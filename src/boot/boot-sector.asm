@@ -67,13 +67,23 @@ gdt_descriptor:
 [BITS 32]
 load32:
     mov eax, 1            ; Start LBA = 1
-    mov ecx, 0          ; First sector count = 255
+    mov ecx, 128          ; First sector count = 255
     mov edi, 0x0100000    ; Destination address in memory = 0x100000
     call ata_lba_read_28     ; Read the first 255 sectors
 
+    mov eax, 129            ; Start LBA = 1
+    mov ecx, 128          ; First sector count = 255
+    mov edi, 0x0110000    ; Destination address in memory = 0x100000
+    call ata_lba_read_28     ; Read the first 255 sectors
+
     mov eax, 257            ; Start LBA = 1
-    mov ecx, 0          ; First sector count = 255
+    mov ecx, 128          ; First sector count = 255
     mov edi, 0x0120000    ; Destination address in memory = 0x100000
+    call ata_lba_read_28     ; Read the first 255 sectors
+
+    mov eax, 385            ; Start LBA = 1
+    mov ecx, 128          ; First sector count = 255
+    mov edi, 0x0130000    ; Destination address in memory = 0x100000
     call ata_lba_read_28     ; Read the first 255 sectors
 
     jmp CODE_SEG:0x0100000 ; Jump to the code segment at address 0x100000

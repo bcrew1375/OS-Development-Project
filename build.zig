@@ -78,8 +78,8 @@ pub fn build(b: *std.Build) void {
 
     var kernel_obj_copy = b.addSystemCommand(&[_][]const u8{
         "objcopy",
-        "-S",
-        "-g",
+        //"-S",
+        //"-g",
         "-O",
         "binary",
         "./build/bin/kernel.elf",
@@ -92,22 +92,22 @@ pub fn build(b: *std.Build) void {
         "./build/bin/os.bin",
     });
 
-    var append_boot_sector = b.addSystemCommand(&[_][]const u8{
+    var inject_boot_sector = b.addSystemCommand(&[_][]const u8{
         "sh",
         "-c",
-        "dd if=./build/bin/boot-sector.bin >> ./build/bin/os.bin",
+        "dd if=./build/bin/boot-sector.bin of=./build/bin/os.bin bs=512 seek=0 conv=notrunc",
     });
 
-    var append_kernel_sectors = b.addSystemCommand(&[_][]const u8{
+    var inject_kernel_sectors = b.addSystemCommand(&[_][]const u8{
         "sh",
         "-c",
-        "dd if=./build/bin/kernel.bin >> ./build/bin/os.bin",
+        "dd if=./build/bin/kernel.bin of=./build/bin/os.bin bs=512 seek=1 conv=notrunc",
     });
 
-    var pad_os_bin_sectors = b.addSystemCommand(&[_][]const u8{
+    var create_disk_image = b.addSystemCommand(&[_][]const u8{
         "sh",
         "-c",
-        "dd if=/dev/zero bs=512 count=1000 >> ./build/bin/os.bin",
+        "dd if=/dev/zero of=./build/bin/os.bin bs=1M count=1",
     });
 
     // Define the clean step
@@ -131,9 +131,9 @@ pub fn build(b: *std.Build) void {
     kernel_link.step.dependOn(&kernel_obj_to_bin.step);
     kernel_obj_copy.step.dependOn(&kernel_link.step);
     remove_os_bin.step.dependOn(&kernel_obj_copy.step);
-    append_boot_sector.step.dependOn(&remove_os_bin.step);
-    append_kernel_sectors.step.dependOn(&append_boot_sector.step);
-    pad_os_bin_sectors.step.dependOn(&append_kernel_sectors.step);
+    create_disk_image.step.dependOn(&remove_os_bin.step);
+    inject_boot_sector.step.dependOn(&create_disk_image.step);
+    inject_kernel_sectors.step.dependOn(&inject_boot_sector.step);
 
-    b.default_step.dependOn(&pad_os_bin_sectors.step);
+    b.default_step.dependOn(&inject_kernel_sectors.step);
 }
