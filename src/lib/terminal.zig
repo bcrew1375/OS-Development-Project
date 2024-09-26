@@ -5,10 +5,8 @@ const TEXT_MODE_BUFFER_SIZE = TEXT_MODE_WIDTH * TEXT_MODE_HEIGHT;
 const MAX_ROW_INDEX = TEXT_MODE_HEIGHT - 1;
 const MAX_COLUMN_INDEX = TEXT_MODE_WIDTH - 1;
 
-//const std = @import("std");
-
-pub var row: u8 = 0;
-pub var column: u8 = 0;
+var row: u8 = 0;
+var column: u8 = 0;
 
 pub const TEXT_MODE_MEMORY = struct {
     pub const buffer: *volatile [TEXT_MODE_BUFFER_SIZE]u16 = @ptrFromInt(0xB8000);
@@ -24,9 +22,6 @@ pub fn print(string: []const u8) void {
     for (0..string.len) |i| {
         write_char(string[i], 15);
     }
-    //for (string) |char| {
-    //    write_char(char, 15);
-    //}
 }
 
 fn put_char(x_position: u8, y_position: u8, character: u8, color: u8) void {
@@ -38,6 +33,12 @@ fn put_char(x_position: u8, y_position: u8, character: u8, color: u8) void {
 }
 
 fn write_char(character: u8, color: u8) void {
+    if (character == '\n') {
+        row += 1;
+        column = 0;
+        return;
+    }
+
     put_char(column, row, character, color);
     column += 1;
 

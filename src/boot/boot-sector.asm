@@ -108,9 +108,9 @@ ata_lba_read_28:
     mov dx, 0x1F7        ; Point to the status register
 .wait_for_not_busy:
     in al, dx
-    test al, 0x80
+    test al, 0x80        ; Wait for BSY to be cleared
     jnz .wait_for_not_busy
-    test al, 0x40
+    test al, 0x40        ; Wait for RDY to be set
     jz .wait_for_not_busy
 
     mov al, 0x20         ; ATA command `0x20` (Read Sectors)
