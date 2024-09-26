@@ -1,5 +1,5 @@
 ORG 0x7c00
-BITS 16
+[BITS 16]
 
 CODE_SEG equ gdt_code - gdt_start
 DATA_SEG equ gdt_data - gdt_start
@@ -66,40 +66,34 @@ gdt_descriptor:
 
 [BITS 32]
 load32:
+    ; Fast enable the A20 line.
+    in al, 0x92
+    or al, 0x02
+    out 0x92, al
+
+    ; Put the kernel in RAM.
     mov eax, 1            ; Start LBA = 1
-    mov ecx, 128          ; First sector count = 255
-    mov edi, 0x0100000    ; Destination address in memory = 0x100000
-    call ata_lba_read_28     ; Read the first 255 sectors
+    mov ebx, 0            ; Sectors to read in(0 is a special case for 256 sectors)
+    mov ecx, 256          ; Track actual sector count for looping
+    mov edi, 0x00100000    ; Destination address in memory = 0x00100000
+    call ata_lba_read_28     ; Read the sectors
 
-    mov eax, 129            ; Start LBA = 1
-    mov ecx, 128          ; First sector count = 255
-    mov edi, 0x0110000    ; Destination address in memory = 0x100000
-    call ata_lba_read_28     ; Read the first 255 sectors
-
-    mov eax, 257            ; Start LBA = 1
-    mov ecx, 128          ; First sector count = 255
-    mov edi, 0x0120000    ; Destination address in memory = 0x100000
-    call ata_lba_read_28     ; Read the first 255 sectors
-
-    mov eax, 385            ; Start LBA = 1
-    mov ecx, 128          ; First sector count = 255
-    mov edi, 0x0130000    ; Destination address in memory = 0x100000
-    call ata_lba_read_28     ; Read the first 255 sectors
-
-    jmp CODE_SEG:0x0100000 ; Jump to the code segment at address 0x100000
+    ; Jump to the kernel
+    jmp CODE_SEG:0x100000
 
 ata_lba_read_28:
-    mov ebx, eax          ; Save the LBA in EBX
+    push eax
+
     shr eax, 24           ; Get the highest byte of LBA
-    or eax, 0xE0         ; Set drive/head register
+    or eax, 0xE0         ; Select master drive and LBA mode
     mov dx, 0x1F6        ; Point to the drive/head register
     out dx, al           ; Send the drive/head and high LBA bits
 
-    mov eax, ecx          ; Move the sector count into EAX
+    mov eax, ebx          ; Move the sector count into EAX
     mov dx, 0x1F2        ; Point to the sector count register
     out dx, al           ; Send the sector count
 
-    mov eax, ebx          ; Restore the LBA
+    pop eax
     mov dx, 0x1F3        ; Point to the LBA low byte register
     out dx, al           ; Send the low byte of LBA
 
@@ -111,18 +105,25 @@ ata_lba_read_28:
     shr eax, 16          ; Shift to get the high byte
     out dx, al           ; Send the high byte
 
-    mov dx, 0x1F7        ; Point to the command register
+    mov dx, 0x1F7        ; Point to the status register
+.wait_for_not_busy:
+    in al, dx
+    test al, 0x80
+    jnz .wait_for_not_busy
+    test al, 0x40
+    jz .wait_for_not_busy
+
     mov al, 0x20         ; ATA command `0x20` (Read Sectors)
     out dx, al           ; Send the read command
 
 .next_sector:
     push ecx
 
-.try_again:
-    mov dx, 0x1F7
+    mov dx, 0x1F7        ; Point to the status register
+.wait_for_data_request:
     in al, dx
-    test al, 8
-    jz .try_again
+    test al, 0x08
+    jz .wait_for_data_request
 
     mov ecx, 256
     mov dx, 0x1F0

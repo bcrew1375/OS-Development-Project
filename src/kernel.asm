@@ -7,6 +7,8 @@ CODE_SEG equ 0x08
 DATA_SEG equ 0x10
 
 _start:
+
+    ; Setup permanent segments and stack pointer.
     mov ax, DATA_SEG
     mov ds, ax
     mov es, ax
@@ -15,11 +17,6 @@ _start:
     mov ss, ax
     mov ebp, 0x00200000
     mov esp, ebp
-
-    ; Fast enable the A20 line.
-    in al, 0x92
-    or al, 0x02
-    out 0x92, al
 
     call kernel_main
 

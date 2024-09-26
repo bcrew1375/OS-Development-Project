@@ -39,8 +39,8 @@ pub fn build(b: *std.Build) void {
         "--emit-relocs",
         "-fstrip",
     } ++ ZIG_SOURCE_FILES ++ &[_][]const u8{
-        //"-O",
-        //"ReleaseSmall",
+        "-O",
+        "ReleaseSmall",
         "-femit-bin=./build/kernel.zig.o",
         "-target",
         "x86-freestanding",
@@ -53,8 +53,8 @@ pub fn build(b: *std.Build) void {
         "--emit-relocs",
         "-fstrip",
     } ++ OBJ_FILES ++ &[_][]const u8{
-        //"-O",
-        //"ReleaseSmall",
+        "-O",
+        "ReleaseSmall",
         "-femit-bin=./build/kernelfull.o",
         "-target",
         "x86-freestanding",
@@ -68,8 +68,8 @@ pub fn build(b: *std.Build) void {
         "--script",
         "./src/boot/linker.ld",
         "-fstrip",
-        //"-O",
-        //"ReleaseSmall",
+        "-O",
+        "ReleaseSmall",
         "-femit-bin=./build/bin/kernel.elf",
         "-target",
         "x86-freestanding",
@@ -118,10 +118,10 @@ pub fn build(b: *std.Build) void {
         "./build/bin/kernel.bin",
         "./build/bin/os.bin",
         "./build/kernel.asm.o",
-        "./build/zig.o",
+        "./build/kernel.zig.o",
+        "./build/kernel.zig.o.o",
         "./build/kernelfull.o",
     });
-    //clean.setDescription("Removing intermediate and final binaries");
 
     // Ensure other build steps run in the correct order
     boot_sector_bin.step.dependOn(&clean.step);
