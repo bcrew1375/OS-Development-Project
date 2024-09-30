@@ -3,8 +3,8 @@ const terminal = @import("lib/terminal.zig");
 
 pub const MESSAGE = "Aello,\nWorld!";
 
-pub export fn kernel_main() void {
-    kernel_common.kernel_initialize();
+pub export fn kernelMain() void {
+    kernel_common.kernelInitialize();
     terminal.initialize();
 
     terminal.print(MESSAGE);

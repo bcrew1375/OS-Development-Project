@@ -28,7 +28,7 @@ pub fn build(b: *std.Build) void {
         "-f",
         "elf",
         "-g",
-        "./src/kernel.asm",
+        "./src/boot/kernel.asm",
         "-o",
         "./build/kernel.asm.o",
     });

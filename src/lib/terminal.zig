@@ -15,31 +15,31 @@ pub const TEXT_MODE_MEMORY = struct {
 pub fn initialize() void {
     row = 0;
     column = 0;
-    @memset(TEXT_MODE_MEMORY.buffer[0..(TEXT_MODE_BUFFER_SIZE)], make_char(' ', 0));
+    @memset(TEXT_MODE_MEMORY.buffer[0..TEXT_MODE_BUFFER_SIZE], makeChar(' ', 0));
 }
 
 pub fn print(string: []const u8) void {
     for (0..string.len) |i| {
-        write_char(string[i], 15);
+        writeChar(string[i], 15);
     }
 }
 
-fn put_char(x_position: u8, y_position: u8, character: u8, color: u8) void {
+fn putChar(x_position: u8, y_position: u8, character: u8, color: u8) void {
     if ((x_position > MAX_COLUMN_INDEX) or (y_position > MAX_ROW_INDEX)) {
         return;
     }
 
-    TEXT_MODE_MEMORY.buffer.*[(y_position * TEXT_MODE_WIDTH) + x_position] = make_char(character, color);
+    TEXT_MODE_MEMORY.buffer.*[(y_position * TEXT_MODE_WIDTH) + x_position] = makeChar(character, color);
 }
 
-fn write_char(character: u8, color: u8) void {
+fn writeChar(character: u8, color: u8) void {
     if (character == '\n') {
         row += 1;
         column = 0;
         return;
     }
 
-    put_char(column, row, character, color);
+    putChar(column, row, character, color);
     column += 1;
 
     if (column >= TEXT_MODE_WIDTH) {
@@ -48,6 +48,6 @@ fn write_char(character: u8, color: u8) void {
     }
 }
 
-fn make_char(character: u8, color: u8) u16 {
+fn makeChar(character: u8, color: u8) u16 {
     return (@as(u16, color) << 8) | character;
 }
