@@ -13,7 +13,7 @@ const InterruptDescriptorTableStruct = packed struct {
 
 const InterruptDescriptorTableRegisterStruct = packed struct {
     limit: u16 = 0, // Size of descriptor table minus 1
-    base: *[TOTAL_INTERRUPTS]InterruptDescriptorTableStruct, // Base address of the start of the interrupt descriptor table
+    base: u32 = 0, // Base address of the start of the interrupt descriptor table
 };
 
 var interrupt_descriptor_table: [TOTAL_INTERRUPTS]InterruptDescriptorTableStruct =
@@ -24,31 +24,36 @@ var interrupt_descriptor_table_register: InterruptDescriptorTableRegisterStruct 
 
 pub fn initialize() void {
     interrupt_descriptor_table_register.limit = @sizeOf(@TypeOf(interrupt_descriptor_table)) - 1;
-    interrupt_descriptor_table_register.base = &interrupt_descriptor_table;
+    interrupt_descriptor_table_register.base = @intFromPtr(&interrupt_descriptor_table);
 
-    set(0, @intFromPtr(&idt_zero));
-    //std.debug.assert(interrupt_descriptor_table[0].type_attribute == 0xEE);
+    set(0, @intFromPtr(&idt_zero), 0xEE);
 
     idt_load();
 }
 
-pub fn set(interrupt_number: u16, address: u32) void {
+pub fn set(interrupt_number: u16, address: u32, type_attribute: u8) void {
     var interrupt_descriptor: *InterruptDescriptorTableStruct = &interrupt_descriptor_table[interrupt_number];
     interrupt_descriptor.offset_low = @truncate(address & 0xffff);
     interrupt_descriptor.selector = kernel_common.KERNEL_CODE_SELECTOR;
     interrupt_descriptor.unused_byte = 0x00;
-    interrupt_descriptor.type_attribute = 0xEE;
-    interrupt_descriptor.offset_high = @truncate((address >> 16) & 0x00ff0000);
+    interrupt_descriptor.type_attribute = type_attribute;
+    interrupt_descriptor.offset_high = @truncate((address >> 16) & 0xffff);
     return;
 }
 
 fn idt_load() void {
     asm volatile (
-        \\mov ebx, [ebp+8]
-        \\lidt[ebx]
+        \\lidt (%ebx)
+        :
+        : [interrupt_descriptor_table_register] "{ebx}" (&interrupt_descriptor_table_register),
+        : "ebx", "memory"
     );
 }
 
 fn idt_zero() void {
-    kernel_common.printError("Divide by zero.");
+    kernel_common.printError("Divide by zero error.\n");
+
+    asm volatile (
+        \\hlt
+    );
 }

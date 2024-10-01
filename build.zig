@@ -114,17 +114,18 @@ pub fn build(b: *std.Build) void {
     var clean = b.addSystemCommand(&[_][]const u8{
         "rm",
         "-rf",
-        "./build/bin/boot-sector.bin",
-        "./build/bin/kernel.bin",
-        "./build/bin/os.bin",
-        "./build/kernel.asm.o",
-        "./build/kernel.zig.o",
-        "./build/kernel.zig.o.o",
-        "./build/kernelfull.o",
+        "./build",
+    });
+
+    var make_build_dirs = b.addSystemCommand(&[_][]const u8{
+        "mkdir",
+        "-p",
+        "./build/bin",
     });
 
     // Ensure other build steps run in the correct order
-    boot_sector_bin.step.dependOn(&clean.step);
+    make_build_dirs.step.dependOn(&clean.step);
+    boot_sector_bin.step.dependOn(&make_build_dirs.step);
     kernel_asm_obj.step.dependOn(&boot_sector_bin.step);
     zig_obj.step.dependOn(&kernel_asm_obj.step);
     kernel_obj_to_bin.step.dependOn(&zig_obj.step);

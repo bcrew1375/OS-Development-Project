@@ -7,7 +7,6 @@ CODE_SEG equ 0x08
 DATA_SEG equ 0x10
 
 _start:
-
     ; Setup permanent segments and stack pointer.
     mov ax, DATA_SEG
     mov ds, ax
