@@ -20,7 +20,6 @@ pub fn build(b: *std.Build) void {
         "-o",
         "./build/bin/boot-sector.bin",
     });
-    //boot_sector_bin.setDescription("Assembling boot-sector.asm to boot-sector.bin");
 
     // Define the kernel object file target
     var kernel_asm_obj = b.addSystemCommand(&[_][]const u8{
@@ -62,19 +61,18 @@ pub fn build(b: *std.Build) void {
 
     // Define the kernel binary target
     var kernel_link = b.addSystemCommand(&[_][]const u8{
-        "zig",
-        "build-exe",
+        //"zig",
+        "ld",
+        "-o",
+        "./build/bin/kernel.elf",
         "./build/kernelfull.o",
-        "--script",
+        "-T",
         "./src/boot/linker.ld",
-        "-fstrip",
-        "-O",
-        "ReleaseSmall",
-        "-femit-bin=./build/bin/kernel.elf",
-        "-target",
-        "x86-freestanding",
+        "--section-start",
+        ".text=0x100000",
+        "-m",
+        "elf_i386",
     });
-    //kernel_bin.setDescription("Linking kernel binary using custom linker script");
 
     var kernel_obj_copy = b.addSystemCommand(&[_][]const u8{
         "objcopy",
