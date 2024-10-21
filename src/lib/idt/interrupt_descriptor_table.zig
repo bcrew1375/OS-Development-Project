@@ -1,5 +1,6 @@
 const std = @import("std");
 const kernel_common = @import("../kernel_common.zig");
+const port_io = @import("../port-io.zig");
 
 const TOTAL_INTERRUPTS: u16 = 512;
 
@@ -26,7 +27,11 @@ pub fn initialize() void {
     interrupt_descriptor_table_register.limit = @sizeOf(@TypeOf(interrupt_descriptor_table)) - 1;
     interrupt_descriptor_table_register.base = @intFromPtr(&interrupt_descriptor_table);
 
+    for (0..TOTAL_INTERRUPTS) |i| {
+        set(@truncate(i), @intFromPtr(&no_interrupt), 0xEE);
+    }
     set(0, @intFromPtr(&idt_zero), 0xEE);
+    set(0x21, @intFromPtr(&int21h), 0xEE);
 
     idt_load();
 }
@@ -55,5 +60,31 @@ fn idt_zero() void {
 
     asm volatile (
         \\hlt
+    );
+}
+export fn int21h_handler() void {
+    kernel_common.printError("Keyboard Pressed!\n");
+    port_io.out8(0x20, 0x20);
+}
+
+export fn no_interrupt_handler() void {
+    port_io.out8(0x20, 0x20);
+}
+
+fn int21h() void {
+    asm volatile (
+        \\cli
+        \\call int21h_handler
+        \\sti
+        \\iret
+    );
+}
+
+fn no_interrupt() void {
+    asm volatile (
+        \\cli
+        \\call no_interrupt_handler
+        \\sti
+        \\iret
     );
 }
