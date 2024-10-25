@@ -49,6 +49,7 @@ pub fn set(interrupt_number: u16, address: u32, type_attribute: u8) void {
 fn idt_load() void {
     asm volatile (
         \\lidt (%ebx)
+        \\sti
         :
         : [interrupt_descriptor_table_register] "{ebx}" (&interrupt_descriptor_table_register),
         : "ebx", "memory"
