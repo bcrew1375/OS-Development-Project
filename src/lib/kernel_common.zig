@@ -15,13 +15,12 @@ pub fn printError(string: []const u8) void {
     terminal.print(string);
 }
 
-pub fn numberToString(number: i32) []u8 {
+pub fn numberToString(number: i32) []const u8 {
     const is_negative: bool = (number < 0);
 
+    var digits_buffer: [20]u8 = undefined;
     var buffer_position: u8 = 20;
     var absolute_number: u32 = @abs(number);
-
-    const digits_buffer: []u8 = @as([*]u8, @ptrCast(heap.malloc(20 - buffer_position)))[buffer_position..20];
 
     if (absolute_number == 0) {
         buffer_position -= 1;
@@ -39,5 +38,10 @@ pub fn numberToString(number: i32) []u8 {
         digits_buffer[buffer_position] = '-';
     }
 
-    return digits_buffer[buffer_position..20];
+    var result: [20]u8 = undefined; //@as([*]u8, @ptrCast(heap.allocate(20 - buffer_position)))[buffer_position..20];
+
+    std.mem.copyForwards(u8, result[0..(20 - buffer_position)], digits_buffer[buffer_position..20]);
+    terminal.print(result[0..(20 - buffer_position)]);
+
+    return result[0..buffer_position];
 }

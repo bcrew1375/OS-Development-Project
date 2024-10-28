@@ -14,7 +14,7 @@ _start:
     mov fs, ax
     mov gs, ax
     mov ss, ax
-    mov ebp, 0x00200000
+    mov ebp, 0x08000000
     mov esp, ebp
 
     mov al, 00010001b

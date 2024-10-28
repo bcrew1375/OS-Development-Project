@@ -33,7 +33,7 @@ pub fn initialize() void {
     set(0, @intFromPtr(&idt_zero), 0xEE);
     set(0x21, @intFromPtr(&int21h), 0xEE);
 
-    idt_load();
+    //idt_load();
 }
 
 pub fn set(interrupt_number: u16, address: u32, type_attribute: u8) void {

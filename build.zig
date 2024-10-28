@@ -35,13 +35,17 @@ pub fn build(b: *std.Build) void {
     var zig_obj = b.addSystemCommand(&[_][]const u8{
         "zig",
         "build-obj",
+        "-fno-strip",
+        "-fcompiler-rt",
         "--emit-relocs",
-        "-fstrip",
+        //"-fstrip",
     } ++ ZIG_SOURCE_FILES ++ &[_][]const u8{
         "-O",
-        "ReleaseSmall",
+        //"ReleaseSmall",
+        "Debug",
         "-femit-bin=./build/kernel.zig.o",
         "-target",
+        //"x86-linux",
         "x86-freestanding",
     });
 
@@ -49,13 +53,17 @@ pub fn build(b: *std.Build) void {
     var kernel_obj_to_bin = b.addSystemCommand(&[_][]const u8{
         "zig",
         "build-obj",
+        "-fno-strip",
+        //"-fcompiler-rt",
         "--emit-relocs",
-        "-fstrip",
+        //"-fstrip",
     } ++ OBJ_FILES ++ &[_][]const u8{
         "-O",
-        "ReleaseSmall",
+        //"ReleaseSmall",
+        "Debug",
         "-femit-bin=./build/kernelfull.o",
         "-target",
+        //"x86-linux",
         "x86-freestanding",
     });
 
@@ -66,10 +74,12 @@ pub fn build(b: *std.Build) void {
         "-o",
         "./build/bin/kernel.elf",
         "./build/kernelfull.o",
+        //"-nostdlib",
+        //"-static",
         "-T",
         "./src/boot/linker.ld",
-        "--section-start",
-        ".text=0x100000",
+        //"--section-start",
+        //".text=0x100000",
         "-m",
         "elf_i386",
     });

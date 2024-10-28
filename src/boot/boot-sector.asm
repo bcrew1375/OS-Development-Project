@@ -85,6 +85,27 @@ load32:
     mov edi, 0x00120000    ; Destination address in memory = 0x00100000
     call ata_lba_read_28     ; Read the sectors
 
+    ; Put the kernel in RAM.
+    mov eax, 513            ; Start LBA = 1
+    mov ebx, 0            ; Sectors to read in(0 is a special case for 256 sectors)
+    mov ecx, 256          ; Track actual sector count for looping
+    mov edi, 0x00140000    ; Destination address in memory = 0x00100000
+    call ata_lba_read_28     ; Read the sectors
+
+    ; Put the kernel in RAM.
+    mov eax, 769            ; Start LBA = 1
+    mov ebx, 0            ; Sectors to read in(0 is a special case for 256 sectors)
+    mov ecx, 256          ; Track actual sector count for looping
+    mov edi, 0x00160000    ; Destination address in memory = 0x00100000
+    call ata_lba_read_28     ; Read the sectors
+
+    ; Put the kernel in RAM.
+    mov eax, 1025            ; Start LBA = 1
+    mov ebx, 0            ; Sectors to read in(0 is a special case for 256 sectors)
+    mov ecx, 256          ; Track actual sector count for looping
+    mov edi, 0x00180000    ; Destination address in memory = 0x00100000
+    call ata_lba_read_28     ; Read the sectors
+
     ; Jump to the kernel
     jmp CODE_SEG:0x100000
 
