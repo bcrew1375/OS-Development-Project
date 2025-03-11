@@ -57,14 +57,14 @@ fn idt_load() void {
 }
 
 fn idt_zero() void {
-    kernel_common.printError("Divide by zero error.\n");
+    kernel_common.printString("Divide by zero error.\n");
 
     asm volatile (
         \\hlt
     );
 }
 export fn int21h_handler() void {
-    kernel_common.printError("Keyboard Pressed!\n");
+    kernel_common.printString("Keyboard Pressed!\n");
     port_io.out8(0x20, 0x20);
 }
 
