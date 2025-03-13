@@ -8,16 +8,32 @@ pub const KERNEL_CODE_SELECTOR: u8 = 0x08;
 pub const KERNEL_DATA_SELECTOR: u8 = 0x10;
 
 pub fn kernelInitialize() void {
+    terminal.initialize();
+
+    printString("Initializing Interrupt Descriptor Table...");
     idt.initialize();
-    heap.initialize();
+    printString("done\n");
+
+    printString("Initializing Heap...");
+
+    heap.initialize() catch |err| {
+        printString("Failed with error: ");
+        printString(@errorName(err));
+        return;
+    };
+
+    printString("done\n");
 }
 
 pub fn printString(string: []const u8) void {
-    terminal.printString(string);
+    terminal.print(string);
 }
 
 pub fn printNumber(number: i32) void {
-    terminal.printNumber(number);
+    var digits_buffer: [20]u8 = undefined;
+    const length = numberToString(number, digits_buffer[0..]);
+
+    terminal.print(digits_buffer[0..length]);
 }
 
 // Accepts a buffer to return the number as a string

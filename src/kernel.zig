@@ -11,8 +11,4 @@ pub const MESSAGE = "Aello,World!\n";
 
 pub export fn kernelMain() void {
     kernel_common.kernelInitialize();
-    terminal.initialize();
-
-    kernel_common.printString(MESSAGE);
-    kernel_common.printNumber(-4096);
 }

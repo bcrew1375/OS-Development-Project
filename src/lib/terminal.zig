@@ -21,17 +21,10 @@ pub fn initialize() void {
     @memset(TEXT_MODE_MEMORY.buffer[0..TEXT_MODE_BUFFER_SIZE], makeChar(' ', 0));
 }
 
-pub fn printString(string: []const u8) void {
+pub fn print(string: []const u8) void {
     for (0..string.len) |i| {
         writeChar(string[i], 15);
     }
-}
-
-pub fn printNumber(number: i32) void {
-    var digits_buffer: [20]u8 = undefined;
-    const length = kernel_common.numberToString(number, digits_buffer[0..]);
-
-    printString(digits_buffer[0..length]);
 }
 
 fn putChar(x_position: u8, y_position: u8, character: u8, color: u8) void {
