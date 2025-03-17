@@ -6,16 +6,29 @@ const HEAP_BLOCK_FREE: u8 = 0x00;
 const HEAP_BLOCK_HAS_NEXT: u8 = 0b1000_0000;
 const HEAP_BLOCK_IS_FREE: u8 = 0b0100_0000;
 
-const table = struct {
-    table_entry: [*]u8 = undefined,
+pub const HEAP_BLOCK_SIZE: u32 = 4096;
+
+const HeapErrors = error{
+    NotAligned,
+};
+
+pub const Table = struct {
+    entries: *u8 = undefined,
     total_entries: u32 = 0,
 };
 
-const heap = struct {
-    table: table = undefined,
-    start_address: anyopaque = undefined,
+pub const Heap = struct {
+    table: Table = undefined,
+    start_address: *anyopaque = undefined,
 };
 
-pub fn initialize() !void {
-    return error.NotImplemented;
+pub fn initialize(heap_struct: *const Heap, start_pointer: *const u8, end_pointer: *const u8, table: *const Table) !void {
+    _ = heap_struct;
+    _ = table;
+    try validate_alignment(start_pointer);
+    try validate_alignment(end_pointer);
+}
+
+fn validate_alignment(pointer: *const u8) !void {
+    if ((@intFromPtr(pointer) % HEAP_BLOCK_SIZE) != 0) return error.NotAligned;
 }

@@ -2,7 +2,7 @@ const std = @import("std");
 
 const idt = @import("idt/interrupt_descriptor_table.zig");
 const terminal = @import("terminal.zig");
-const heap = @import("../lib/memory/heap.zig");
+const kernel_heap = @import("../lib/memory/kernel_heap.zig");
 
 pub const KERNEL_CODE_SELECTOR: u8 = 0x08;
 pub const KERNEL_DATA_SELECTOR: u8 = 0x10;
@@ -14,9 +14,10 @@ pub fn kernelInitialize() void {
     idt.initialize();
     printString("done\n");
 
-    printString("Initializing Heap...");
+    printString("Initializing Kernel Heap...");
+    printNumber(128);
 
-    heap.initialize() catch |err| {
+    kernel_heap.initialize() catch |err| {
         printString("Failed with error: ");
         printString(@errorName(err));
         return;
@@ -38,7 +39,7 @@ pub fn printNumber(number: i32) void {
 
 // Accepts a buffer to return the number as a string
 // digits_buffer must always be a []u8 of size 20.
-pub fn numberToString(number: i32, digits_buffer: []u8) u8 {
+pub fn numberToString(number: i32, digits_buffer: *[20]u8) u8 {
     const is_negative: bool = (number < 0);
 
     var result: [20]u8 = undefined;
