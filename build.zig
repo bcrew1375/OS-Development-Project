@@ -7,7 +7,7 @@ const ZIG_SOURCE_FILES = [_][]const u8{
 
 const OBJ_FILES = [_][]const u8{
     "./build/kernel.asm.o",
-    "./build/kernel.zig.o",
+    //"./build/kernel.zig.o",
 };
 
 pub fn build(b: *std.Build) void {
@@ -26,7 +26,7 @@ pub fn build(b: *std.Build) void {
         "nasm",
         "-f",
         "elf",
-        "-g",
+        //"-g",
         "./src/boot/kernel.asm",
         "-o",
         "./build/kernel.asm.o",
@@ -35,37 +35,43 @@ pub fn build(b: *std.Build) void {
     var zig_obj = b.addSystemCommand(&[_][]const u8{
         "zig",
         "build-obj",
-        "-fno-strip",
+        //"-fno-strip",
         "-fcompiler-rt",
-        "--emit-relocs",
+        //"--emit-relocs",
         //"-fstrip",
-    } ++ ZIG_SOURCE_FILES ++ &[_][]const u8{
+    } ++ ZIG_SOURCE_FILES ++
+        OBJ_FILES ++
+        &[_][]const u8{
         "-O",
         //"ReleaseSmall",
         "Debug",
-        "-femit-bin=./build/kernel.zig.o",
+        "-femit-bin=./build/kernelfull.o", //.zig.o",
         "-target",
         //"x86-linux",
         "x86-freestanding",
+        "-mcpu",
+        "i386",
     });
 
     // Define the kernel object file to binary
-    var kernel_obj_to_bin = b.addSystemCommand(&[_][]const u8{
-        "zig",
-        "build-obj",
-        "-fno-strip",
-        //"-fcompiler-rt",
-        "--emit-relocs",
-        //"-fstrip",
-    } ++ OBJ_FILES ++ &[_][]const u8{
-        "-O",
-        //"ReleaseSmall",
-        "Debug",
-        "-femit-bin=./build/kernelfull.o",
-        "-target",
-        //"x86-linux",
-        "x86-freestanding",
-    });
+    //var kernel_obj_to_bin = b.addSystemCommand(&[_][]const u8{
+    //    "zig",
+    //    "build-obj",
+    //    "-fno-strip",
+    //"-fcompiler-rt",
+    //    "--emit-relocs",
+    //"-fstrip",
+    //} ++ OBJ_FILES ++ &[_][]const u8{
+    //    "-O",
+    //"ReleaseSmall",
+    //    "Debug",
+    //    "-femit-bin=./build/kernelfull.o",
+    //    "-target",
+    //"x86-linux",
+    //    "x86-freestanding",
+    //    "-mcpu",
+    //    "i386",
+    //});
 
     // Define the kernel binary target
     var kernel_link = b.addSystemCommand(&[_][]const u8{
@@ -115,7 +121,7 @@ pub fn build(b: *std.Build) void {
     var create_disk_image = b.addSystemCommand(&[_][]const u8{
         "sh",
         "-c",
-        "dd if=/dev/zero of=./build/bin/os.bin bs=1M count=1",
+        "dd if=/dev/zero of=./build/bin/os.bin bs=2M count=1",
     });
 
     // Define the clean step
@@ -136,8 +142,8 @@ pub fn build(b: *std.Build) void {
     boot_sector_bin.step.dependOn(&make_build_dirs.step);
     kernel_asm_obj.step.dependOn(&boot_sector_bin.step);
     zig_obj.step.dependOn(&kernel_asm_obj.step);
-    kernel_obj_to_bin.step.dependOn(&zig_obj.step);
-    kernel_link.step.dependOn(&kernel_obj_to_bin.step);
+    //kernel_obj_to_bin.step.dependOn(&zig_obj.step);
+    kernel_link.step.dependOn(&zig_obj.step); //kernel_obj_to_bin.step);
     kernel_obj_copy.step.dependOn(&kernel_link.step);
     remove_os_bin.step.dependOn(&kernel_obj_copy.step);
     create_disk_image.step.dependOn(&remove_os_bin.step);

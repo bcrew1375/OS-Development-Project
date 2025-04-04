@@ -6,9 +6,12 @@ const portio = @import("lib/port-io.zig");
 const heap = @import("lib/memory/heap.zig");
 const math = @import("std").math;
 //const print = @import("std").debug.print;
+const std = @import("std");
 
 pub const MESSAGE = "Aello,World!\n";
 
 pub export fn kernelMain() void {
-    kernel_common.kernelInitialize();
+    kernel_common.kernelInitialize() catch |err| {
+        kernel_common.printString(@errorName(err));
+    };
 }

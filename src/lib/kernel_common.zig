@@ -7,27 +7,33 @@ const kernel_heap = @import("../lib/memory/kernel_heap.zig");
 pub const KERNEL_CODE_SELECTOR: u8 = 0x08;
 pub const KERNEL_DATA_SELECTOR: u8 = 0x10;
 
-pub fn kernelInitialize() void {
+pub fn kernelInitialize() !void {
     terminal.initialize();
 
     printString("Initializing Interrupt Descriptor Table...");
-    idt.initialize();
+    try idt.initialize();
     printString("done\n");
 
     printString("Initializing Kernel Heap...");
-    printNumber(128);
-
-    kernel_heap.initialize() catch |err| {
-        printString("Failed with error: ");
-        printString(@errorName(err));
-        return;
-    };
-
+    try kernel_heap.initialize();
     printString("done\n");
+
+    printFormat("Number Test {d} {d}\n", .{ 0, 1 });
 }
 
 pub fn printString(string: []const u8) void {
     terminal.print(string);
+}
+
+pub fn printFormat(comptime string: []const u8, args: anytype) void {
+    var string_buffer: [256]u8 = undefined;
+
+    const string_slice = std.fmt.bufPrint(&string_buffer, string, args) catch |format_err| {
+        printString(@errorName(format_err));
+        return;
+    };
+
+    terminal.print(string_slice);
 }
 
 pub fn printNumber(number: i32) void {

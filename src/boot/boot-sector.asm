@@ -3,6 +3,11 @@ ORG 0x7c00
 
 CODE_SEG equ gdt_code - gdt_start
 DATA_SEG equ gdt_data - gdt_start
+TSS_SEG equ gdt_tss - gdt_start
+
+TSS_START_OFFSET equ (tss_start - _start) + 0x7c00
+TSS_BASE_LOW equ TSS_START_OFFSET & 0xFFFF
+TSS_BASE_HIGH equ ((TSS_START_OFFSET) >> 16) & 0xFF
 
 _start:
     jmp short start
@@ -58,14 +63,28 @@ gdt_data:     ; DS, SS, ES, FS, GS.
     db 11001111b ; High 4-bit flags and the low 4-bit flags.
     db 0      ; Base 24-31 bits.
 
+gdt_tss:
+    ; TSS descriptor (for example, available 32-bit TSS)
+    dw tss_end - tss_start - 1  ; Limit
+    dw TSS_BASE_LOW             ; Base low, middle, and high parts packed in two dwords
+    db TSS_BASE_HIGH            ; Base 16-23 bits (or part of base, depending on encoding)
+    db 0x89                     ; Access byte: present, ring 0, type 9 (available TSS)
+    db 0x00                     ; Flags and limit high (set flags appropriately)
+    db 0x00                     ; Base high
 gdt_end:
 
 gdt_descriptor:
     dw gdt_end - gdt_start - 1
     dd gdt_start
 
+tss_start:
+    times 104 db 0
+tss_end:
+
 [BITS 32]
 load32:
+    ltr[TSS_SEG]
+
     ; Fast enable the A20 line.
     in al, 0x92
     or al, 0x02

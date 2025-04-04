@@ -23,17 +23,23 @@ var interrupt_descriptor_table: [TOTAL_INTERRUPTS]InterruptDescriptorTableStruct
 var interrupt_descriptor_table_register: InterruptDescriptorTableRegisterStruct =
     InterruptDescriptorTableRegisterStruct{ .base = undefined };
 
-pub fn initialize() void {
+pub fn initialize() !void {
     interrupt_descriptor_table_register.limit = @sizeOf(@TypeOf(interrupt_descriptor_table)) - 1;
     interrupt_descriptor_table_register.base = @intFromPtr(&interrupt_descriptor_table);
 
     for (0..TOTAL_INTERRUPTS) |i| {
         set(@truncate(i), @intFromPtr(&no_interrupt), 0xEE);
     }
-    set(0, @intFromPtr(&idt_zero), 0xEE);
+    set(0x00, @intFromPtr(&idt_zero), 0xEE);
+    set(0x06, @intFromPtr(&invalid_opcode), 0xEE);
+    set(0x08, @intFromPtr(&double_fault), 0xEE);
+    set(0x0C, @intFromPtr(&stack_segment_fault), 0xEE);
+    //set(0x0D, @intFromPtr(&general_protection_fault), 0xEE);
+    set(0x0E, @intFromPtr(&page_fault), 0xEE);
+    set(0x11, @intFromPtr(&alignment_check), 0xEE);
     set(0x21, @intFromPtr(&int21h), 0xEE);
 
-    //idt_load();
+    idt_load();
 }
 
 pub fn set(interrupt_number: u16, address: u32, type_attribute: u8) void {
@@ -87,5 +93,57 @@ fn no_interrupt() void {
         \\call no_interrupt_handler
         \\sti
         \\iret
+    );
+}
+
+// A very simple handler for a general protection fault.
+// In a real kernel, you might log register state or blink LEDs, etc.
+fn general_protection_fault() void {
+    kernel_common.printString("General protection fault.\n");
+    asm volatile (
+        \\cli
+        \\hlt
+    );
+}
+
+// A simple handler for an invalid opcode fault.
+fn invalid_opcode() void {
+    kernel_common.printString("Invalid opcode.\n");
+    asm volatile (
+        \\cli
+        \\hlt
+    );
+}
+
+// A simple handler for an invalid opcode fault.
+fn stack_segment_fault() void {
+    kernel_common.printString("Stack segment fault.\n");
+    asm volatile (
+        \\cli
+        \\hlt
+    );
+}
+
+fn double_fault() void {
+    kernel_common.printString("Double fault.\n");
+    asm volatile (
+        \\cli
+        \\hlt
+    );
+}
+
+fn page_fault() void {
+    kernel_common.printString("Page fault.\n");
+    asm volatile (
+        \\cli
+        \\hlt
+    );
+}
+
+fn alignment_check() void {
+    kernel_common.printString("Alignment check.\n");
+    asm volatile (
+        \\cli
+        \\hlt
     );
 }

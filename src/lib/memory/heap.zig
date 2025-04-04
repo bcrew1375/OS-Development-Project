@@ -8,7 +8,7 @@ const HEAP_BLOCK_IS_FREE: u8 = 0b0100_0000;
 
 pub const HEAP_BLOCK_SIZE: u32 = 4096;
 
-const HeapErrors = error{
+const HeapError = error{
     NotAligned,
 };
 
@@ -27,6 +27,7 @@ pub fn initialize(heap_struct: *const Heap, start_pointer: *const u8, end_pointe
     _ = table;
     try validate_alignment(start_pointer);
     try validate_alignment(end_pointer);
+    //return HeapError.NotAligned;
 }
 
 fn validate_alignment(pointer: *const u8) !void {
