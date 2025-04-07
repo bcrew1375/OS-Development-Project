@@ -34,7 +34,7 @@ pub fn initialize() !void {
     set(0x06, @intFromPtr(&invalid_opcode), 0xEE);
     set(0x08, @intFromPtr(&double_fault), 0xEE);
     set(0x0C, @intFromPtr(&stack_segment_fault), 0xEE);
-    //set(0x0D, @intFromPtr(&general_protection_fault), 0xEE);
+    set(0x0D, @intFromPtr(&general_protection_fault), 0xEE);
     set(0x0E, @intFromPtr(&page_fault), 0xEE);
     set(0x11, @intFromPtr(&alignment_check), 0xEE);
     set(0x21, @intFromPtr(&int21h), 0xEE);
@@ -69,14 +69,6 @@ fn idt_zero() void {
         \\hlt
     );
 }
-export fn int21h_handler() void {
-    kernel_common.printString("Keyboard Pressed!\n");
-    port_io.out8(0x20, 0x20);
-}
-
-export fn no_interrupt_handler() void {
-    port_io.out8(0x20, 0x20);
-}
 
 fn int21h() void {
     asm volatile (
@@ -87,6 +79,11 @@ fn int21h() void {
     );
 }
 
+export fn int21h_handler() void {
+    kernel_common.printString("Keyboard Pressed!\n");
+    port_io.out8(0x20, 0x20);
+}
+
 fn no_interrupt() void {
     asm volatile (
         \\cli
@@ -94,6 +91,15 @@ fn no_interrupt() void {
         \\sti
         \\iret
     );
+}
+
+export fn no_interrupt_handler() void {
+    kernel_common.printString("No Interrupt!\n");
+    asm volatile (
+        \\cli
+        \\hlt
+    );
+    port_io.out8(0x20, 0x20);
 }
 
 // A very simple handler for a general protection fault.

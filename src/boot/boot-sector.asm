@@ -5,9 +5,9 @@ CODE_SEG equ gdt_code - gdt_start
 DATA_SEG equ gdt_data - gdt_start
 TSS_SEG equ gdt_tss - gdt_start
 
-TSS_START_OFFSET equ (tss_start - _start) + 0x7c00
-TSS_BASE_LOW equ TSS_START_OFFSET & 0xFFFF
-TSS_BASE_HIGH equ ((TSS_START_OFFSET) >> 16) & 0xFF
+;TSS_START_OFFSET equ (tss_start - _start) + 0x7c00
+;TSS_BASE_LOW equ TSS_START_OFFSET & 0xFFFF
+;TSS_BASE_HIGH equ ((TSS_START_OFFSET) >> 16) & 0xFF
 
 _start:
     jmp short start
@@ -65,25 +65,26 @@ gdt_data:     ; DS, SS, ES, FS, GS.
 
 gdt_tss:
     ; TSS descriptor (for example, available 32-bit TSS)
-    dw tss_end - tss_start - 1  ; Limit
-    dw TSS_BASE_LOW             ; Base low, middle, and high parts packed in two dwords
-    db TSS_BASE_HIGH            ; Base 16-23 bits (or part of base, depending on encoding)
-    db 0x89                     ; Access byte: present, ring 0, type 9 (available TSS)
-    db 0x00                     ; Flags and limit high (set flags appropriately)
-    db 0x00                     ; Base high
+    ;dw tss_end - tss_start - 1  ; Limit
+    ;dw TSS_BASE_LOW             ; Base low, middle, and high parts packed in two dwords
+    ;db TSS_BASE_HIGH            ; Base 16-23 bits (or part of base, depending on encoding)
+    ;db 0x89                     ; Access byte: present, ring 0, type 9 (available TSS)
+    ;db 0x00                     ; Flags and limit high (set flags appropriately)
+    ;db 0x00                     ; Base high
 gdt_end:
 
 gdt_descriptor:
     dw gdt_end - gdt_start - 1
     dd gdt_start
 
-tss_start:
-    times 104 db 0
-tss_end:
+;tss_start:
+;    times 104 db 0
+;tss_end:
+
 
 [BITS 32]
 load32:
-    ltr[TSS_SEG]
+    ;ltr[TSS_SEG]
 
     ; Fast enable the A20 line.
     in al, 0x92
@@ -93,40 +94,23 @@ load32:
     ; Put the kernel in RAM.
     mov eax, 1            ; Start LBA = 1
     mov ebx, 0            ; Sectors to read in(0 is a special case for 256 sectors)
-    mov ecx, 256          ; Track actual sector count for looping
-    mov edi, 0x00100000    ; Destination address in memory = 0x00100000
-    call ata_lba_read_28     ; Read the sectors
+    mov ecx, 4            ; Number of 128 KB chunks to read - 1
+    mov edi, 0x00100000   ; Destination address in memory = 0x00100000
 
-    ; Put the kernel in RAM.
-    mov eax, 257            ; Start LBA = 1
-    mov ebx, 0            ; Sectors to read in(0 is a special case for 256 sectors)
-    mov ecx, 256          ; Track actual sector count for looping
-    mov edi, 0x00120000    ; Destination address in memory = 0x00100000
-    call ata_lba_read_28     ; Read the sectors
-
-    ; Put the kernel in RAM.
-    mov eax, 513            ; Start LBA = 1
-    mov ebx, 0            ; Sectors to read in(0 is a special case for 256 sectors)
-    mov ecx, 256          ; Track actual sector count for looping
-    mov edi, 0x00140000    ; Destination address in memory = 0x00100000
-    call ata_lba_read_28     ; Read the sectors
-
-    ; Put the kernel in RAM.
-    mov eax, 769            ; Start LBA = 1
-    mov ebx, 0            ; Sectors to read in(0 is a special case for 256 sectors)
-    mov ecx, 256          ; Track actual sector count for looping
-    mov edi, 0x00160000    ; Destination address in memory = 0x00100000
-    call ata_lba_read_28     ; Read the sectors
-
-    ; Put the kernel in RAM.
-    mov eax, 1025            ; Start LBA = 1
-    mov ebx, 0            ; Sectors to read in(0 is a special case for 256 sectors)
-    mov ecx, 256          ; Track actual sector count for looping
-    mov edi, 0x00180000    ; Destination address in memory = 0x00100000
-    call ata_lba_read_28     ; Read the sectors
+    .kernel_load:
+    push eax              ; Save the current LBA
+    push ecx              ; Save the number of 128 KB chunks left to read
+    mov ecx, 256          ; Number of sectors to read in. 512 * 256 = 128 KB
+    call ata_lba_read_28  ; Read the sectors
+    ;add edi, 0x00020000   ; Increase the destination address by 128 KB
+    pop ecx
+    pop eax
+    add eax, 256          ; Increase the LBA by 256 sectors.
+    loop .kernel_load
 
     ; Jump to the kernel
     jmp CODE_SEG:0x100000
+
 
 ata_lba_read_28:
     push eax
@@ -153,6 +137,8 @@ ata_lba_read_28:
     out dx, al           ; Send the high byte
 
     mov dx, 0x1F7        ; Point to the status register
+
+
 .wait_for_not_busy:
     in al, dx
     test al, 0x80        ; Wait for BSY to be cleared
@@ -163,10 +149,13 @@ ata_lba_read_28:
     mov al, 0x20         ; ATA command `0x20` (Read Sectors)
     out dx, al           ; Send the read command
 
+
 .next_sector:
     push ecx
 
     mov dx, 0x1F7        ; Point to the status register
+
+
 .wait_for_data_request:
     in al, dx
     test al, 0x08
@@ -178,6 +167,7 @@ ata_lba_read_28:
     pop ecx
     loop .next_sector
     ret
+
 
 times 510-($ - $$) db 0
 dw 0xAA55
