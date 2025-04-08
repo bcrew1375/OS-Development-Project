@@ -1,4 +1,5 @@
 const kernel_common = @import("kernel_common.zig");
+const std = @import("std");
 
 const TEXT_MODE_WIDTH: u16 = 80;
 const TEXT_MODE_HEIGHT: u16 = 25;
@@ -31,7 +32,8 @@ var column: u8 = 0;
 var printed: u8 = 0;
 
 pub const TEXT_MODE_MEMORY = struct {
-    pub const buffer: *volatile [TEXT_MODE_BUFFER_SIZE]u16 = @ptrFromInt(0xB8000);
+    pub var buffer: *volatile [TEXT_MODE_BUFFER_SIZE]u16 = @ptrFromInt(0xB8000);
+    //const volatileRamSlice: []volatile u8 = std.mem.sliceFromPtr(@as(*volatile u16, @ptrFromInt(0xB8000)));
 };
 
 pub fn initialize() void {
@@ -47,8 +49,8 @@ pub fn print(string: []const u8) void {
 }
 
 fn putChar(x_position: u8, y_position: u8, character: u8, color: COLOR) void {
-    if ((x_position > MAX_COLUMN_INDEX) or (y_position > MAX_ROW_INDEX)) {
-        return;
+    if (x_position > MAX_COLUMN_INDEX) {
+        nextLine();
     }
 
     TEXT_MODE_MEMORY.buffer.*[(y_position * TEXT_MODE_WIDTH) + x_position] = makeChar(character, color);
@@ -56,20 +58,32 @@ fn putChar(x_position: u8, y_position: u8, character: u8, color: COLOR) void {
 
 fn writeChar(character: u8, color: COLOR) void {
     if (character == '\n') {
-        row += 1;
-        column = 0;
+        nextLine();
         return;
+    }
+
+    if (row > MAX_ROW_INDEX) {
+        // "Scroll" the screen up one line.
+        for (TEXT_MODE_WIDTH..TEXT_MODE_BUFFER_SIZE) |i| {
+            TEXT_MODE_MEMORY.buffer.*[i - TEXT_MODE_WIDTH] = TEXT_MODE_MEMORY.buffer.*[i];
+        }
+
+        for ((TEXT_MODE_BUFFER_SIZE - TEXT_MODE_WIDTH)..TEXT_MODE_BUFFER_SIZE) |i| {
+            TEXT_MODE_MEMORY.buffer.*[i] = makeChar(' ', COLOR.black);
+        }
+
+        row = MAX_ROW_INDEX;
     }
 
     putChar(column, row, character, color);
     column += 1;
-
-    if (column >= TEXT_MODE_WIDTH) {
-        column = 0;
-        row += 1;
-    }
 }
 
 fn makeChar(character: u8, color: COLOR) u16 {
     return (@as(u16, @intFromEnum(color)) << 8) | character;
+}
+
+fn nextLine() void {
+    row += 1;
+    column = 0;
 }
