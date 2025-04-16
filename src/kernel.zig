@@ -15,3 +15,12 @@ pub export fn kernelMain() void {
         kernel_common.printString(@errorName(err));
     };
 }
+
+pub fn panic(message: []const u8, stack_trace: ?*std.builtin.StackTrace, number: ?usize) noreturn {
+    terminal.print("\n!KERNEL PANIC!\n");
+    terminal.print(message);
+    terminal.print("\n");
+    _ = stack_trace;
+    _ = number;
+    while (true) {}
+}

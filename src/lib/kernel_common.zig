@@ -10,17 +10,22 @@ pub const KERNEL_DATA_SELECTOR: u8 = 0x10;
 pub fn kernelInitialize() !void {
     terminal.initialize();
 
-    //printString("Initializing Interrupt Descriptor Table...");
-    //try idt.initialize();
-    //printString("done\n");
+    printString("Initializing Interrupt Descriptor Table...");
+    try idt.initialize();
+    printString("done\n");
 
     //printString("Initializing Kernel Heap...");
     //try kernel_heap.initialize();
     //printString("done\n");
 
-    for (0..200) |i| {
-        printFormat("Line: {d}\n", .{i});
-    }
+    //for (0..1000) |i| {
+    //    printFormat("Line: {d}\n", .{i});
+    //}
+    //var number: u32 = 0;
+    //while (true) {
+    //    printFormat("Running {d}\n", .{number});
+    //    number += 1;
+    //}
 }
 
 pub fn printString(string: []const u8) void {

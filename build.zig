@@ -43,8 +43,8 @@ pub fn build(b: *std.Build) void {
         OBJ_FILES ++
         &[_][]const u8{
         "-O",
-        "ReleaseSmall",
-        //"Debug",
+        //"ReleaseSmall",
+        "Debug",
         "-femit-bin=./build/kernelfull.o", //.zig.o",
         "-target",
         //"x86-linux",

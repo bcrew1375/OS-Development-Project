@@ -28,18 +28,25 @@ pub fn initialize() !void {
     interrupt_descriptor_table_register.base = @intFromPtr(&interrupt_descriptor_table);
 
     for (0..TOTAL_INTERRUPTS) |i| {
-        set(@truncate(i), @intFromPtr(&no_interrupt), 0xEE);
+        set(@truncate(i), @intFromPtr(&no_interrupt_handler), 0xEE);
     }
-    set(0x00, @intFromPtr(&idt_zero), 0xEE);
-    set(0x06, @intFromPtr(&invalid_opcode), 0xEE);
-    set(0x08, @intFromPtr(&double_fault), 0xEE);
-    set(0x0C, @intFromPtr(&stack_segment_fault), 0xEE);
-    set(0x0D, @intFromPtr(&general_protection_fault), 0xEE);
-    set(0x0E, @intFromPtr(&page_fault), 0xEE);
-    set(0x11, @intFromPtr(&alignment_check), 0xEE);
-    set(0x21, @intFromPtr(&int21h), 0xEE);
+    //set(0x00, @intFromPtr(&idt_zero), 0xEE);
+    //set(0x01, @intFromPtr(&debug_exception), 0xEE);
+    //set(0x06, @intFromPtr(&invalid_opcode), 0xEE);
+    //set(0x08, @intFromPtr(&double_fault), 0xEE);
+    //set(0x0A, @intFromPtr(&invalid_tss), 0xEE);
+    //set(0x0C, @intFromPtr(&stack_segment_fault), 0xEE);
+    //set(0x0D, @intFromPtr(&general_protection_fault), 0xEE);
+    //set(0x0E, @intFromPtr(&page_fault), 0xEE);
+    //set(0x11, @intFromPtr(&alignment_check), 0xEE);
+    //set(0x20, @intFromPtr(&timer_interrupt), 0xEE);
+    //set(0x21, @intFromPtr(&int21h_handler), 0xEE);
 
-    //idt_load();
+    //for (34..TOTAL_INTERRUPTS) |i| {
+    //    set(@truncate(i), @intFromPtr(&non_intel), 0xEE);
+    //}
+
+    idt_load();
 }
 
 pub fn set(interrupt_number: u16, address: u32, type_attribute: u8) void {
@@ -52,8 +59,31 @@ pub fn set(interrupt_number: u16, address: u32, type_attribute: u8) void {
     return;
 }
 
+fn int21h_handler() void {
+    asm volatile (
+        \\cli
+    );
+    kernel_common.printString("Keyboard Pressed!\n");
+    acknowledge_interrupt();
+}
+
+fn no_interrupt_handler() callconv(.Naked) noreturn {
+    //asm volatile (
+    //    \\pusha
+    //);
+    //kernel_common.printString("No Interrupt!\n");
+    //port_io.out8(0x20, 0x20);
+    asm volatile (
+    //    \\popa
+        \\iret
+    );
+    //unreachable;
+}
+
 fn idt_load() void {
     asm volatile (
+        \\push %ebp
+        \\mov %esp, %ebp
         \\lidt (%ebx)
         \\sti
         :
@@ -64,24 +94,20 @@ fn idt_load() void {
 
 fn idt_zero() void {
     kernel_common.printString("Divide by zero error.\n");
-
-    asm volatile (
-        \\hlt
-    );
-}
-
-fn int21h() void {
     asm volatile (
         \\cli
-        \\call int21h_handler
-        \\sti
-        \\iret
+        \\hlt
     );
+    acknowledge_interrupt();
 }
 
-export fn int21h_handler() void {
-    kernel_common.printString("Keyboard Pressed!\n");
-    port_io.out8(0x20, 0x20);
+fn debug_exception() void {
+    kernel_common.printString("Debug exception.\n");
+    asm volatile (
+        \\cli
+        \\hlt
+    );
+    acknowledge_interrupt();
 }
 
 fn no_interrupt() void {
@@ -91,15 +117,7 @@ fn no_interrupt() void {
         \\sti
         \\iret
     );
-}
-
-export fn no_interrupt_handler() void {
-    kernel_common.printString("No Interrupt!\n");
-    asm volatile (
-        \\cli
-        \\hlt
-    );
-    port_io.out8(0x20, 0x20);
+    acknowledge_interrupt();
 }
 
 // A very simple handler for a general protection fault.
@@ -110,6 +128,7 @@ fn general_protection_fault() void {
         \\cli
         \\hlt
     );
+    acknowledge_interrupt();
 }
 
 // A simple handler for an invalid opcode fault.
@@ -119,6 +138,7 @@ fn invalid_opcode() void {
         \\cli
         \\hlt
     );
+    acknowledge_interrupt();
 }
 
 // A simple handler for an invalid opcode fault.
@@ -128,6 +148,7 @@ fn stack_segment_fault() void {
         \\cli
         \\hlt
     );
+    acknowledge_interrupt();
 }
 
 fn double_fault() void {
@@ -136,6 +157,16 @@ fn double_fault() void {
         \\cli
         \\hlt
     );
+    acknowledge_interrupt();
+}
+
+fn invalid_tss() void {
+    kernel_common.printString("Invalid TSS.\n");
+    asm volatile (
+        \\cli
+        \\hlt
+    );
+    acknowledge_interrupt();
 }
 
 fn page_fault() void {
@@ -144,6 +175,7 @@ fn page_fault() void {
         \\cli
         \\hlt
     );
+    acknowledge_interrupt();
 }
 
 fn alignment_check() void {
@@ -151,5 +183,43 @@ fn alignment_check() void {
     asm volatile (
         \\cli
         \\hlt
+    );
+    acknowledge_interrupt();
+}
+
+fn timer_interrupt() void {
+    asm volatile (
+        \\cli
+    );
+    kernel_common.printString("Timer interrupt.\n");
+    asm volatile (
+        \\sti
+        \\iret
+    );
+    acknowledge_interrupt();
+}
+
+fn int21h() void {
+    asm volatile (
+        \\cli
+        \\call int21h_handler
+        \\sti
+        \\iret
+    );
+    acknowledge_interrupt();
+}
+
+fn non_intel() void {
+    kernel_common.printString("Non Intel interrupt.\n");
+    asm volatile (
+        \\cli
+        \\hlt
+    );
+    acknowledge_interrupt();
+}
+
+fn acknowledge_interrupt() void {
+    asm volatile (
+        \\sti
     );
 }

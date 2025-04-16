@@ -31,6 +31,7 @@ _start:
 
     cli
     hlt
+    ;sti
     jmp $
 
 times 512-($ - $$) db 0

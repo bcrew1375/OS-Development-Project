@@ -33,7 +33,6 @@ var printed: u8 = 0;
 
 pub const TEXT_MODE_MEMORY = struct {
     pub var buffer: *volatile [TEXT_MODE_BUFFER_SIZE]u16 = @ptrFromInt(0xB8000);
-    //const volatileRamSlice: []volatile u8 = std.mem.sliceFromPtr(@as(*volatile u16, @ptrFromInt(0xB8000)));
 };
 
 pub fn initialize() void {
@@ -54,6 +53,8 @@ fn putChar(x_position: u8, y_position: u8, character: u8, color: COLOR) void {
     }
 
     TEXT_MODE_MEMORY.buffer.*[(y_position * TEXT_MODE_WIDTH) + x_position] = makeChar(character, color);
+
+    column += 1;
 }
 
 fn writeChar(character: u8, color: COLOR) void {
@@ -63,20 +64,10 @@ fn writeChar(character: u8, color: COLOR) void {
     }
 
     if (row > MAX_ROW_INDEX) {
-        // "Scroll" the screen up one line.
-        for (TEXT_MODE_WIDTH..TEXT_MODE_BUFFER_SIZE) |i| {
-            TEXT_MODE_MEMORY.buffer.*[i - TEXT_MODE_WIDTH] = TEXT_MODE_MEMORY.buffer.*[i];
-        }
-
-        for ((TEXT_MODE_BUFFER_SIZE - TEXT_MODE_WIDTH)..TEXT_MODE_BUFFER_SIZE) |i| {
-            TEXT_MODE_MEMORY.buffer.*[i] = makeChar(' ', COLOR.black);
-        }
-
-        row = MAX_ROW_INDEX;
+        scrollLine();
     }
 
     putChar(column, row, character, color);
-    column += 1;
 }
 
 fn makeChar(character: u8, color: COLOR) u16 {
@@ -86,4 +77,16 @@ fn makeChar(character: u8, color: COLOR) u16 {
 fn nextLine() void {
     row += 1;
     column = 0;
+}
+
+fn scrollLine() void {
+    for (TEXT_MODE_WIDTH..TEXT_MODE_BUFFER_SIZE) |i| {
+        TEXT_MODE_MEMORY.buffer.*[i - TEXT_MODE_WIDTH] = TEXT_MODE_MEMORY.buffer.*[i];
+    }
+
+    for ((TEXT_MODE_BUFFER_SIZE - TEXT_MODE_WIDTH)..TEXT_MODE_BUFFER_SIZE) |i| {
+        TEXT_MODE_MEMORY.buffer.*[i] = makeChar(' ', COLOR.black);
+    }
+
+    row = MAX_ROW_INDEX;
 }
