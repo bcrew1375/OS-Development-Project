@@ -35,23 +35,25 @@ pub fn build(b: *std.Build) void {
     var zig_obj = b.addSystemCommand(&[_][]const u8{
         "zig",
         "build-obj",
-        //"-fno-strip",
+        "-fno-strip",
         "-fcompiler-rt",
-        //"--emit-relocs",
+        "--emit-relocs",
         //"-fstrip",
     } ++ ZIG_SOURCE_FILES ++
         OBJ_FILES ++
         &[_][]const u8{
-        "-O",
-        //"ReleaseSmall",
-        "Debug",
-        "-femit-bin=./build/kernelfull.o", //.zig.o",
-        "-target",
-        //"x86-linux",
-        "x86-freestanding",
-        "-mcpu",
-        "i386",
-    });
+            "-O",
+            //"ReleaseSmall",
+            "Debug",
+            "-femit-bin=./build/kernelfull.o", //.zig.o",
+            //"-o",
+            //"./build/kernelfull.o",
+            "-target",
+            //"x86-linux",
+            "x86-freestanding",
+            "-mcpu",
+            "i386",
+        });
 
     // Define the kernel object file to binary
     //var kernel_obj_to_bin = b.addSystemCommand(&[_][]const u8{

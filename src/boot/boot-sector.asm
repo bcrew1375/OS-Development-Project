@@ -93,7 +93,7 @@ load32:
     ; Put the kernel in RAM.
     mov eax, 1            ; Start LBA = 1
     mov ebx, 0            ; Sectors to read in(0 is a special case for 256 sectors)
-    mov ecx, 4            ; Number of 128 KB chunks to read
+    mov ecx, 15            ; Number of 128 KB chunks to read
     mov edi, 0x00100000   ; Destination address in memory = 0x00100000
 
     .kernel_load:

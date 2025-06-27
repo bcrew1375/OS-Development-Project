@@ -14,33 +14,28 @@ pub fn kernelInitialize() !void {
     try idt.initialize();
     printString("done\n");
 
-    //printString("Initializing Kernel Heap...");
-    //try kernel_heap.initialize();
-    //printString("done\n");
+    printString("Initializing Kernel Heap...");
+    try kernel_heap.initialize();
+    printString("done\n");
 
-    //for (0..1000) |i| {
-    //    printFormat("Line: {d}\n", .{i});
-    //}
-    //var number: u32 = 0;
-    //while (true) {
-    //    printFormat("Running {d}\n", .{number});
-    //    number += 1;
-    //}
+    for (0..100) |i| {
+        printFormat("{d}\n", .{i});
+    }
 }
 
 pub fn printString(string: []const u8) void {
     terminal.print(string);
 }
 
-pub fn printFormat(comptime string: []const u8, args: anytype) void {
+pub fn printFormat(comptime string_fmt: []const u8, args: anytype) void {
     var string_buffer: [256]u8 = undefined;
 
-    const string_slice = std.fmt.bufPrint(&string_buffer, string, args) catch |format_err| {
+    const string_slice = std.fmt.bufPrint(&string_buffer, string_fmt, args) catch |format_err| {
         printString(@errorName(format_err));
         return;
     };
 
-    terminal.print(string_slice);
+    printString(string_slice);
 }
 
 pub fn printNumber(number: i32) void {

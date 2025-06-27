@@ -14,24 +14,35 @@ _start:
     mov fs, ax
     mov gs, ax
     mov ss, ax
+    ;mov esp, 0x08000000
     mov ebp, 0x08000000
+    ;and esp, 0xFFFFFFF0   ; 16-byte alignment
+    ;sub esp, 4            ; prepare for `call` pushing 4 bytes
+    ;push ebp              ; save previous EBP
+    ;mov ebp, esp          ; establish correct base pointer
     mov esp, ebp
 
-    mov al, 00010001b
-    out 0x20, al ; Tell Master PIC
-
-    mov al, 0x20 ; Interrupt 0x20 is where master ISR should start.
+    mov al, 0x11        ; ICW1: start init, edge triggered, ICW4 needed
+    out 0x20, al
+    mov al, 0x20        ; ICW2: interrupt vector offset (0x20 = IRQ0 → INT 0x20)
     out 0x21, al
-
-    mov al, 00000001b
+    mov al, 0x04        ; ICW3: bitmask of connected slaves (bit 2 = IRQ2)
+    out 0x21, al
+    mov al, 0x01        ; ICW4: 8086 mode
     out 0x21, al
     ; End remap of the master PIC.
 
+    ;push ebx
+    ;push esi
+    ;push edi
     call kernelMain
-
-    cli
-    hlt
-    ;sti
+    ;pop edi
+    ;pop esi
+    ;pop ebx
+    ;pop ebp
+    ;cli
+    ;hlt
+    sti
     jmp $
 
 times 512-($ - $$) db 0
