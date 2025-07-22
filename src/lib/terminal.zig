@@ -5,7 +5,7 @@ const TEXT_MODE_WIDTH: u16 = 80;
 const TEXT_MODE_HEIGHT: u16 = 25;
 const TEXT_MODE_BUFFER_SIZE = TEXT_MODE_WIDTH * TEXT_MODE_HEIGHT;
 
-const COLOR = enum(u8) {
+pub const COLOR = enum(u8) {
     black = 0,
     blue = 1,
     green = 2,
@@ -44,6 +44,12 @@ pub fn initialize() void {
 pub fn print(string: []const u8) void {
     for (0..string.len) |i| {
         writeChar(string[i], COLOR.white);
+    }
+}
+
+pub fn printColor(string: []const u8, color: COLOR) void {
+    for (0..string.len) |i| {
+        writeChar(string[i], color);
     }
 }
 
