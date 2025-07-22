@@ -18,9 +18,9 @@ pub fn kernelInitialize() !void {
     try kernel_heap.initialize();
     printString("done\n");
 
-    for (0..100) |i| {
-        printFormat("{d}\n", .{i});
-    }
+    //for (0..100) |i| {
+    //    printFormat("{d}\n", .{i});
+    //}
 }
 
 pub fn printString(string: []const u8) void {

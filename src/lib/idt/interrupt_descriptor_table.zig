@@ -2,7 +2,7 @@ const std = @import("std");
 const kernel_common = @import("../kernel_common.zig");
 const port_io = @import("../port-io.zig");
 
-const TOTAL_INTERRUPTS: u16 = 512;
+const TOTAL_INTERRUPTS: u16 = 256;
 
 const InterruptDescriptorTableStruct = packed struct {
     offset_low: u16 = 0, // Offset bits 0-15
@@ -23,28 +23,35 @@ var interrupt_descriptor_table: [TOTAL_INTERRUPTS]InterruptDescriptorTableStruct
 var interrupt_descriptor_table_register: InterruptDescriptorTableRegisterStruct =
     InterruptDescriptorTableRegisterStruct{ .base = undefined };
 
+const Trampoline = *const fn () callconv(.Naked) void;
+
+// Generate a trampoline that pushes its index and calls `target`
+fn makeTrampoline(comptime index: u32) Trampoline {
+    return struct {
+        fn trampoline() callconv(.Naked) void {
+            asm volatile (
+                \\ push %esp
+                \\ push %[index]
+                \\ call interrupt_handler
+                \\ add $8, %esp
+                \\ iret
+                :
+                : [index] "i" (index),
+            );
+        }
+    }.trampoline;
+}
+
+var trampolines: [TOTAL_INTERRUPTS]Trampoline = undefined;
+
 pub fn initialize() !void {
+    inline for (0..TOTAL_INTERRUPTS) |vec| {
+        trampolines[vec] = makeTrampoline(vec);
+        set(@truncate(vec), @intFromPtr(trampolines[vec]), 0x8E);
+    }
+
     interrupt_descriptor_table_register.limit = @sizeOf(@TypeOf(interrupt_descriptor_table)) - 1;
     interrupt_descriptor_table_register.base = @intFromPtr(&interrupt_descriptor_table);
-
-    for (0..TOTAL_INTERRUPTS) |vec| {
-        set(@truncate(vec), @intFromPtr(&interrupt_handler_stub), 0x8E);
-    }
-    //set(0x00, @intFromPtr(&idt_zero_entry), 0xEE);
-    //set(0x01, @intFromPtr(&debug_exception), 0xEE);
-    //set(0x06, @intFromPtr(&invalid_opcode_entry), 0xEE);
-    //set(0x08, @intFromPtr(&double_fault), 0xEE);
-    //set(0x0A, @intFromPtr(&invalid_tss), 0xEE);
-    //set(0x0C, @intFromPtr(&stack_segment_fault), 0xEE);
-    //set(0x0D, @intFromPtr(&general_protection_fault_entry), 0xEE);
-    //set(0x0E, @intFromPtr(&page_fault), 0xEE);
-    //set(0x11, @intFromPtr(&alignment_check), 0xEE);
-    //set(0x20, @intFromPtr(&timer_interrupt_entry), 0xEE);
-    //set(0x21, @intFromPtr(&keyboard_interrupt_entry), 0xEE);
-
-    //for (34..TOTAL_INTERRUPTS) |i| {
-    //    set(@truncate(i), @intFromPtr(&non_intel), 0xEE);
-    //}
 
     idt_load();
 }
@@ -59,32 +66,10 @@ pub fn set(interrupt_number: u16, address: u32, type_attribute: u8) void {
     return;
 }
 
-export fn keyboard_handler() void {
-    kernel_common.printString("Keyboard Pressed!\n");
-    port_io.out8(0x20, 0x20);
-}
-
-export fn no_interrupt_handler() void {
-    kernel_common.printString("No Interrupt!\n");
-    port_io.out8(0x20, 0x20);
-}
-
-fn no_interrupt_entry() callconv(.Naked) noreturn {
-    asm volatile (
-        \\cli
-        \\pusha
-        \\call no_interrupt_handler
-        \\iret
-    );
-}
-
 fn idt_load() void {
     asm volatile (
-    //\\push %ebp
-    //\\mov %esp, %ebp
         \\cli
         \\lidt (%ebx)
-        //\\pop %ebp
         \\sti
         :
         : [interrupt_descriptor_table_register] "{ebx}" (&interrupt_descriptor_table_register),
@@ -92,173 +77,63 @@ fn idt_load() void {
     );
 }
 
-export fn idt_zero_handler() void {
-    kernel_common.printString("Divide by zero error.\n");
+export fn interrupt_handler(index: u32, stack_pointer: u32) callconv(.C) void {
+    kernel_common.printString("Interrupt: ");
+    switch (index) {
+        0x00 => {
+            kernel_common.printString("Divide by zero.");
+        },
+        0x01 => {
+            kernel_common.printString("Debug exception.");
+        },
+        0x02...0x05 => {},
+        0x06 => {
+            kernel_common.printString("Invalid opcode.");
+        },
+        0x07 => {},
+        0x08 => {
+            kernel_common.printString("Double fault.");
+        },
+        0x09 => {},
+        0x0A => {
+            kernel_common.printString("Invalid TSS.");
+        },
+        0x0B => {},
+        0x0C => {
+            kernel_common.printString("Stack segment fault.");
+        },
+        0x0D => {
+            kernel_common.printString("General protection fault.");
+            kernel_common.printFormat(" Stack Index: {x}\n", .{stack_pointer});
+            asm volatile (
+                \\cli
+                \\hlt
+            );
+        },
+        0x0E => {
+            kernel_common.printString("Page fault.");
+        },
+        0x0F => {},
+        0x10 => {},
+        0x11 => {
+            kernel_common.printString("Alignment check.");
+        },
+        0x12...0x1F => {},
+        0x20 => {
+            kernel_common.printString("Timer.");
+        },
+        0x21 => {
+            kernel_common.printString("Keyboard pressed.");
+            _ = port_io.in8(0x60);
+        },
+        0x22...0xFFFFFFFF => {},
+    }
+
+    kernel_common.printFormat(" --- Stack Index: {x}\n", .{stack_pointer});
+    //var i: usize = 0;
+    //while (i < 1000000000) : (i += 1) {
+    //    asm volatile ("" ::: "memory"); // prevent loop being optimized away
+    //}
     port_io.out8(0x20, 0x20);
-}
-
-fn idt_zero_entry() void {
-    asm volatile (
-        \\cli
-    );
-    kernel_common.printString("Zero divide interrupt.\n");
-    asm volatile (
-        \\hlt
-        \\sti
-        \\iret
-    );
-}
-
-fn debug_exception() void {
-    kernel_common.printString("Debug exception.\n");
-    asm volatile (
-        \\cli
-        \\hlt
-    );
-}
-
-export fn general_protection_fault_handler() void {
-    kernel_common.printString("General protection fault.\n");
-    port_io.out8(0x20, 0x20);
-}
-
-// A very simple handler for a general protection fault.
-// In a real kernel, you might log register state or blink LEDs, etc.
-fn general_protection_fault_entry() void {
-    asm volatile (
-        \\cli
-    );
-    kernel_common.printString("General protection fault interrupt.\n");
-    asm volatile (
-        \\hlt
-        \\sti
-        \\iret
-    );
-}
-
-export fn invalid_opcode_handler() void {
-    asm volatile (
-        \\cli
-    );
-    kernel_common.printString("Invalid opcode interrupt.\n");
-    asm volatile (
-        \\hlt
-        \\sti
-        \\iret
-    );
-}
-
-// A simple handler for an invalid opcode fault.
-fn invalid_opcode_entry() callconv(.Naked) noreturn {
-    asm volatile (
-        \\cli
-        \\call invalid_opcode_handler
-        \\hlt
-        \\iret
-    );
-}
-
-// A simple handler for an invalid opcode fault.
-fn stack_segment_fault() void {
-    asm volatile (
-        \\cli
-    );
-    kernel_common.printString("Stack segment interrupt.\n");
-    asm volatile (
-        \\hlt
-        \\sti
-        \\iret
-    );
-}
-
-fn double_fault() void {
-    asm volatile (
-        \\cli
-    );
-    kernel_common.printString("Double fault interrupt.\n");
-    asm volatile (
-        \\hlt
-        \\sti
-        \\iret
-    );
-}
-
-fn invalid_tss() void {
-    asm volatile (
-        \\cli
-    );
-    kernel_common.printString("Invalid TSS interrupt.\n");
-    asm volatile (
-        \\hlt
-        \\sti
-        \\iret
-    );
-}
-
-fn page_fault() void {
-    asm volatile (
-        \\cli
-    );
-    kernel_common.printString("Page fault interrupt.\n");
-    asm volatile (
-        \\hlt
-        \\sti
-        \\iret
-    );
-}
-
-fn alignment_check() void {
-    kernel_common.printString("Alignment check.\n");
-    asm volatile (
-        \\cli
-        \\hlt
-    );
-}
-
-export fn timer_interrupt_handler() void {
-    kernel_common.printString("Timer interrupt.\n");
-    port_io.out8(0x20, 0x20);
-}
-
-export fn keyboard_interrupt_handler() void {
-    kernel_common.printString("Keyboard interrupt.\n");
-    port_io.out8(0x20, 0x20);
-    _ = port_io.in8(0x60);
-}
-
-fn non_intel() void {
-    asm volatile (
-        \\cli
-        \\call keyboard_handler
-        \\iret
-    );
-}
-
-fn keyboard_interrupt_entry() callconv(.Naked) noreturn {
-    asm volatile (
-        \\cli
-        \\call keyboard_interrupt_handler
-        \\iret
-    );
-}
-
-fn timer_interrupt_entry() callconv(.Naked) noreturn {
-    asm volatile (
-        \\cli
-        \\call timer_interrupt_handler
-        \\iret
-    );
-}
-
-fn interrupt_handler_stub() callconv(.Naked) noreturn {
-    asm volatile (
-        \\cli
-        \\call interrupt_handler
-        \\iret
-    );
-}
-
-export fn interrupt_handler() void {
-    kernel_common.printString("Handler.\n");
-    port_io.out8(0x20, 0x20);
+    port_io.out8(0xA0, 0x20);
 }

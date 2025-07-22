@@ -26,7 +26,7 @@ pub fn build(b: *std.Build) void {
         "nasm",
         "-f",
         "elf",
-        "-g",
+        //"-g",
         "./src/boot/kernel.asm",
         "-o",
         "./build/kernel.asm.o",
@@ -43,8 +43,8 @@ pub fn build(b: *std.Build) void {
         OBJ_FILES ++
         &[_][]const u8{
             "-O",
-            //"ReleaseSmall",
-            "Debug",
+            "ReleaseSmall",
+            //"Debug",
             "-femit-bin=./build/kernelfull.o", //.zig.o",
             //"-o",
             //"./build/kernelfull.o",

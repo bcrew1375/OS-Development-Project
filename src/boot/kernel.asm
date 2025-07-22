@@ -14,12 +14,7 @@ _start:
     mov fs, ax
     mov gs, ax
     mov ss, ax
-    ;mov esp, 0x08000000
     mov ebp, 0x08000000
-    ;and esp, 0xFFFFFFF0   ; 16-byte alignment
-    ;sub esp, 4            ; prepare for `call` pushing 4 bytes
-    ;push ebp              ; save previous EBP
-    ;mov ebp, esp          ; establish correct base pointer
     mov esp, ebp
 
     mov al, 0x11        ; ICW1: start init, edge triggered, ICW4 needed
@@ -32,17 +27,7 @@ _start:
     out 0x21, al
     ; End remap of the master PIC.
 
-    ;push ebx
-    ;push esi
-    ;push edi
     call kernelMain
-    ;pop edi
-    ;pop esi
-    ;pop ebx
-    ;pop ebp
-    ;cli
-    ;hlt
-    sti
     jmp $
 
 times 512-($ - $$) db 0
