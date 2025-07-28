@@ -135,5 +135,5 @@ export fn interrupt_handler(index: u32, stack_pointer: u32) callconv(.C) void {
     //    asm volatile ("" ::: "memory"); // prevent loop being optimized away
     //}
     port_io.out8(0x20, 0x20);
-    port_io.out8(0xA0, 0x20);
+    //port_io.out8(0xA0, 0x20);
 }

@@ -9,6 +9,10 @@ pub const MESSAGE = "Aello,World!\n";
 pub export fn kernelMain() void {
     kernel_common.kernelInitialize() catch |err| {
         kernel_common.printString(@errorName(err));
+        asm volatile (
+            \\ cli
+            \\ hlt
+        );
     };
 }
 

@@ -6,22 +6,22 @@ const TEXT_MODE_HEIGHT: u16 = 25;
 const TEXT_MODE_BUFFER_SIZE = TEXT_MODE_WIDTH * TEXT_MODE_HEIGHT;
 
 pub const COLOR = enum(u8) {
-    black = 0,
-    blue = 1,
-    green = 2,
-    cyan = 3,
-    red = 4,
-    magenta = 5,
-    brown = 6,
-    light_gray = 7,
-    dark_gray = 8,
-    light_blue = 9,
-    light_green = 10,
-    light_cyan = 11,
-    light_red = 12,
-    light_magenta = 13,
-    something = 14,
-    white = 15,
+    BLACK = 0,
+    BLUE = 1,
+    GREEN = 2,
+    CYAN = 3,
+    RED = 4,
+    MAGENTA = 5,
+    BROWN = 6,
+    LIGHT_GRAY = 7,
+    DARK_GRAY = 8,
+    LIGHT_BLUE = 9,
+    LIGHT_GREEN = 10,
+    LIGHT_CYAN = 11,
+    LIGHT_RED = 12,
+    LIGHT_MAGENTA = 13,
+    YELLOW = 14,
+    WHITE = 15,
 };
 
 const MAX_ROW_INDEX = TEXT_MODE_HEIGHT - 1;
@@ -38,12 +38,12 @@ pub const TEXT_MODE_MEMORY = struct {
 pub fn initialize() void {
     row = 0;
     column = 0;
-    @memset(TEXT_MODE_MEMORY.buffer[0..TEXT_MODE_BUFFER_SIZE], makeChar(' ', COLOR.black));
+    @memset(TEXT_MODE_MEMORY.buffer[0..TEXT_MODE_BUFFER_SIZE], makeChar(' ', COLOR.BLACK));
 }
 
 pub fn print(string: []const u8) void {
     for (0..string.len) |i| {
-        writeChar(string[i], COLOR.white);
+        writeChar(string[i], COLOR.WHITE);
     }
 }
 
@@ -91,7 +91,7 @@ fn scrollLine() void {
     }
 
     for ((TEXT_MODE_BUFFER_SIZE - TEXT_MODE_WIDTH)..TEXT_MODE_BUFFER_SIZE) |i| {
-        TEXT_MODE_MEMORY.buffer.*[i] = makeChar(' ', COLOR.black);
+        TEXT_MODE_MEMORY.buffer.*[i] = makeChar(' ', COLOR.BLACK);
     }
 
     row = MAX_ROW_INDEX;

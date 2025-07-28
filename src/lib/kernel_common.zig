@@ -12,15 +12,11 @@ pub fn kernelInitialize() !void {
 
     printString("Initializing Interrupt Descriptor Table...");
     try idt.initialize();
-    printStringColor("done\n", terminal.COLOR.green);
+    printStringColor("done\n", terminal.COLOR.GREEN);
 
     printString("Initializing Kernel Heap...");
     try kernel_heap.initialize();
-    printStringColor("done\n", terminal.COLOR.green);
-
-    //for (0..100) |i| {
-    //    printFormat("{d}\n", .{i});
-    //}
+    printStringColor("done\n", terminal.COLOR.GREEN);
 }
 
 pub fn printString(string: []const u8) void {
