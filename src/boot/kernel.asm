@@ -17,6 +17,8 @@ _start:
     mov ebp, 0x08000000
     mov esp, ebp
 
+    cli
+
     mov al, 0x11        ; ICW1: start init, edge triggered, ICW4 needed
     out 0x20, al
     mov al, 0x20        ; ICW2: interrupt vector offset (0x20 = IRQ0 → INT 0x20)

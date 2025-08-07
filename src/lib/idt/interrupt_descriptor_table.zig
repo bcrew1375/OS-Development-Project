@@ -45,6 +45,7 @@ fn makeTrampoline(comptime index: u32) Trampoline {
 var trampolines: [TOTAL_INTERRUPTS]Trampoline = undefined;
 
 pub fn initialize() !void {
+    kernel_common.printString("Initializing Interrupt Descriptor Table...");
     inline for (0..TOTAL_INTERRUPTS) |vec| {
         trampolines[vec] = makeTrampoline(vec);
         set(@truncate(vec), @intFromPtr(trampolines[vec]), 0x8E);
@@ -54,6 +55,7 @@ pub fn initialize() !void {
     interrupt_descriptor_table_register.base = @intFromPtr(&interrupt_descriptor_table);
 
     idt_load();
+    kernel_common.printStringColor("done\n", kernel_common.COLOR.GREEN);
 }
 
 pub fn set(interrupt_number: u16, address: u32, type_attribute: u8) void {
@@ -130,10 +132,13 @@ export fn interrupt_handler(index: u32, stack_pointer: u32) callconv(.C) void {
     }
 
     kernel_common.printFormat(" --- Stack Index: {x}\n", .{stack_pointer});
-    //var i: usize = 0;
-    //while (i < 1000000000) : (i += 1) {
-    //    asm volatile ("" ::: "memory"); // prevent loop being optimized away
-    //}
+
+    // Waste some time to slow down printing.
+    var i: usize = 0;
+    while (i < 100000000) : (i += 1) {
+        asm volatile ("" ::: "memory"); // prevent loop being optimized away
+    }
+
     port_io.out8(0x20, 0x20);
     port_io.out8(0xA0, 0x20);
 }

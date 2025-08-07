@@ -5,25 +5,6 @@ const TEXT_MODE_WIDTH: u16 = 80;
 const TEXT_MODE_HEIGHT: u16 = 25;
 const TEXT_MODE_BUFFER_SIZE = TEXT_MODE_WIDTH * TEXT_MODE_HEIGHT;
 
-pub const COLOR = enum(u8) {
-    black = 0,
-    blue = 1,
-    green = 2,
-    cyan = 3,
-    red = 4,
-    magenta = 5,
-    brown = 6,
-    light_gray = 7,
-    dark_gray = 8,
-    light_blue = 9,
-    light_green = 10,
-    light_cyan = 11,
-    light_red = 12,
-    light_magenta = 13,
-    something = 14,
-    white = 15,
-};
-
 const MAX_ROW_INDEX = TEXT_MODE_HEIGHT - 1;
 const MAX_COLUMN_INDEX = TEXT_MODE_WIDTH - 1;
 
@@ -38,22 +19,22 @@ pub const TEXT_MODE_MEMORY = struct {
 pub fn initialize() void {
     row = 0;
     column = 0;
-    @memset(TEXT_MODE_MEMORY.buffer[0..TEXT_MODE_BUFFER_SIZE], makeChar(' ', COLOR.black));
+    @memset(TEXT_MODE_MEMORY.buffer[0..TEXT_MODE_BUFFER_SIZE], makeChar(' ', kernel_common.COLOR.BLACK));
 }
 
 pub fn print(string: []const u8) void {
     for (0..string.len) |i| {
-        writeChar(string[i], COLOR.white);
+        writeChar(string[i], kernel_common.COLOR.WHITE);
     }
 }
 
-pub fn printColor(string: []const u8, color: COLOR) void {
+pub fn printColor(string: []const u8, color: kernel_common.COLOR) void {
     for (0..string.len) |i| {
         writeChar(string[i], color);
     }
 }
 
-fn putChar(x_position: u8, y_position: u8, character: u8, color: COLOR) void {
+fn putChar(x_position: u8, y_position: u8, character: u8, color: kernel_common.COLOR) void {
     if (x_position > MAX_COLUMN_INDEX) {
         nextLine();
     }
@@ -63,7 +44,7 @@ fn putChar(x_position: u8, y_position: u8, character: u8, color: COLOR) void {
     column += 1;
 }
 
-fn writeChar(character: u8, color: COLOR) void {
+fn writeChar(character: u8, color: kernel_common.COLOR) void {
     if (character == '\n') {
         nextLine();
         return;
@@ -76,7 +57,7 @@ fn writeChar(character: u8, color: COLOR) void {
     putChar(column, row, character, color);
 }
 
-fn makeChar(character: u8, color: COLOR) u16 {
+fn makeChar(character: u8, color: kernel_common.COLOR) u16 {
     return (@as(u16, @intFromEnum(color)) << 8) | character;
 }
 
@@ -91,7 +72,7 @@ fn scrollLine() void {
     }
 
     for ((TEXT_MODE_BUFFER_SIZE - TEXT_MODE_WIDTH)..TEXT_MODE_BUFFER_SIZE) |i| {
-        TEXT_MODE_MEMORY.buffer.*[i] = makeChar(' ', COLOR.black);
+        TEXT_MODE_MEMORY.buffer.*[i] = makeChar(' ', kernel_common.COLOR.BLACK);
     }
 
     row = MAX_ROW_INDEX;

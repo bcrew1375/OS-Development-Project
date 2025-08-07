@@ -7,27 +7,36 @@ const kernel_heap = @import("../lib/memory/kernel_heap.zig");
 pub const KERNEL_CODE_SELECTOR: u8 = 0x08;
 pub const KERNEL_DATA_SELECTOR: u8 = 0x10;
 
+pub const COLOR = enum(u8) {
+    BLACK = 0,
+    BLUE = 1,
+    GREEN = 2,
+    CYAN = 3,
+    RED = 4,
+    MAGENTA = 5,
+    BROWN = 6,
+    LIGHT_GRAY = 7,
+    DARK_GRAY = 8,
+    LIGHT_BLUE = 9,
+    LIGHT_GREEN = 10,
+    LIGHT_CYAN = 11,
+    LIGHT_RED = 12,
+    LIGHT_MAGENTA = 13,
+    YELLOW = 14,
+    WHITE = 15,
+};
+
 pub fn kernelInitialize() !void {
     terminal.initialize();
-
-    printString("Initializing Interrupt Descriptor Table...");
-    try idt.initialize();
-    printStringColor("done\n", terminal.COLOR.green);
-
-    printString("Initializing Kernel Heap...");
     try kernel_heap.initialize();
-    printStringColor("done\n", terminal.COLOR.green);
-
-    //for (0..100) |i| {
-    //    printFormat("{d}\n", .{i});
-    //}
+    try idt.initialize();
 }
 
 pub fn printString(string: []const u8) void {
     terminal.print(string);
 }
 
-pub fn printStringColor(string: []const u8, color: terminal.COLOR) void {
+pub fn printStringColor(string: []const u8, color: COLOR) void {
     terminal.printColor(string, color);
 }
 
