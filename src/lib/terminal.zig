@@ -10,7 +10,6 @@ const MAX_COLUMN_INDEX = TEXT_MODE_WIDTH - 1;
 
 var row: u8 = 0;
 var column: u8 = 0;
-var printed: u8 = 0;
 
 pub const TEXT_MODE_MEMORY = struct {
     pub var buffer: *volatile [TEXT_MODE_BUFFER_SIZE]u16 = @ptrFromInt(0xB8000);
