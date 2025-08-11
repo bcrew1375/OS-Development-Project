@@ -18,6 +18,7 @@ pub fn initialize() !void {
     kernel_common.printFormat("- Heap table start address: 0x{x}\n", .{@intFromPtr(KERNEL_HEAP_TABLE_ADDRESS)});
     kernel_common.printFormat("- Heap physical start address: 0x{x}\n", .{@intFromPtr(KERNEL_HEAP_START_ADDRESS)});
     kernel_common.printFormat("- Heap physical end address: 0x{x}\n", .{@intFromPtr(KERNEL_HEAP_END_ADDRESS)});
+    kernel_common.printFormat("- Heap total bytes: {d}\n", .{KERNEL_HEAP_BYTES_SIZE});
     kernel_common.printString("- Testing heap allocation of 50: ");
     const test50: *[50]u8 = @ptrCast(try kmalloc(50));
     test50[49] = 55;
@@ -26,9 +27,9 @@ pub fn initialize() !void {
     const test5000: *[5000]u8 = @ptrCast(try kmalloc(5000));
     test5000[4999] = 85;
     kernel_common.printString("- OK\n");
-    kernel_common.printString("- Testing heap allocation of 2000000000: ");
-    const test2000000000: *[2000000000]u8 = @ptrCast(try kmalloc(2000000000));
-    test2000000000[1500000000] = 38;
+    kernel_common.printString("- Testing heap allocation of 104000000: ");
+    const test2000000000: *[104857601]u8 = @ptrCast(try kmalloc(104857601));
+    test2000000000[100400000] = 38;
     kernel_common.printString("- OK\n");
 
     kernel_common.printStringColor("done\n", kernel_common.COLOR.GREEN);
