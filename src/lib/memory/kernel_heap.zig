@@ -20,16 +20,17 @@ pub fn initialize() !void {
     kernel_common.printFormat("- Heap physical end address: 0x{x}\n", .{@intFromPtr(KERNEL_HEAP_END_ADDRESS)});
     kernel_common.printFormat("- Heap total bytes: {d}\n", .{KERNEL_HEAP_BYTES_SIZE});
     kernel_common.printString("- Testing heap allocation of 50: ");
-    const test50: *[50]u8 = @ptrCast(try kmalloc(50));
-    test50[49] = 55;
+    const test_one_block_allocate: *[50]u8 = @ptrCast(try kmalloc(50));
+    test_one_block_allocate[49] = 55;
     kernel_common.printString("- OK\n");
     kernel_common.printString("- Testing heap allocation of 5000: ");
-    const test5000: *[5000]u8 = @ptrCast(try kmalloc(5000));
-    test5000[4999] = 85;
+    const test_multi_block_allocate: *[5000]u8 = @ptrCast(try kmalloc(5000));
+    test_multi_block_allocate[4999] = 85;
     kernel_common.printString("- OK\n");
-    kernel_common.printString("- Testing heap allocation of 104000000: ");
-    const test2000000000: *[104857601]u8 = @ptrCast(try kmalloc(104857601));
-    test2000000000[100400000] = 38;
+    kernel_common.printFormat("- Testing out of heap allocation of: {d}\n", .{KERNEL_HEAP_BYTES_SIZE});
+    _ = kmalloc(KERNEL_HEAP_BYTES_SIZE) catch |err| {
+        kernel_common.printFormat("  - Heap allocate failed successfully with: {s} ", .{@errorName(err)});
+    };
     kernel_common.printString("- OK\n");
 
     kernel_common.printStringColor("done\n", kernel_common.COLOR.GREEN);

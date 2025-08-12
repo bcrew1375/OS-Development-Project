@@ -2,8 +2,8 @@ const kernel_common = @import("../kernel_common.zig");
 
 const std = @import("std");
 
-const BLOCK_TAKEN: u8 = 0x01;
-const BLOCK_FREE: u8 = 0x00;
+const BLOCK_TAKEN: u8 = 0b0000_0001;
+const BLOCK_FREE: u8 = 0b0000_0000;
 
 const BLOCK_HAS_NEXT: u8 = 0b1000_0000;
 const BLOCK_IS_FIRST: u8 = 0b0100_0000;
@@ -14,6 +14,7 @@ const HeapError = error{
     NotAligned,
     InvalidTableSize,
     OutOfMemory,
+    IntegrityError,
 };
 
 pub const Table = struct {
@@ -75,30 +76,30 @@ fn align_to_block_size(value: usize) !usize {
 
 fn get_start_block(heap_struct: *const Heap, needed_blocks: usize) !usize {
     var current_block: usize = 0;
-    var free_block: isize = -1;
+    var start_block: usize = 0;
+    var is_first: bool = true;
 
     for (0..heap_struct.table.total_entries) |block_entry| {
         if (get_entry_type(heap_struct.table.entries[block_entry]) != BLOCK_FREE) {
             current_block = 0;
-            free_block = @bitCast(block_entry);
+            start_block = 0;
+            is_first = true;
             continue;
         }
 
-        if (free_block == -1) {
-            free_block = @bitCast(block_entry);
+        if (is_first) {
+            is_first = false;
+            start_block = block_entry;
         }
+
         current_block += 1;
 
         if (current_block == needed_blocks) {
-            break;
+            return start_block;
         }
     }
 
-    if (free_block == -1) {
-        return HeapError.OutOfMemory;
-    } else {
-        return @bitCast(free_block);
-    }
+    return HeapError.OutOfMemory;
 }
 
 fn get_entry_type(entry_type: u8) u8 {
@@ -118,10 +119,10 @@ fn mark_blocks_taken(heap_struct: *const Heap, start_block: usize, total_blocks:
         entry |= BLOCK_HAS_NEXT;
     }
 
-    for (start_block..end_block) |block| {
-        heap_struct.table.entries[block] = entry;
+    for (start_block..(end_block + 1)) |block| {
         entry = BLOCK_TAKEN;
-        if (block != (end_block - 1)) {
+        heap_struct.table.entries[block] = entry;
+        if (block != end_block) {
             entry |= BLOCK_HAS_NEXT;
         }
     }
