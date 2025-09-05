@@ -23,12 +23,12 @@ var interrupt_descriptor_table: [TOTAL_INTERRUPTS]InterruptDescriptorTableStruct
 var interrupt_descriptor_table_register: InterruptDescriptorTableRegisterStruct =
     InterruptDescriptorTableRegisterStruct{ .base = undefined };
 
-const Trampoline = *const fn () callconv(.Naked) void;
+const Trampoline = *const fn () callconv(.naked) noreturn;
 
 // Generate a trampoline that pushes its index and calls `target`
 fn makeTrampoline(comptime index: u32) Trampoline {
     return struct {
-        fn trampoline() callconv(.Naked) void {
+        fn trampoline() align(16) callconv(.naked) noreturn {
             asm volatile (
                 \\ push %esp
                 \\ push %[index]
@@ -75,11 +75,10 @@ fn idt_load() void {
         \\sti
         :
         : [interrupt_descriptor_table_register] "{ebx}" (&interrupt_descriptor_table_register),
-        : "ebx", "memory"
-    );
+        : .{ .ebx = true, .memory = true });
 }
 
-export fn interrupt_handler(index: u32, stack_pointer: u32) callconv(.C) void {
+export fn interrupt_handler(index: u32, stack_pointer: u32) callconv(.c) void {
     kernel_common.printString("Interrupt: ");
     switch (index) {
         0x00 => {
@@ -107,10 +106,7 @@ export fn interrupt_handler(index: u32, stack_pointer: u32) callconv(.C) void {
         0x0D => {
             kernel_common.printString("General protection fault.");
             kernel_common.printFormat(" Stack Index: {x}\n", .{stack_pointer});
-            asm volatile (
-                \\cli
-                \\hlt
-            );
+            kernel_common.unrecoverableHalt();
         },
         0x0E => {
             kernel_common.printString("Page fault.");
@@ -136,7 +132,7 @@ export fn interrupt_handler(index: u32, stack_pointer: u32) callconv(.C) void {
     // Waste some time to slow down printing.
     var i: usize = 0;
     while (i < 100000000) : (i += 1) {
-        asm volatile ("" ::: "memory"); // prevent loop being optimized away
+        asm volatile ("" ::: .{ .memory = true }); // prevent loop being optimized away
     }
 
     port_io.out8(0x20, 0x20);

@@ -5,8 +5,7 @@ pub fn in8(port: u16) u8 {
         \\in %[port], %al
         : [_] "={al}" (in_data),
         : [port] "{dx}" (port),
-        : "eax", "dx", "memory"
-    );
+        : .{ .eax = true, .dx = true, .memory = true });
 
     return in_data;
 }
@@ -14,12 +13,11 @@ pub fn in8(port: u16) u8 {
 pub fn in16(port: u16) u16 {
     var in_data: u16 = 0;
 
-    asm (
+    asm volatile (
         \\in %[port], %ax 
         : [_] "={ax}" (in_data),
         : [port] "{dx}" (port),
-        : "ax", "dx", "memory"
-    );
+        : .{ .ax = true, .dx = true, .memory = true });
 
     return in_data;
 }
@@ -30,8 +28,7 @@ pub fn out8(port: u16, out_data: u8) void {
         :
         : [port] "{dx}" (port),
           [out_data] "{al}" (out_data),
-        : "dx", "al", "memory"
-    );
+        : .{ .dx = true, .al = true, .memory = true });
 }
 
 pub fn out16(port: u16, out_data: u16) void {
@@ -40,6 +37,5 @@ pub fn out16(port: u16, out_data: u16) void {
         :
         : [port] "{dx}" (port),
           [out_data] "{ax}" (out_data),
-        : "dx", "ax", "memory"
-    );
+        : .{ .dx = true, .ax = true, .memory = true });
 }

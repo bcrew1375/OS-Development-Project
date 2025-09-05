@@ -10,7 +10,7 @@ const BLOCK_IS_FIRST: u8 = 0b0100_0000;
 
 pub const BLOCK_SIZE: u32 = 4096;
 
-const HeapError = error{
+pub const HeapError = error{
     NotAligned,
     InvalidTableSize,
     OutOfMemory,
@@ -54,11 +54,10 @@ pub fn allocate(heap_struct: *const Heap, size: usize) !*anyopaque {
 }
 
 fn allocate_blocks(heap_struct: *const Heap, blocks: usize) !usize {
-    var address: usize = 0;
     const start_block = try get_start_block(heap_struct, blocks);
-
-    address = block_to_address(heap_struct, start_block);
     mark_blocks_taken(heap_struct, start_block, blocks);
+
+    const address = block_to_address(heap_struct, start_block);
     return address;
 }
 
