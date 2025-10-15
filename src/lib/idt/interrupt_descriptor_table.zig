@@ -72,7 +72,6 @@ fn idt_load() void {
     asm volatile (
         \\cli
         \\lidt (%ebx)
-        \\sti
         :
         : [interrupt_descriptor_table_register] "{ebx}" (&interrupt_descriptor_table_register),
         : .{ .ebx = true, .memory = true });
@@ -109,7 +108,13 @@ export fn interrupt_handler(index: u32, stack_pointer: u32) callconv(.c) void {
             kernel_common.unrecoverableHalt();
         },
         0x0E => {
-            kernel_common.printString("Page fault.");
+            const exception: usize = 0;
+            asm volatile (
+                \\ pop %ebx
+                :
+                : [exception] "{ebx}" (exception),
+                : .{ .ebx = true, .memory = true });
+            kernel_common.printFormat("Page fault: 0x{x}", .{exception});
         },
         0x0F => {},
         0x10 => {},
@@ -130,10 +135,10 @@ export fn interrupt_handler(index: u32, stack_pointer: u32) callconv(.c) void {
     kernel_common.printFormat(" --- Stack Index: {x}\n", .{stack_pointer});
 
     // Waste some time to slow down printing.
-    var i: usize = 0;
-    while (i < 100000000) : (i += 1) {
-        asm volatile ("" ::: .{ .memory = true }); // prevent loop being optimized away
-    }
+    //var i: usize = 0;
+    //while (i < 100000000) : (i += 1) {
+    //    asm volatile ("" ::: .{ .memory = true }); // prevent loop being optimized away
+    //}
 
     port_io.out8(0x20, 0x20);
     port_io.out8(0xA0, 0x20);

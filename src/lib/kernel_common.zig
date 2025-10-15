@@ -4,6 +4,7 @@ const idt = @import("idt/interrupt_descriptor_table.zig");
 const terminal = @import("terminal.zig");
 const kernel_heap = @import("../lib/memory/kernel_heap.zig");
 const paging = @import("../lib/memory/paging.zig");
+const port_io = @import("../lib/port-io.zig");
 
 pub const KERNEL_CODE_SELECTOR: u8 = 0x08;
 pub const KERNEL_DATA_SELECTOR: u8 = 0x10;
@@ -29,18 +30,20 @@ pub const COLOR = enum(u8) {
 
 pub fn kernelInitialize() !void {
     terminal.initialize();
-    kernel_heap.initialize() catch |err| {
-        printString(@errorName(err));
-        unrecoverableHalt();
-    };
     idt.initialize() catch |err| {
         printString(@errorName(err));
         unrecoverableHalt();
     };
-    _ = paging.makePageDirectoryEntry(0) catch |err| {
+    kernel_heap.initialize() catch |err| {
         printString(@errorName(err));
         unrecoverableHalt();
     };
+    disableInterrupts();
+    _ = paging.makePageDirectory(0x03) catch |err| {
+        printString(@errorName(err));
+        unrecoverableHalt();
+    };
+    enableInterrupts();
 }
 
 pub fn printString(string: []const u8) void {
@@ -106,4 +109,18 @@ pub fn unrecoverableHalt() noreturn {
         \\hlt
     );
     unreachable;
+}
+
+pub fn enableInterrupts() void {
+    asm volatile (
+        \\sti
+    );
+}
+
+pub fn disableInterrupts() void {
+    port_io.out8(0x20, 0x20);
+    port_io.out8(0xA0, 0x20);
+    asm volatile (
+        \\cli
+    );
 }
