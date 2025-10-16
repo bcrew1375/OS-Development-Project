@@ -58,7 +58,7 @@ pub fn initialize() !void {
     kernel_common.printStringColor("done\n", kernel_common.COLOR.GREEN);
 }
 
-pub fn set(interrupt_number: u16, address: u32, type_attribute: u8) void {
+pub fn set(interrupt_number: u16, address: usize, type_attribute: u8) void {
     var interrupt_descriptor: *InterruptDescriptorTableStruct = &interrupt_descriptor_table[interrupt_number];
     interrupt_descriptor.offset_low = @truncate(address & 0xffff);
     interrupt_descriptor.selector = kernel_common.KERNEL_CODE_SELECTOR;
@@ -77,7 +77,9 @@ fn idt_load() void {
         : .{ .ebx = true, .memory = true });
 }
 
-export fn interrupt_handler(index: u32, stack_pointer: u32) callconv(.c) void {
+export fn interrupt_handler(index: usize, stack_pointer: usize) callconv(.c) void {
+    // Not ready to handle nested interrupts. Don't risk stack overflow.
+    kernel_common.disableInterrupts();
     kernel_common.printString("Interrupt: ");
     switch (index) {
         0x00 => {
@@ -108,13 +110,16 @@ export fn interrupt_handler(index: u32, stack_pointer: u32) callconv(.c) void {
             kernel_common.unrecoverableHalt();
         },
         0x0E => {
-            const exception: usize = 0;
+            const virtual_address: usize = 0;
             asm volatile (
-                \\ pop %ebx
+                \\ mov %cr2, %[virtual_address]
                 :
-                : [exception] "{ebx}" (exception),
+                : [virtual_address] "{ebx}" (virtual_address),
                 : .{ .ebx = true, .memory = true });
-            kernel_common.printFormat("Page fault: 0x{x}", .{exception});
+            const stack_array: *[4]usize = @ptrFromInt(stack_pointer);
+            const error_code: usize = stack_array[0];
+            kernel_common.printFormat("Page fault: 0x{x}", .{error_code});
+            kernel_common.printFormat("Virtual address: 0x{x}", .{virtual_address});
         },
         0x0F => {},
         0x10 => {},
@@ -140,6 +145,11 @@ export fn interrupt_handler(index: u32, stack_pointer: u32) callconv(.c) void {
     //    asm volatile ("" ::: .{ .memory = true }); // prevent loop being optimized away
     //}
 
+    acknowledgeInterrupt();
+    kernel_common.enableInterrupts();
+}
+
+pub fn acknowledgeInterrupt() void {
     port_io.out8(0x20, 0x20);
     port_io.out8(0xA0, 0x20);
 }

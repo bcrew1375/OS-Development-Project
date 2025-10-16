@@ -29,6 +29,12 @@ pub const COLOR = enum(u8) {
 };
 
 pub fn kernelInitialize() !void {
+    //Set 100 Hz PIT divisor. 1193182 / 100 = ~100 Hz
+    const PIT_DIVISOR = 11931;
+    port_io.out8(0x43, 0b00110100);
+    port_io.out8(0x40, @truncate(PIT_DIVISOR & 0xFF));
+    port_io.out8(0x40, @truncate((PIT_DIVISOR >> 8) & 0xFF));
+
     terminal.initialize();
     idt.initialize() catch |err| {
         printString(@errorName(err));
@@ -39,10 +45,11 @@ pub fn kernelInitialize() !void {
         unrecoverableHalt();
     };
     disableInterrupts();
-    _ = paging.makePageDirectory(0x03) catch |err| {
+    const page_directory: paging.PageDirectory = paging.makePageDirectory(0x03) catch |err| {
         printString(@errorName(err));
         unrecoverableHalt();
     };
+    _ = page_directory;
     enableInterrupts();
 }
 
@@ -118,8 +125,6 @@ pub fn enableInterrupts() void {
 }
 
 pub fn disableInterrupts() void {
-    port_io.out8(0x20, 0x20);
-    port_io.out8(0xA0, 0x20);
     asm volatile (
         \\cli
     );
