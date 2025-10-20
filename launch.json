@@ -1,0 +1,24 @@
+{
+  "configurations": [
+    {
+      "name": "QEMU i386 remote (:1234)",
+      "type": "cppdbg",
+      "request": "launch",
+
+      "program": "${workspaceFolder}/build/kernelfull.o",
+      "cwd": "${workspaceFolder}",
+
+      "MIMode": "gdb",
+      "miDebuggerPath": "/usr/bin/gdb",
+      "miDebuggerServerAddress": "localhost:1234",
+
+      "setupCommands": [
+        { "text": "add-symbol-file ${workspaceFolder}/build/kernelfull.o 0x100000" }
+        // If you *really* need it, add: { "text": "set architecture i386" }
+      ],
+
+      "stopAtEntry": false,
+      "preLaunchTask": "Run QEMU"
+    }
+  ]
+}
