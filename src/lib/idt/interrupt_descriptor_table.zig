@@ -1,6 +1,7 @@
 const std = @import("std");
 const kernel_common = @import("../kernel_common.zig");
 const port_io = @import("../port-io.zig");
+const paging = @import("../memory/paging.zig");
 
 const TOTAL_INTERRUPTS: u16 = 256;
 
@@ -80,58 +81,55 @@ fn idt_load() void {
 export fn interrupt_handler(index: usize, stack_pointer: usize) callconv(.c) void {
     // Not ready to handle nested interrupts. Don't risk stack overflow.
     kernel_common.disableInterrupts();
-    kernel_common.printString("Interrupt: ");
+    kernel_common.printString("\nInterrupt: ");
     switch (index) {
         0x00 => {
-            kernel_common.printString("Divide by zero.");
+            kernel_common.printString("Divide by zero.\n");
         },
         0x01 => {
-            kernel_common.printString("Debug exception.");
+            kernel_common.printString("Debug exception.\n");
         },
         0x02...0x05 => {},
         0x06 => {
-            kernel_common.printString("Invalid opcode.");
+            kernel_common.printString("Invalid opcode.\n");
         },
         0x07 => {},
         0x08 => {
-            kernel_common.printString("Double fault.");
+            kernel_common.printString("Double fault.\n");
         },
         0x09 => {},
         0x0A => {
-            kernel_common.printString("Invalid TSS.");
+            kernel_common.printString("Invalid TSS.\n");
         },
         0x0B => {},
         0x0C => {
-            kernel_common.printString("Stack segment fault.");
+            kernel_common.printString("Stack segment fault.\n");
         },
         0x0D => {
-            kernel_common.printString("General protection fault.");
+            kernel_common.printString("General protection fault.\n");
             kernel_common.printFormat(" Stack Index: {x}\n", .{stack_pointer});
             kernel_common.unrecoverableHalt();
         },
         0x0E => {
-            const virtual_address: usize = 0;
-            asm volatile (
-                \\ mov %cr2, %[virtual_address]
-                :
-                : [virtual_address] "{ebx}" (virtual_address),
-                : .{ .ebx = true, .memory = true });
             const stack_array: *[4]usize = @ptrFromInt(stack_pointer);
             const error_code: usize = stack_array[0];
-            kernel_common.printFormat("Page fault: 0x{x}", .{error_code});
-            kernel_common.printFormat("Virtual address: 0x{x}", .{virtual_address});
+            const virtual_address: usize = stack_array[1];
+            kernel_common.printString("Page fault.\n");
+            kernel_common.printFormat("Error code: 0x{x}\n", .{error_code});
+            kernel_common.printFormat("Virtual address: 0x{x}\n", .{virtual_address});
+            kernel_common.printFormat("Physical address: 0x{x}\n", .{paging.getPhysicalAddress(virtual_address)});
         },
         0x0F => {},
         0x10 => {},
         0x11 => {
-            kernel_common.printString("Alignment check.");
+            kernel_common.printString("Alignment check.\n");
         },
         0x12...0x1F => {},
         0x20 => {
-            kernel_common.printString("Timer.");
+            kernel_common.printString("Timer.\n");
         },
         0x21 => {
-            kernel_common.printString("Keyboard pressed.");
+            kernel_common.printString("Keyboard pressed.\n");
             _ = port_io.in8(0x60);
         },
         0x22...0xFFFFFFFF => {},
@@ -140,10 +138,10 @@ export fn interrupt_handler(index: usize, stack_pointer: usize) callconv(.c) voi
     kernel_common.printFormat(" --- Stack Index: {x}\n", .{stack_pointer});
 
     // Waste some time to slow down printing.
-    //var i: usize = 0;
-    //while (i < 100000000) : (i += 1) {
-    //    asm volatile ("" ::: .{ .memory = true }); // prevent loop being optimized away
-    //}
+    var i: usize = 0;
+    while (i < 100) : (i += 1) {
+        asm volatile ("" ::: .{ .memory = true }); // prevent loop being optimized away
+    }
 
     acknowledgeInterrupt();
     kernel_common.enableInterrupts();

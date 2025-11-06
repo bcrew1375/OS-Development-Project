@@ -45,11 +45,10 @@ pub fn kernelInitialize() !void {
         unrecoverableHalt();
     };
     disableInterrupts();
-    const page_directory: paging.PageDirectory = paging.makePageDirectory(0x03) catch |err| {
+    paging.makePageDirectory(0x03) catch |err| {
         printString(@errorName(err));
         unrecoverableHalt();
     };
-    _ = page_directory;
     enableInterrupts();
 }
 
