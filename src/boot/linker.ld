@@ -2,15 +2,7 @@ ENTRY(_start)
 OUTPUT_FORMAT(elf32-i386)
 SECTIONS
 {
-    . = 1M;
-
-    .kernel : {
-        KEEP(*(.text))
-        KEEP(*(.rodata))
-        KEEP(*(.data))
-        KEEP(*(COMMON))
-        KEEP(*(.bss))
-    }
+    . = 0xC0100000;
 
     .text : ALIGN(4096)
     {
@@ -29,14 +21,6 @@ SECTIONS
 
     .bss : ALIGN(4096)
     {
-        *(COMMON)
         *(.bss*)
-    }
-
-    /DISCARD/ : {
-        *(.comment)
-        *(.eh_frame)
-        *(.note*)
-        *(.debug*)
     }
 }

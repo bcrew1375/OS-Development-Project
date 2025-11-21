@@ -1,7 +1,7 @@
 [BITS 32]
 
 global _start
-extern kernelMain
+extern enablePaging
 
 CODE_SEG equ 0x08
 DATA_SEG equ 0x10
@@ -29,8 +29,7 @@ _start:
     out 0x21, al
     ; End remap of the master PIC.
 
-    ;call pagingSetup
-    call kernelMain
+    call enablePaging
     jmp $
 
 times 512-($ - $$) db 0

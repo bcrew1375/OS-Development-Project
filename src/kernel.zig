@@ -1,5 +1,3 @@
-var allocator = @import("std").heap.GeneralPurposeAllocator(.{}){};
-
 const kernel_common = @import("lib/kernel_common.zig");
 const terminal = @import("lib/terminal.zig");
 const std = @import("std");

@@ -6,12 +6,12 @@
       "request": "attach",
       "executable": "${workspaceFolder}/build/kernelfull.o",
       "cwd": "${workspaceFolder}",
-      "gdbpath": "/usr/bin/gdb-multiarch",
+      "gdbpath": "/usr/bin/gdb",
       "target": "localhost:1234",
       "remote": true,
       "autorun": [
         "set architecture i386",
-        "add-symbol-file ${workspaceFolder}/build/kernelfull.o 0x100000"
+        "add-symbol-file ${workspaceFolder}/build/kernelfull.o 0x00100000"
       ],
       "preLaunchTask": "Run QEMU"
     }
