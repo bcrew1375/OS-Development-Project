@@ -1,24 +1,13 @@
 [BITS 32]
 
-global _start
-extern enablePaging
+global _start_asm
+extern kernelMain
 
-CODE_SEG equ 0x08
-DATA_SEG equ 0x10
-
-_start:
-    ; Setup permanent segments and stack pointer.
-    mov ax, DATA_SEG
-    mov ds, ax
-    mov es, ax
-    mov fs, ax
-    mov gs, ax
-    mov ss, ax
-    mov ebp, 0x00800000
-    mov esp, ebp
-
+;section .text
+_start_asm:
     cli
 
+    mov esp, 0x300000
     mov al, 0x11        ; ICW1: start init, edge triggered, ICW4 needed
     out 0x20, al
     mov al, 0x20        ; ICW2: interrupt vector offset (0x20 = IRQ0 → INT 0x20)
@@ -29,7 +18,5 @@ _start:
     out 0x21, al
     ; End remap of the master PIC.
 
-    call enablePaging
+    call kernelMain
     jmp $
-
-times 512-($ - $$) db 0

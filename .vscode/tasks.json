@@ -4,7 +4,12 @@
     {
       "label": "Run QEMU",
       "type": "shell",
-      "command": "${workspaceFolder}/run.sh"
+      "command": "zig build run"
+    },
+    {
+      "label": "Kill QEMU",
+      "type": "shell",
+      "command": "pkill qemu"
     },
   ],
 }

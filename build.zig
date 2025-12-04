@@ -1,156 +1,48 @@
+// OS Dev: https://wiki.osdev.org/Zig_Bare_Bones
 const std = @import("std");
-const fs = std.fs;
 
-const ZIG_SOURCE_FILES = [_][]const u8{
-    "./src/kernel.zig",
-};
+pub fn build(b: *std.Build) !void {
+    const optimize = b.standardOptimizeOption(.{});
 
-const OBJ_FILES = [_][]const u8{
-    "./build/kernel.asm.o",
-    //"./build/kernel.zig.o",
-};
-
-pub fn build(b: *std.Build) void {
-    // Define the boot sector binary target
-    var boot_sector_bin = b.addSystemCommand(&[_][]const u8{
-        "nasm",
-        "-f",
-        "bin",
-        "./src/boot/boot-sector.asm",
-        "-o",
-        "./build/bin/boot-sector.bin",
+    const Target = std.Target.x86;
+    const target = b.resolveTargetQuery(.{
+        .cpu_arch = .x86,
+        .os_tag = .freestanding,
+        .abi = .none,
+        // We use software float because we are disabling all SIMD stuff
+        .cpu_features_add = Target.featureSet(&.{.soft_float}),
+        // Disable all SIMD related stuff because SIMD are problematic in kernel
+        .cpu_features_sub = Target.featureSet(&.{ .avx, .avx2, .sse, .sse2, .mmx }),
     });
 
-    // Define the kernel object file target
-    var kernel_asm_obj = b.addSystemCommand(&[_][]const u8{
-        "nasm",
-        "-f",
-        "elf",
-        //"-g",
-        "./src/boot/kernel.asm",
-        "-o",
-        "./build/kernel.asm.o",
+    const kernel = b.addExecutable(.{
+        .name = "kernel.elf",
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("src/kernel.zig"),
+            .target = target,
+            .optimize = optimize,
+            .code_model = .kernel,
+        }),
     });
+    kernel.setLinkerScript(b.path("src/linker.ld"));
+    b.installArtifact(kernel);
 
-    var zig_obj = b.addSystemCommand(&[_][]const u8{
-        "zig",
-        "build-obj",
-        "-fno-strip",
-        "-fcompiler-rt",
-        "--emit-relocs",
-        //"-fstrip",
-    } ++ ZIG_SOURCE_FILES ++
-        OBJ_FILES ++
-        &[_][]const u8{
-            "-O",
-            //"ReleaseSmall",
-            "Debug",
-            "-femit-bin=./build/kernelfull.o", //.zig.o",
-            //"-o",
-            //"./build/kernelfull.o",
-            "-target",
-            //"x86-linux",
-            "x86-freestanding",
-            "-mcpu",
-            "i386",
-        });
-
-    // Define the kernel object file to binary
-    //var kernel_obj_to_bin = b.addSystemCommand(&[_][]const u8{
-    //    "zig",
-    //    "build-obj",
-    //    "-fno-strip",
-    //"-fcompiler-rt",
-    //    "--emit-relocs",
-    //"-fstrip",
-    //} ++ OBJ_FILES ++ &[_][]const u8{
-    //    "-O",
-    //"ReleaseSmall",
-    //    "Debug",
-    //    "-femit-bin=./build/kernelfull.o",
-    //    "-target",
-    //"x86-linux",
-    //    "x86-freestanding",
-    //    "-mcpu",
-    //    "i386",
-    //});
-
-    // Define the kernel binary target
-    var kernel_link = b.addSystemCommand(&[_][]const u8{
-        //"zig",
-        "ld",
-        "-o",
-        "./build/bin/kernel.elf",
-        "./build/kernelfull.o",
-        //"-nostdlib",
-        //"-static",
-        "-T",
-        "./src/boot/linker.ld",
-        //"--section-start",
-        //".text=0x100000",
-        "-m",
-        "elf_i386",
+    const kernel_path = kernel.getEmittedBin();
+    const qemu_cmd = b.addSystemCommand(&[_][]const u8{
+        // zig fmt: off
+        "qemu-system-i386",
+        "-S",
+        "-s",
+        "-m", "1G",
+        "-daemonize",
+        "-pidfile", ".qemu.pid",
     });
+    // zig fmt: on
+    qemu_cmd.addArg("-kernel");
+    qemu_cmd.addFileArg(kernel_path);
+    qemu_cmd.step.dependOn(b.getInstallStep());
 
-    var kernel_obj_copy = b.addSystemCommand(&[_][]const u8{
-        "objcopy",
-        //"-S",
-        //"-g",
-        "-O",
-        "binary",
-        "./build/bin/kernel.elf",
-        "./build/bin/kernel.bin",
-    });
-
-    var remove_os_bin = b.addSystemCommand(&[_][]const u8{
-        "rm",
-        "-rf",
-        "./build/bin/os.bin",
-    });
-
-    var inject_boot_sector = b.addSystemCommand(&[_][]const u8{
-        "sh",
-        "-c",
-        "dd if=./build/bin/boot-sector.bin of=./build/bin/os.bin bs=512 seek=0 conv=notrunc",
-    });
-
-    var inject_kernel_sectors = b.addSystemCommand(&[_][]const u8{
-        "sh",
-        "-c",
-        "dd if=./build/bin/kernel.bin of=./build/bin/os.bin bs=512 seek=1 conv=notrunc",
-    });
-
-    var create_disk_image = b.addSystemCommand(&[_][]const u8{
-        "sh",
-        "-c",
-        "dd if=/dev/zero of=./build/bin/os.bin bs=2M count=1",
-    });
-
-    // Define the clean step
-    var clean = b.addSystemCommand(&[_][]const u8{
-        "rm",
-        "-rf",
-        "./build",
-    });
-
-    var make_build_dirs = b.addSystemCommand(&[_][]const u8{
-        "mkdir",
-        "-p",
-        "./build/bin",
-    });
-
-    // Ensure other build steps run in the correct order
-    make_build_dirs.step.dependOn(&clean.step);
-    boot_sector_bin.step.dependOn(&make_build_dirs.step);
-    kernel_asm_obj.step.dependOn(&boot_sector_bin.step);
-    zig_obj.step.dependOn(&kernel_asm_obj.step);
-    //kernel_obj_to_bin.step.dependOn(&zig_obj.step);
-    kernel_link.step.dependOn(&zig_obj.step); //kernel_obj_to_bin.step);
-    kernel_obj_copy.step.dependOn(&kernel_link.step);
-    remove_os_bin.step.dependOn(&kernel_obj_copy.step);
-    create_disk_image.step.dependOn(&remove_os_bin.step);
-    inject_boot_sector.step.dependOn(&create_disk_image.step);
-    inject_kernel_sectors.step.dependOn(&inject_boot_sector.step);
-
-    b.default_step.dependOn(&inject_kernel_sectors.step);
+    const run_step = b.step("run", "Run kernel with qemu");
+    run_step.dependOn(&qemu_cmd.step);
+    // OS Dev: https://wiki.osdev.org/Zig_Bare_Bones
 }

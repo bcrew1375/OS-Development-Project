@@ -11,17 +11,11 @@ const PAGE_SIZE = 4096;
 const ENTRIES_PER_DIRECTORY: usize = 1024;
 const ENTRIES_PER_TABLE: usize = 1024;
 
-const PageTable = struct {
-    entries: [ENTRIES_PER_TABLE]PageTableEntry = undefined,
-};
-
-const PageTableEntry = packed struct {
-    flags: u12 = 0,
-    address: u20 = 0,
-};
+pub const HIGHER_HALF_ADDRESS = 0xC0000000;
+const HIGHER_HALF_INDEX = HIGHER_HALF_ADDRESS / (PAGE_SIZE * ENTRIES_PER_TABLE);
 
 const PageDirectory = struct {
-    entries: [ENTRIES_PER_DIRECTORY]PageDirectoryEntry = undefined,
+    entries: *[ENTRIES_PER_DIRECTORY]PageDirectoryEntry = undefined,
 };
 
 const PageDirectoryEntry = packed struct {
@@ -29,40 +23,46 @@ const PageDirectoryEntry = packed struct {
     address: u20 = 0,
 };
 
-var pageDirectory: PageDirectory align(PAGE_SIZE) = PageDirectory{ .entries = [_]PageDirectoryEntry{.{}} ** ENTRIES_PER_DIRECTORY };
-var pageTable0: PageTable align(PAGE_SIZE) = PageTable{ .entries = [_]PageTableEntry{.{}} ** ENTRIES_PER_TABLE };
+const PageTable = struct {
+    entries: *[ENTRIES_PER_TABLE]PageTableEntry = undefined,
+};
 
-pub export fn enablePaging() void {
-    //pageDirectory.entries = @ptrCast(@alignCast(try kernel_heap.kmalloc(@sizeOf(PageDirectoryEntry) * ENTRIES_PER_DIRECTORY)));
-    const HIGHER_HALF_INDEX = 768;
+const PageTableEntry = packed struct {
+    flags: u12 = 0,
+    address: u20 = 0,
+};
 
-    terminal.initialize();
-    kernel_common.printString("Initializing Paging...");
+var pageDirectory: PageDirectory align(PAGE_SIZE) = PageDirectory{};
+var pageDirectoryEntries: [ENTRIES_PER_DIRECTORY]PageDirectoryEntry = [_]PageDirectoryEntry{.{}} ** ENTRIES_PER_DIRECTORY;
+var pageTableIdentity: PageTable align(PAGE_SIZE) = PageTable{};
+var pageTableIdentityEntries: [ENTRIES_PER_TABLE]PageTableEntry = [_]PageTableEntry{.{}} ** ENTRIES_PER_TABLE;
 
-    //Only map the first 8 MB.
-    for (0..2) |directory_index| {
-        pageDirectory.entries[directory_index].address = @truncate((@intFromPtr(&pageTable0.entries) & 0xFFFFF000) >> 12);
-        pageDirectory.entries[directory_index].flags = IS_PRESENT | IS_WRITEABLE;
+extern const stack_top: usize;
 
-        pageDirectory.entries[directory_index + HIGHER_HALF_INDEX].address = @truncate((@intFromPtr(&pageTable0.entries) & 0xFFFFF000) >> 12);
-        pageDirectory.entries[directory_index + HIGHER_HALF_INDEX].flags = IS_PRESENT | IS_WRITEABLE;
+pub export fn enablePaging() callconv(.c) void {
+    pageDirectory.entries = &pageDirectoryEntries;
+    pageTableIdentity.entries = &pageTableIdentityEntries;
 
-        for (0..ENTRIES_PER_TABLE) |table_index| {
-            pageTable0.entries[table_index].address = @truncate((((directory_index * ENTRIES_PER_TABLE + table_index) * PAGE_SIZE) & 0xFFFFF000) >> 12);
-            pageTable0.entries[table_index].flags = IS_PRESENT | IS_WRITEABLE;
-        }
+    var address = @intFromPtr(pageDirectory.entries);
+    address += 0;
+    //Only map the first 4 MB.
+    pageDirectory.entries[0].address = @truncate(@intFromPtr(pageTableIdentity.entries) >> 12);
+    pageDirectory.entries[0].flags = IS_PRESENT | IS_WRITEABLE;
+
+    pageDirectory.entries[HIGHER_HALF_INDEX].address = pageDirectory.entries[0].address;
+    pageDirectory.entries[HIGHER_HALF_INDEX].flags = pageDirectory.entries[0].flags;
+
+    for (0..ENTRIES_PER_TABLE) |table_index| {
+        pageTableIdentity.entries[table_index].address = @truncate((table_index * PAGE_SIZE) >> 12);
+        pageTableIdentity.entries[table_index].flags = IS_PRESENT | IS_WRITEABLE;
     }
 
     asm volatile (
-        \\pusha
         \\mov %[pageDirectory], %eax
         \\mov %eax, %cr3
         \\mov %cr0, %eax
-        \\or $0x80000000, %eax
+        \\or $0x80010000, %eax
         \\mov %eax, %cr0
-        \\popa
-        \\call kernelMain
-        \\jmp .
         :
         : [pageDirectory] "{ebx}" (pageDirectory.entries),
         : .{ .ebx = true, .memory = true });

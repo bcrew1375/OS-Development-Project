@@ -2,7 +2,47 @@ const kernel_common = @import("lib/kernel_common.zig");
 const terminal = @import("lib/terminal.zig");
 const std = @import("std");
 
-pub const MESSAGE = "Aello,World!\n";
+// OS Dev: https://wiki.osdev.org/Zig_Bare_Bones
+const MB_HEADER_MAGIC = 0x1BADB002;
+const MB_FLAG_ALIGN = 1 << 0;
+const MB_FLAG_MEMINFO = 1 << 1;
+const FLAGS = MB_FLAG_ALIGN | MB_FLAG_MEMINFO;
+
+const MultibootHeader = packed struct {
+    magic: u32 = MB_HEADER_MAGIC,
+    flags: u32 = FLAGS,
+    checksum: u32,
+    padding: u32 = 0,
+};
+
+export var multiboot: MultibootHeader align(4) linksection(".multiboot") = .{
+    // Here we are adding magic and flags and ~ to get 1's complement and by adding 1 we get 2's complement
+    .checksum = ~@as(u32, (MB_HEADER_MAGIC + FLAGS)) + 1,
+};
+// OS Dev: https://wiki.osdev.org/Zig_Bare_Bones
+
+pub export fn _start() callconv(.naked) noreturn {
+    asm volatile (
+        \\cli
+        \\mov $0x300000, %esp
+        //ICW1: start init, edge triggered, ICW4 needed
+        \\mov $0x11, %al
+        \\out %al, $0x20
+        //ICW2: interrupt vector offset (0x20 = IRQ0 → INT 0x20)
+        \\mov $0x20, %al
+        \\out %al, $0x21
+        //ICW3: bitmask of connected slaves (bit 2 = IRQ2)
+        \\mov $0x04, %al
+        \\out %al, $0x21
+        //ICW4: 8086 mode
+        \\mov $0x01, %al
+        \\out %al, $0x21
+        //End remap of the master PIC.
+
+        \\call kernelMain
+        \\jmp .
+    );
+}
 
 pub export fn kernelMain() void {
     kernel_common.kernelInitialize() catch |err| {

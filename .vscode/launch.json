@@ -4,16 +4,17 @@
       "name": "QEMU i386 remote (:1234)",
       "type": "gdb",
       "request": "attach",
-      "executable": "${workspaceFolder}/build/kernelfull.o",
+      "executable": "${workspaceFolder}/zig build run",
       "cwd": "${workspaceFolder}",
-      "gdbpath": "/usr/bin/gdb",
-      "target": "localhost:1234",
+      "gdbpath": "/usr/bin/gdb-multiarch",
+      "target": ":1234",
       "remote": true,
       "autorun": [
-        "set architecture i386",
-        "add-symbol-file ${workspaceFolder}/build/kernelfull.o 0x00100000"
+        //"set architecture i386",
+        "add-symbol-file ${workspaceFolder}/zig-out/bin/kernel.elf 0x00201000"
       ],
-      "preLaunchTask": "Run QEMU"
+      "preLaunchTask": "Run QEMU",
+      "postDebugTask": "Kill QEMU"
     }
   ]
 }

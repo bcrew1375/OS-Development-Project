@@ -1,4 +1,4 @@
 .zig-cache
-build
+zig-out
 qemu.log
 .qemu.pid

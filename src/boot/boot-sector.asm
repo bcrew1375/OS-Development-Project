@@ -107,6 +107,13 @@ load32:
     add eax, 256          ; Increase the LBA by 256 sectors.
     loop .kernel_load
 
+    mov ax, DATA_SEG
+    mov ds, ax
+    mov es, ax
+    mov fs, ax
+    mov gs, ax
+    mov ss, ax
+    
     ; Jump to the kernel
     jmp CODE_SEG:0x100000
 
