@@ -9,7 +9,7 @@ const TEXT_MODE_BUFFER_SIZE = TEXT_MODE_WIDTH * TEXT_MODE_HEIGHT;
 const MAX_ROW_INDEX = TEXT_MODE_HEIGHT - 1;
 const MAX_COLUMN_INDEX = TEXT_MODE_WIDTH - 1;
 
-const buffer_pointer: *volatile [TEXT_MODE_BUFFER_SIZE]u16 = @ptrFromInt(0x000B8000);
+const buffer_pointer: *volatile [TEXT_MODE_BUFFER_SIZE]u16 = @ptrFromInt(0xC00B8000);
 
 var row: u8 = 0;
 var column: u8 = 0;

@@ -1,4 +1,5 @@
 const kernel_common = @import("lib/kernel_common.zig");
+const paging = @import("lib/memory/paging.zig");
 const terminal = @import("lib/terminal.zig");
 const std = @import("std");
 
@@ -15,13 +16,13 @@ const MultibootHeader = packed struct {
     padding: u32 = 0,
 };
 
-export var multiboot: MultibootHeader align(4) linksection(".multiboot") = .{
+export var multiboot: MultibootHeader linksection(".multiboot.header") = .{
     // Here we are adding magic and flags and ~ to get 1's complement and by adding 1 we get 2's complement
     .checksum = ~@as(u32, (MB_HEADER_MAGIC + FLAGS)) + 1,
 };
 // OS Dev: https://wiki.osdev.org/Zig_Bare_Bones
 
-pub export fn _start() callconv(.naked) noreturn {
+pub export fn _start() linksection(".multiboot.text") callconv(.naked) noreturn {
     asm volatile (
         \\cli
         \\mov $0x300000, %esp
@@ -39,12 +40,18 @@ pub export fn _start() callconv(.naked) noreturn {
         \\out %al, $0x21
         //End remap of the master PIC.
 
-        \\call kernelMain
+        \\call higherHalfSetup
         \\jmp .
     );
 }
 
+pub export fn higherHalfSetup() linksection(".multiboot.text") void {
+    paging.enablePaging();
+    kernelMain();
+}
+
 pub export fn kernelMain() void {
+    paging.removeIdentityEntry();
     kernel_common.kernelInitialize() catch |err| {
         kernel_common.printString(@errorName(err));
     };

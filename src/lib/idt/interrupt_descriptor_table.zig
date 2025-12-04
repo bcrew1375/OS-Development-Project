@@ -18,10 +18,10 @@ const InterruptDescriptorTableRegisterStruct = packed struct {
     base: u32 = 0, // Base address of the start of the interrupt descriptor table
 };
 
-var interrupt_descriptor_table: [TOTAL_INTERRUPTS]InterruptDescriptorTableStruct =
+var interrupt_descriptor_table: [TOTAL_INTERRUPTS]InterruptDescriptorTableStruct align(16) =
     [_]InterruptDescriptorTableStruct{.{}} ** TOTAL_INTERRUPTS;
 
-var interrupt_descriptor_table_register: InterruptDescriptorTableRegisterStruct =
+var interrupt_descriptor_table_register: InterruptDescriptorTableRegisterStruct align(16) =
     InterruptDescriptorTableRegisterStruct{ .base = undefined };
 
 const Trampoline = *const fn () callconv(.naked) noreturn;
@@ -54,6 +54,8 @@ pub fn initialize() !void {
 
     interrupt_descriptor_table_register.limit = @sizeOf(@TypeOf(interrupt_descriptor_table)) - 1;
     interrupt_descriptor_table_register.base = @intFromPtr(&interrupt_descriptor_table);
+    const address = interrupt_descriptor_table_register.base;
+    _ = address;
 
     idt_load();
     kernel_common.printStringColor("done\n", kernel_common.COLOR.GREEN);

@@ -32,19 +32,15 @@ const PageTableEntry = packed struct {
     address: u20 = 0,
 };
 
-var pageDirectory: PageDirectory align(PAGE_SIZE) = PageDirectory{};
-var pageDirectoryEntries: [ENTRIES_PER_DIRECTORY]PageDirectoryEntry = [_]PageDirectoryEntry{.{}} ** ENTRIES_PER_DIRECTORY;
-var pageTableIdentity: PageTable align(PAGE_SIZE) = PageTable{};
-var pageTableIdentityEntries: [ENTRIES_PER_TABLE]PageTableEntry = [_]PageTableEntry{.{}} ** ENTRIES_PER_TABLE;
+var pageDirectory: PageDirectory linksection(".multiboot.text") = PageDirectory{};
+var pageDirectoryEntries: [ENTRIES_PER_DIRECTORY]PageDirectoryEntry align(PAGE_SIZE) linksection(".multiboot.text") = [_]PageDirectoryEntry{.{}} ** ENTRIES_PER_DIRECTORY;
+var pageTableIdentity: PageTable linksection(".multiboot.text") = PageTable{};
+var pageTableIdentityEntries: [ENTRIES_PER_TABLE]PageTableEntry align(PAGE_SIZE) linksection(".multiboot.text") = [_]PageTableEntry{.{}} ** ENTRIES_PER_TABLE;
 
-extern const stack_top: usize;
-
-pub export fn enablePaging() callconv(.c) void {
+pub fn enablePaging() linksection(".multiboot.text") void {
     pageDirectory.entries = &pageDirectoryEntries;
     pageTableIdentity.entries = &pageTableIdentityEntries;
 
-    var address = @intFromPtr(pageDirectory.entries);
-    address += 0;
     //Only map the first 4 MB.
     pageDirectory.entries[0].address = @truncate(@intFromPtr(pageTableIdentity.entries) >> 12);
     pageDirectory.entries[0].flags = IS_PRESENT | IS_WRITEABLE;
@@ -64,8 +60,20 @@ pub export fn enablePaging() callconv(.c) void {
         \\or $0x80010000, %eax
         \\mov %eax, %cr0
         :
-        : [pageDirectory] "{ebx}" (pageDirectory.entries),
-        : .{ .ebx = true, .memory = true });
+        : [pageDirectory] "{ecx}" (pageDirectory.entries),
+        : .{ .ecx = true, .memory = true });
+}
+
+pub fn removeIdentityEntry() void {
+    asm volatile (
+        \\add $0xC0000000, %esp
+    );
+    pageDirectory.entries[0].address = 0;
+    pageDirectory.entries[0].flags = 0;
+    asm volatile (
+        \\mov %cr0, %eax
+        \\mov %eax, %cr0
+    );
 }
 
 pub fn makePageDirectory(flags: u8) !void {

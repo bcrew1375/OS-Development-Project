@@ -40,15 +40,15 @@ pub fn kernelInitialize() !void {
         printString(@errorName(err));
         unrecoverableHalt();
     };
-    kernel_heap.initialize() catch |err| {
-        printString(@errorName(err));
-        unrecoverableHalt();
-    };
-    disableInterrupts();
-    paging.makePageDirectory(0x03) catch |err| {
-        printString(@errorName(err));
-        unrecoverableHalt();
-    };
+    // kernel_heap.initialize() catch |err| {
+    //     printString(@errorName(err));
+    //     unrecoverableHalt();
+    // };
+    // disableInterrupts();
+    // paging.makePageDirectory(0x03) catch |err| {
+    //     printString(@errorName(err));
+    //     unrecoverableHalt();
+    // };
     enableInterrupts();
 }
 
