@@ -54,8 +54,6 @@ pub fn initialize() !void {
 
     interrupt_descriptor_table_register.limit = @sizeOf(@TypeOf(interrupt_descriptor_table)) - 1;
     interrupt_descriptor_table_register.base = @intFromPtr(&interrupt_descriptor_table);
-    const address = interrupt_descriptor_table_register.base;
-    _ = address;
 
     idt_load();
     kernel_common.printStringColor("done\n", kernel_common.COLOR.GREEN);
