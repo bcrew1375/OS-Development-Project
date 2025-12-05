@@ -14,43 +14,38 @@ const ENTRIES_PER_TABLE: usize = 1024;
 pub const HIGHER_HALF_ADDRESS = 0xC0000000;
 const HIGHER_HALF_INDEX = HIGHER_HALF_ADDRESS / (PAGE_SIZE * ENTRIES_PER_TABLE);
 
-const PageDirectory = struct {
-    entries: *[ENTRIES_PER_DIRECTORY]PageDirectoryEntry = undefined,
-};
+const PageDirectory = *[ENTRIES_PER_DIRECTORY]PageDirectoryEntry;
 
 const PageDirectoryEntry = packed struct {
     flags: u12 = 0,
     address: u20 = 0,
 };
 
-const PageTable = struct {
-    entries: *[ENTRIES_PER_TABLE]PageTableEntry = undefined,
-};
+const PageTable = *[ENTRIES_PER_TABLE]PageTableEntry;
 
 const PageTableEntry = packed struct {
     flags: u12 = 0,
     address: u20 = 0,
 };
 
-var pageDirectory: PageDirectory linksection(".multiboot.text") = PageDirectory{};
+var pageDirectory: PageDirectory align(PAGE_SIZE) linksection(".multiboot.text") = undefined;
 var pageDirectoryEntries: [ENTRIES_PER_DIRECTORY]PageDirectoryEntry align(PAGE_SIZE) linksection(".multiboot.text") = [_]PageDirectoryEntry{.{}} ** ENTRIES_PER_DIRECTORY;
-var pageTableIdentity: PageTable linksection(".multiboot.text") = PageTable{};
-var pageTableIdentityEntries: [ENTRIES_PER_TABLE]PageTableEntry align(PAGE_SIZE) linksection(".multiboot.text") = [_]PageTableEntry{.{}} ** ENTRIES_PER_TABLE;
+var pageTable0: PageTable align(PAGE_SIZE) linksection(".multiboot.text") = undefined;
+var pageTable0Entries: [ENTRIES_PER_TABLE]PageTableEntry align(PAGE_SIZE) linksection(".multiboot.text") = [_]PageTableEntry{.{}} ** ENTRIES_PER_TABLE;
 
-pub fn enablePaging() linksection(".multiboot.text") void {
-    pageDirectory.entries = &pageDirectoryEntries;
-    pageTableIdentity.entries = &pageTableIdentityEntries;
-
+pub fn setupHigherHalf() linksection(".multiboot.text") void {
+    pageDirectory = &pageDirectoryEntries;
+    pageTable0 = &pageTable0Entries;
     //Only map the first 4 MB.
-    pageDirectory.entries[0].address = @truncate(@intFromPtr(pageTableIdentity.entries) >> 12);
-    pageDirectory.entries[0].flags = IS_PRESENT | IS_WRITEABLE;
+    pageDirectory[0].address = @truncate(@intFromPtr(pageTable0) >> 12);
+    pageDirectory[0].flags = IS_PRESENT | IS_WRITEABLE;
 
-    pageDirectory.entries[HIGHER_HALF_INDEX].address = pageDirectory.entries[0].address;
-    pageDirectory.entries[HIGHER_HALF_INDEX].flags = pageDirectory.entries[0].flags;
+    pageDirectory[HIGHER_HALF_INDEX].address = pageDirectory[0].address;
+    pageDirectory[HIGHER_HALF_INDEX].flags = pageDirectory[0].flags;
 
     for (0..ENTRIES_PER_TABLE) |table_index| {
-        pageTableIdentity.entries[table_index].address = @truncate((table_index * PAGE_SIZE) >> 12);
-        pageTableIdentity.entries[table_index].flags = IS_PRESENT | IS_WRITEABLE;
+        pageTable0[table_index].address = @truncate((table_index * PAGE_SIZE) >> 12);
+        pageTable0[table_index].flags = IS_PRESENT | IS_WRITEABLE;
     }
 
     asm volatile (
@@ -60,16 +55,16 @@ pub fn enablePaging() linksection(".multiboot.text") void {
         \\or $0x80010000, %eax
         \\mov %eax, %cr0
         :
-        : [pageDirectory] "{ecx}" (pageDirectory.entries),
+        : [pageDirectory] "{ecx}" (pageDirectory),
         : .{ .ecx = true, .memory = true });
 }
 
-pub fn removeIdentityEntry() void {
+pub fn removeIdentityMapping() void {
     asm volatile (
         \\add $0xC0000000, %esp
     );
-    pageDirectory.entries[0].address = 0;
-    pageDirectory.entries[0].flags = 0;
+    pageDirectory[0].address = 0;
+    pageDirectory[0].flags = 0;
     asm volatile (
         \\mov %cr0, %eax
         \\mov %eax, %cr0

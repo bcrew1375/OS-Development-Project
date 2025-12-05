@@ -72,10 +72,10 @@ pub fn set(interrupt_number: u16, address: usize, type_attribute: u8) void {
 fn idt_load() void {
     asm volatile (
         \\cli
-        \\lidt (%ebx)
+        \\lidt (%ecx)
         :
-        : [interrupt_descriptor_table_register] "{ebx}" (&interrupt_descriptor_table_register),
-        : .{ .ebx = true, .memory = true });
+        : [interrupt_descriptor_table_register] "{ecx}" (&interrupt_descriptor_table_register),
+        : .{ .ecx = true, .memory = true });
 }
 
 export fn interrupt_handler(index: usize, stack_pointer: usize) callconv(.c) void {

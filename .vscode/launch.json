@@ -6,12 +6,12 @@
       "request": "attach",
       "executable": "${workspaceFolder}/zig build run",
       "cwd": "${workspaceFolder}",
-      "gdbpath": "/usr/bin/gdb-multiarch",
+      "gdbpath": "/usr/bin/gdb",
       "target": ":1234",
       "remote": true,
       "autorun": [
         //"set architecture i386",
-        "add-symbol-file ${workspaceFolder}/zig-out/bin/kernel.elf 0xC0206000"
+        "add-symbol-file ${workspaceFolder}/zig-out/bin/kernel.elf 0xC0205000"
       ],
       "preLaunchTask": "Run QEMU",
       "postDebugTask": "Kill QEMU"

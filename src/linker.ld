@@ -11,19 +11,10 @@ SECTIONS
 	.multiboot.header ALIGN(4): AT (ADDR (.multiboot.header)) {
 		KEEP(*(.multiboot.header))
 	}
-	.multiboot.text : AT (ADDR (.multiboot.text)) {
+	.multiboot.text ALIGN(4) : AT (ADDR (.multiboot.text)) {
 		KEEP(*(.multiboot.text))
 	}
-
-	/*.multiboot.data ALIGN (4) : AT (ADDR (.multiboot.data)) {
-		*(.multiboot.data)
-	}
-
-
-	.paging_setup ALIGN (4K) : AT (ADDR (.paging_setup)) {
-		*(.paging_setup)
-	}*/
-
+	
 	. += KERNEL_VIRTUAL_ADDRESS;
 	.text ALIGN (4K) : AT (ADDR (.text) - KERNEL_VIRTUAL_ADDRESS)
 	{

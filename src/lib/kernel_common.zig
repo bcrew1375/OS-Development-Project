@@ -1,5 +1,6 @@
 const std = @import("std");
 
+const gdt = @import("gdt.zig");
 const idt = @import("idt/interrupt_descriptor_table.zig");
 const terminal = @import("terminal.zig");
 const kernel_heap = @import("../lib/memory/kernel_heap.zig");
@@ -28,7 +29,7 @@ pub const COLOR = enum(u8) {
     WHITE = 15,
 };
 
-pub fn kernelInitialize() !void {
+pub fn kernelMain() !void {
     //Set 100 Hz PIT divisor. 1193182 / 100 = ~100 Hz
     const PIT_DIVISOR = 11931;
     port_io.out8(0x43, 0b00110100);
@@ -36,6 +37,7 @@ pub fn kernelInitialize() !void {
     port_io.out8(0x40, @truncate((PIT_DIVISOR >> 8) & 0xFF));
 
     terminal.initialize();
+    gdt.initialize();
     idt.initialize() catch |err| {
         printString(@errorName(err));
         unrecoverableHalt();

@@ -36,6 +36,12 @@ pub fn build(b: *std.Build) !void {
         "-m", "1G",
         "-daemonize",
         "-pidfile", ".qemu.pid",
+        "-M",
+        "accel=tcg,smm=off",
+        "-D", "qemu.log",
+        "-d", "int",
+        "-no-reboot",
+        "-no-shutdown",
     });
     // zig fmt: on
     qemu_cmd.addArg("-kernel");
