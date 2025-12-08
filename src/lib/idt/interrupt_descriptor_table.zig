@@ -65,7 +65,7 @@ pub fn set(interrupt_number: u16, address: usize, type_attribute: u8) void {
     interrupt_descriptor.selector = kernel_common.KERNEL_CODE_SELECTOR;
     interrupt_descriptor.unused_byte = 0x00;
     interrupt_descriptor.type_attribute = type_attribute;
-    interrupt_descriptor.offset_high = @truncate((address >> 16) & 0xffff);
+    interrupt_descriptor.offset_high = @truncate(address >> 16);
     return;
 }
 
@@ -136,12 +136,6 @@ export fn interrupt_handler(index: usize, stack_pointer: usize) callconv(.c) voi
     }
 
     kernel_common.printFormat(" --- Stack Index: {x}\n", .{stack_pointer});
-
-    // Waste some time to slow down printing.
-    var i: usize = 0;
-    while (i < 100) : (i += 1) {
-        asm volatile ("" ::: .{ .memory = true }); // prevent loop being optimized away
-    }
 
     acknowledgeInterrupt();
     kernel_common.enableInterrupts();

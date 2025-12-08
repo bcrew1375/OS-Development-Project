@@ -7,11 +7,10 @@ SECTIONS
 {
     . = 2M;
 
-	_kernel_start = .;
 	.multiboot.header ALIGN(4): AT (ADDR (.multiboot.header)) {
 		KEEP(*(.multiboot.header))
 	}
-	.multiboot.text ALIGN(4) : AT (ADDR (.multiboot.text)) {
+	.multiboot.text ALIGN(4K) : AT (ADDR (.multiboot.text)) {
 		KEEP(*(.multiboot.text))
 	}
 	
@@ -33,5 +32,4 @@ SECTIONS
 		*(.bss)
 		*(.bootstrap_stack)
 	}
-	_kernel_end = .;
 }

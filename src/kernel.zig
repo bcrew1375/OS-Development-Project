@@ -22,12 +22,17 @@ export var multiboot: MultibootHeader linksection(".multiboot.header") = .{
 };
 // OS Dev: https://wiki.osdev.org/Zig_Bare_Bones
 
+var startup_stack: [1024]u8 align(16) linksection(".multiboot.text") = undefined;
+var kernel_stack: [8192]u8 align(16) = undefined;
+
 pub export fn _start() linksection(".multiboot.text") callconv(.naked) noreturn {
     asm volatile (
         \\cli
-        \\mov $0x400000, %esp
+        \\mov %[startup_stack], %esp
         \\call kernelSetup
         \\jmp .
+        :
+        : [startup_stack] "i" (@as([*]u8, &startup_stack) + startup_stack.len),
     );
 }
 
@@ -48,15 +53,26 @@ pub export fn kernelSetup() linksection(".multiboot.text") void {
         //End remap of the master PIC.
     );
     paging.setupHigherHalf();
-    higherHalfEntry();
+    asm volatile (
+        \\call higherHalfEntry
+    );
 }
 
 pub export fn higherHalfEntry() void {
+    asm volatile (
+        \\mov %[kernel_stack], %esp
+        :
+        : [kernel_stack] "i" (@as([*]u8, &kernel_stack) + kernel_stack.len),
+    );
+
     paging.removeIdentityMapping();
 
     kernel_common.kernelMain() catch |err| {
         kernel_common.printString(@errorName(err));
     };
+    asm volatile (
+        \\jmp .
+    );
 }
 
 pub fn panic(message: []const u8, stack_trace: ?*std.builtin.StackTrace, number: ?usize) noreturn {

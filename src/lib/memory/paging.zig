@@ -1,4 +1,5 @@
-const kernel_heap = @import("./kernel_heap.zig");
+const pmm = @import("pmm.zig");
+const kernel_heap = @import("kernel_heap.zig");
 const kernel_common = @import("../kernel_common.zig");
 const terminal = @import("../terminal.zig");
 const CACHE_DISABLED: u8 = 0b00010000;
@@ -10,6 +11,8 @@ const PAGE_SIZE = 4096;
 
 const ENTRIES_PER_DIRECTORY: usize = 1024;
 const ENTRIES_PER_TABLE: usize = 1024;
+const PAGE_TABLE_COUNT: usize = 1024;
+const PAGE_TABLE_BASE: usize = 0xFFC00000;
 
 pub const HIGHER_HALF_ADDRESS = 0xC0000000;
 const HIGHER_HALF_INDEX = HIGHER_HALF_ADDRESS / (PAGE_SIZE * ENTRIES_PER_TABLE);
@@ -28,21 +31,33 @@ const PageTableEntry = packed struct {
     address: u20 = 0,
 };
 
-var pageDirectory: PageDirectory align(PAGE_SIZE) linksection(".multiboot.text") = undefined;
+var pageDirectoryIdentity: PageDirectory align(PAGE_SIZE) linksection(".multiboot.text") = undefined;
 var pageDirectoryEntries: [ENTRIES_PER_DIRECTORY]PageDirectoryEntry align(PAGE_SIZE) linksection(".multiboot.text") = [_]PageDirectoryEntry{.{}} ** ENTRIES_PER_DIRECTORY;
 var pageTable0: PageTable align(PAGE_SIZE) linksection(".multiboot.text") = undefined;
 var pageTable0Entries: [ENTRIES_PER_TABLE]PageTableEntry align(PAGE_SIZE) linksection(".multiboot.text") = [_]PageTableEntry{.{}} ** ENTRIES_PER_TABLE;
 
+// Place virtual addresses for page tables at the end of the 32-bit address space.
+const pageTables: *[PAGE_TABLE_COUNT]PageTable = @ptrFromInt(PAGE_TABLE_BASE);
+var pageDirectory: *PageDirectory = undefined;
+
 pub fn setupHigherHalf() linksection(".multiboot.text") void {
-    pageDirectory = &pageDirectoryEntries;
+    pageDirectoryIdentity = &pageDirectoryEntries;
     pageTable0 = &pageTable0Entries;
+
+    pageDirectoryIdentity[0].address = @truncate(@intFromPtr(pageTable0) >> 12);
+    pageDirectoryIdentity[0].flags = IS_PRESENT | IS_WRITEABLE;
+
+    pageDirectoryIdentity[HIGHER_HALF_INDEX].address = pageDirectoryIdentity[0].address;
+    pageDirectoryIdentity[HIGHER_HALF_INDEX].flags = pageDirectoryIdentity[0].flags;
+
+    //Recursive mapping setup.
+    pageDirectoryIdentity[ENTRIES_PER_DIRECTORY - 1].address = PAGE_TABLE_BASE >> 12;
+    pageDirectoryIdentity[ENTRIES_PER_DIRECTORY - 1].flags = IS_PRESENT | IS_WRITEABLE;
+
+    pageDirectory = @ptrCast(&pageTables[PAGE_TABLE_COUNT - 1]);
+
     //Only map the first 4 MB.
-    pageDirectory[0].address = @truncate(@intFromPtr(pageTable0) >> 12);
-    pageDirectory[0].flags = IS_PRESENT | IS_WRITEABLE;
-
-    pageDirectory[HIGHER_HALF_INDEX].address = pageDirectory[0].address;
-    pageDirectory[HIGHER_HALF_INDEX].flags = pageDirectory[0].flags;
-
+    pmm.allocate();
     for (0..ENTRIES_PER_TABLE) |table_index| {
         pageTable0[table_index].address = @truncate((table_index * PAGE_SIZE) >> 12);
         pageTable0[table_index].flags = IS_PRESENT | IS_WRITEABLE;
@@ -55,16 +70,13 @@ pub fn setupHigherHalf() linksection(".multiboot.text") void {
         \\or $0x80010000, %eax
         \\mov %eax, %cr0
         :
-        : [pageDirectory] "{ecx}" (pageDirectory),
+        : [pageDirectory] "{ecx}" (pageDirectoryIdentity),
         : .{ .ecx = true, .memory = true });
 }
 
 pub fn removeIdentityMapping() void {
-    asm volatile (
-        \\add $0xC0000000, %esp
-    );
-    pageDirectory[0].address = 0;
-    pageDirectory[0].flags = 0;
+    pageDirectory.*[0].address = 0;
+    pageDirectory.*[0].flags = 0;
     asm volatile (
         \\mov %cr0, %eax
         \\mov %eax, %cr0
@@ -123,17 +135,99 @@ pub fn makePageDirectory(flags: u8) !void {
 }
 
 pub fn getPhysicalAddress(virtual_address: usize) usize {
-    _ = virtual_address;
-    //const page_directory_index = (virtual_address & 0xFFC00000) >> 22;
-    //const page_table_index = (virtual_address & 0x003FF000) >> 12;
-    //const offset = virtual_address & 0xFFF;
+    const page_directory_index = virtual_address >> 22;
+    const page_table_index = (virtual_address & 0x003FF000) >> 12;
+    const offset = virtual_address & 0xFFF;
 
-    //const page_table_address = pageDirectory.entries[page_directory_index].address;
-    //const page_table: *PageTable = @ptrFromInt(page_table_address);
-    //const page_table_entry = page_table.entries[page_table_index];
+    const page_table_address = @as(usize, @truncate(@as(usize, pageDirectory.*[page_directory_index].address << 12)));
+    const page_table: *PageTable = @ptrFromInt(page_table_address);
+    const page_table_entry = page_table.*[page_table_index];
 
-    //const physical_address = page_table_entry.address + offset;
+    const physical_address = page_table_entry.address + offset;
 
-    //return physical_address;
-    return 0;
+    return physical_address;
 }
+
+//fn free(heap_struct: *const Heap, ptr: *u8) !void {
+//    _ = ptr;
+//}
+
+fn createPageTable() void {}
+
+fn tableExists(virtual_address: usize) bool {
+    _ = virtual_address;
+    return false;
+}
+
+// pub fn allocate(virtual_address: usize, size: usize) !*anyopaque {
+//     const total_pages = size / PAGE_SIZE;
+
+//     const start_block = try get_start_block(heap_struct, blocks);
+//     mark_blocks_taken(heap_struct, start_block, blocks);
+
+//     const address = block_to_address(heap_struct, start_block);
+
+//     return @ptrFromInt(try allocate_blocks(heap_struct, total_blocks));
+// }
+
+// fn allocate_blocks(heap_struct: *const Heap, blocks: usize) !usize {
+//     const start_block = try get_start_block(heap_struct, blocks);
+//     mark_blocks_taken(heap_struct, start_block, blocks);
+
+//     const address = block_to_address(heap_struct, start_block);
+//     return address;
+// }
+
+// fn get_start_block(heap_struct: *const Heap, needed_blocks: usize) !usize {
+//     var current_block: usize = 0;
+//     var start_block: usize = 0;
+//     var is_first: bool = true;
+
+//     for (0..heap_struct.table.total_entries) |block_entry| {
+//         if (get_entry_type(heap_struct.table.entries[block_entry]) != BLOCK_FREE) {
+//             current_block = 0;
+//             start_block = 0;
+//             is_first = true;
+//             continue;
+//         }
+
+//         if (is_first) {
+//             is_first = false;
+//             start_block = block_entry;
+//         }
+
+//         current_block += 1;
+
+//         if (current_block == needed_blocks) {
+//             return start_block;
+//         }
+//     }
+
+//     return HeapError.OutOfMemory;
+// }
+
+// fn get_entry_type(entry_type: u8) u8 {
+//     return entry_type & 0x0F;
+// }
+
+// fn block_to_address(heap_struct: *const Heap, start_block: usize) usize {
+//     return @intFromPtr(heap_struct.start_address) + (start_block * BLOCK_SIZE);
+// }
+
+// fn mark_blocks_taken(heap_struct: *const Heap, start_block: usize, total_blocks: usize) void {
+//     const end_block: usize = start_block + total_blocks - 1;
+
+//     var entry: u8 = BLOCK_TAKEN | BLOCK_IS_FIRST;
+
+//     if (total_blocks > 1) {
+//         entry |= BLOCK_HAS_NEXT;
+//     }
+
+//     for (start_block..(end_block + 1)) |block| {
+//         entry = BLOCK_TAKEN;
+//         heap_struct.table.entries[block] = entry;
+//         if (block != end_block) {
+//             entry |= BLOCK_HAS_NEXT;
+//         }
+//     }
+// }
