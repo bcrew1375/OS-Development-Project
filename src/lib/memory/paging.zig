@@ -1,4 +1,4 @@
-const pmm = @import("pmm.zig");
+//const pmm = @import("pmm.zig");
 const kernel_heap = @import("kernel_heap.zig");
 const kernel_common = @import("../kernel_common.zig");
 const terminal = @import("../terminal.zig");
@@ -12,7 +12,7 @@ const PAGE_SIZE = 4096;
 const ENTRIES_PER_DIRECTORY: usize = 1024;
 const ENTRIES_PER_TABLE: usize = 1024;
 const PAGE_TABLE_COUNT: usize = 1024;
-const PAGE_TABLE_BASE: usize = 0xFFC00000;
+const PAGE_TABLE_UPPER_BASE: usize = 0xFFC00000;
 
 pub const HIGHER_HALF_ADDRESS = 0xC0000000;
 const HIGHER_HALF_INDEX = HIGHER_HALF_ADDRESS / (PAGE_SIZE * ENTRIES_PER_TABLE);
@@ -37,10 +37,10 @@ var pageTable0: PageTable align(PAGE_SIZE) linksection(".multiboot.text") = unde
 var pageTable0Entries: [ENTRIES_PER_TABLE]PageTableEntry align(PAGE_SIZE) linksection(".multiboot.text") = [_]PageTableEntry{.{}} ** ENTRIES_PER_TABLE;
 
 // Place virtual addresses for page tables at the end of the 32-bit address space.
-const pageTables: *[PAGE_TABLE_COUNT]PageTable = @ptrFromInt(PAGE_TABLE_BASE);
+const pageTables: *[PAGE_TABLE_COUNT]PageTable = @ptrFromInt(PAGE_TABLE_UPPER_BASE);
 var pageDirectory: *PageDirectory = undefined;
 
-pub fn setupHigherHalf() linksection(".multiboot.text") void {
+pub export fn setupHigherHalf() linksection(".multiboot.text") void {
     pageDirectoryIdentity = &pageDirectoryEntries;
     pageTable0 = &pageTable0Entries;
 
@@ -51,13 +51,11 @@ pub fn setupHigherHalf() linksection(".multiboot.text") void {
     pageDirectoryIdentity[HIGHER_HALF_INDEX].flags = pageDirectoryIdentity[0].flags;
 
     //Recursive mapping setup.
-    pageDirectoryIdentity[ENTRIES_PER_DIRECTORY - 1].address = PAGE_TABLE_BASE >> 12;
+    pageDirectoryIdentity[ENTRIES_PER_DIRECTORY - 1].address = PAGE_TABLE_UPPER_BASE >> 12;
     pageDirectoryIdentity[ENTRIES_PER_DIRECTORY - 1].flags = IS_PRESENT | IS_WRITEABLE;
 
-    pageDirectory = @ptrCast(&pageTables[PAGE_TABLE_COUNT - 1]);
-
     //Only map the first 4 MB.
-    pmm.allocate();
+    //pmm.allocate();
     for (0..ENTRIES_PER_TABLE) |table_index| {
         pageTable0[table_index].address = @truncate((table_index * PAGE_SIZE) >> 12);
         pageTable0[table_index].flags = IS_PRESENT | IS_WRITEABLE;
@@ -75,8 +73,13 @@ pub fn setupHigherHalf() linksection(".multiboot.text") void {
 }
 
 pub fn removeIdentityMapping() void {
-    pageDirectory.*[0].address = 0;
-    pageDirectory.*[0].flags = 0;
+    pageDirectory = @ptrCast(&pageTables[PAGE_TABLE_COUNT - 1]);
+    // const pageDirectory0Address = pageDirectory.*[0].address;
+    // _ = pageDirectory0Address;
+    // const pageDirectory0Flags = pageDirectory.*[0].flags;
+    // _ = pageDirectory0Flags;
+    // pageDirectory.*[0].address = 0;
+    // pageDirectory.*[0].flags = 0;
     asm volatile (
         \\mov %cr0, %eax
         \\mov %eax, %cr0

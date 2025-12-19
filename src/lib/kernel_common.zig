@@ -3,7 +3,7 @@ const std = @import("std");
 const terminal = @import("terminal.zig");
 const gdt = @import("gdt.zig");
 const idt = @import("idt/interrupt_descriptor_table.zig");
-const pmm = @import("memory/pmm.zig");
+//const pmm = @import("memory/pmm.zig");
 const kernel_heap = @import("../lib/memory/kernel_heap.zig");
 const paging = @import("../lib/memory/paging.zig");
 const port_io = @import("../lib/port-io.zig");
@@ -30,24 +30,23 @@ pub const COLOR = enum(u8) {
     WHITE = 15,
 };
 
-pub fn kernelMain() !void {
+pub export fn kernelMain() void {
     //Set 100 Hz PIT divisor. 1193182 / 100 = ~100 Hz
     const PIT_DIVISOR: u16 = 65535;
     port_io.out8(0x43, 0b00110100);
     port_io.out8(0x40, @truncate(PIT_DIVISOR & 0xFF));
     port_io.out8(0x40, @truncate((PIT_DIVISOR >> 8) & 0xFF));
 
-    const address = paging.getPhysicalAddress(0xC0000000);
-    _ = address;
-
     terminal.initialize();
 
     gdt.initialize();
+    //paging.removeIdentityMapping();
+
     idt.initialize() catch |err| {
         printString(@errorName(err));
         unrecoverableHalt();
     };
-    pmm.initialize();
+    //pmm.initialize();
     // kernel_heap.initialize() catch |err| {
     //     printString(@errorName(err));
     //     unrecoverableHalt();

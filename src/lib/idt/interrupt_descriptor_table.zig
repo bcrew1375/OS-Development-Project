@@ -26,7 +26,7 @@ var interrupt_descriptor_table_register: InterruptDescriptorTableRegisterStruct 
 
 const Trampoline = *const fn () callconv(.naked) noreturn;
 
-// Generate a trampoline that pushes its index and calls `target`
+// Generate a trampoline that calls the interrupt handler with the interrupt number.
 fn makeTrampoline(comptime index: u32) Trampoline {
     return struct {
         fn trampoline() align(16) callconv(.naked) noreturn {

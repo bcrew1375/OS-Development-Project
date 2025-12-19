@@ -6,7 +6,7 @@
       "request": "attach",
       "executable": "${workspaceFolder}/zig build run",
       "cwd": "${workspaceFolder}",
-      "gdbpath": "/usr/bin/gdb-multiarch",
+      "gdbpath": "/usr/bin/gdb",
       "target": ":1234",
       "remote": true,
       "autorun": [

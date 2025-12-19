@@ -24,6 +24,7 @@ pub fn build(b: *std.Build) !void {
             .code_model = .kernel,
         }),
     });
+
     kernel.setLinkerScript(b.path("src/linker.ld"));
     b.installArtifact(kernel);
 

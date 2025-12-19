@@ -29,14 +29,13 @@ pub export fn _start() linksection(".multiboot.text") callconv(.naked) noreturn 
     asm volatile (
         \\cli
         \\mov %[startup_stack], %esp
-        \\call kernelSetup
-        \\jmp .
+        \\jmp kernelSetup
         :
         : [startup_stack] "i" (@as([*]u8, &startup_stack) + startup_stack.len),
     );
 }
 
-pub export fn kernelSetup() linksection(".multiboot.text") void {
+pub export fn kernelSetup() linksection(".multiboot.text") callconv(.naked) noreturn {
     asm volatile (
     //ICW1: start init, edge triggered, ICW4 needed
         \\mov $0x11, %al
@@ -51,27 +50,21 @@ pub export fn kernelSetup() linksection(".multiboot.text") void {
         \\mov $0x01, %al
         \\out %al, $0x21
         //End remap of the master PIC.
-    );
-    paging.setupHigherHalf();
-    asm volatile (
-        \\call higherHalfEntry
+        \\call *%[setupHigherHalf]
+        \\jmp higherHalfEntry
+        :
+        : [setupHigherHalf] "{ebx}" (paging.setupHigherHalf),
     );
 }
 
-pub export fn higherHalfEntry() void {
+pub export fn higherHalfEntry() callconv(.naked) noreturn {
     asm volatile (
         \\mov %[kernel_stack], %esp
+        \\call kernelMain
+        \\jmp .
         :
         : [kernel_stack] "i" (@as([*]u8, &kernel_stack) + kernel_stack.len),
-    );
-
-    paging.removeIdentityMapping();
-
-    kernel_common.kernelMain() catch |err| {
-        kernel_common.printString(@errorName(err));
-    };
-    asm volatile (
-        \\jmp .
+          [kernelMain] "{ebx}" (kernel_common.kernelMain),
     );
 }
 
