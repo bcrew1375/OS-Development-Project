@@ -13,6 +13,7 @@ const ENTRIES_PER_DIRECTORY: usize = 1024;
 const ENTRIES_PER_TABLE: usize = 1024;
 const PAGE_TABLE_COUNT: usize = 1024;
 const PAGE_TABLE_UPPER_BASE: usize = 0xFFC00000;
+const PAGE_DIRECTORY_UPPER_BASE: usize = 0xFFFFF000;
 
 pub const HIGHER_HALF_ADDRESS = 0xC0000000;
 const HIGHER_HALF_INDEX = HIGHER_HALF_ADDRESS / (PAGE_SIZE * ENTRIES_PER_TABLE);
@@ -37,8 +38,7 @@ var pageTable0: PageTable align(PAGE_SIZE) linksection(".multiboot.text") = unde
 var pageTable0Entries: [ENTRIES_PER_TABLE]PageTableEntry align(PAGE_SIZE) linksection(".multiboot.text") = [_]PageTableEntry{.{}} ** ENTRIES_PER_TABLE;
 
 // Place virtual addresses for page tables at the end of the 32-bit address space.
-const pageTables: *[PAGE_TABLE_COUNT]PageTable = @ptrFromInt(PAGE_TABLE_UPPER_BASE);
-var pageDirectory: *PageDirectory = undefined;
+//var pageDirectory: *PageDirectory = undefined;
 
 pub export fn setupHigherHalf() linksection(".multiboot.text") void {
     pageDirectoryIdentity = &pageDirectoryEntries;
@@ -51,7 +51,7 @@ pub export fn setupHigherHalf() linksection(".multiboot.text") void {
     pageDirectoryIdentity[HIGHER_HALF_INDEX].flags = pageDirectoryIdentity[0].flags;
 
     //Recursive mapping setup.
-    pageDirectoryIdentity[ENTRIES_PER_DIRECTORY - 1].address = PAGE_TABLE_UPPER_BASE >> 12;
+    pageDirectoryIdentity[ENTRIES_PER_DIRECTORY - 1].address = PAGE_DIRECTORY_UPPER_BASE >> 12;
     pageDirectoryIdentity[ENTRIES_PER_DIRECTORY - 1].flags = IS_PRESENT | IS_WRITEABLE;
 
     //Only map the first 4 MB.
@@ -73,13 +73,10 @@ pub export fn setupHigherHalf() linksection(".multiboot.text") void {
 }
 
 pub fn removeIdentityMapping() void {
-    pageDirectory = @ptrCast(&pageTables[PAGE_TABLE_COUNT - 1]);
-    // const pageDirectory0Address = pageDirectory.*[0].address;
-    // _ = pageDirectory0Address;
-    // const pageDirectory0Flags = pageDirectory.*[0].flags;
-    // _ = pageDirectory0Flags;
-    // pageDirectory.*[0].address = 0;
-    // pageDirectory.*[0].flags = 0;
+    var pageDirectory: *PageDirectory = undefined;
+    pageDirectory = @ptrFromInt(@as(usize, pageDirectoryIdentity.*[ENTRIES_PER_DIRECTORY - 1].address) << 12);
+    pageDirectory.*[0].address = 0;
+    pageDirectory.*[0].flags = 0;
     asm volatile (
         \\mov %cr0, %eax
         \\mov %eax, %cr0
@@ -138,17 +135,19 @@ pub fn makePageDirectory(flags: u8) !void {
 }
 
 pub fn getPhysicalAddress(virtual_address: usize) usize {
-    const page_directory_index = virtual_address >> 22;
-    const page_table_index = (virtual_address & 0x003FF000) >> 12;
-    const offset = virtual_address & 0xFFF;
+    // const page_directory_index = virtual_address >> 22;
+    // const page_table_index = (virtual_address & 0x003FF000) >> 12;
+    // const offset = virtual_address & 0xFFF;
 
-    const page_table_address = @as(usize, @truncate(@as(usize, pageDirectory.*[page_directory_index].address << 12)));
-    const page_table: *PageTable = @ptrFromInt(page_table_address);
-    const page_table_entry = page_table.*[page_table_index];
+    // const page_table_address = @as(usize, @truncate(@as(usize, pageDirectory.*[page_directory_index].address << 12)));
+    // const page_table: *PageTable = @ptrFromInt(page_table_address);
+    // const page_table_entry = page_table.*[page_table_index];
 
-    const physical_address = page_table_entry.address + offset;
+    // const physical_address = page_table_entry.address + offset;
 
-    return physical_address;
+    // return physical_address;
+    _ = virtual_address;
+    return 0;
 }
 
 //fn free(heap_struct: *const Heap, ptr: *u8) !void {

@@ -35,12 +35,12 @@ pub export fn kernelMain() void {
     const PIT_DIVISOR: u16 = 65535;
     port_io.out8(0x43, 0b00110100);
     port_io.out8(0x40, @truncate(PIT_DIVISOR & 0xFF));
-    port_io.out8(0x40, @truncate((PIT_DIVISOR >> 8) & 0xFF));
+    port_io.out8(0x40, @truncate(PIT_DIVISOR >> 8));
 
     terminal.initialize();
 
     gdt.initialize();
-    //paging.removeIdentityMapping();
+    paging.removeIdentityMapping();
 
     idt.initialize() catch |err| {
         printString(@errorName(err));
