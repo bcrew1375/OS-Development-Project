@@ -38,7 +38,7 @@ var pageTable0: PageTable align(PAGE_SIZE) linksection(".multiboot.text") = unde
 var pageTable0Entries: [ENTRIES_PER_TABLE]PageTableEntry align(PAGE_SIZE) linksection(".multiboot.text") = [_]PageTableEntry{.{}} ** ENTRIES_PER_TABLE;
 
 // Place virtual addresses for page tables at the end of the 32-bit address space.
-//var pageDirectory: *PageDirectory = undefined;
+var pageDirectory: *PageDirectory = undefined;
 
 pub export fn setupHigherHalf() linksection(".multiboot.text") void {
     pageDirectoryIdentity = &pageDirectoryEntries;
@@ -51,7 +51,7 @@ pub export fn setupHigherHalf() linksection(".multiboot.text") void {
     pageDirectoryIdentity[HIGHER_HALF_INDEX].flags = pageDirectoryIdentity[0].flags;
 
     //Recursive mapping setup.
-    pageDirectoryIdentity[ENTRIES_PER_DIRECTORY - 1].address = PAGE_DIRECTORY_UPPER_BASE >> 12;
+    pageDirectoryIdentity[ENTRIES_PER_DIRECTORY - 1].address = @truncate(@intFromPtr(&pageDirectoryIdentity) >> 12);
     pageDirectoryIdentity[ENTRIES_PER_DIRECTORY - 1].flags = IS_PRESENT | IS_WRITEABLE;
 
     //Only map the first 4 MB.
@@ -73,13 +73,14 @@ pub export fn setupHigherHalf() linksection(".multiboot.text") void {
 }
 
 pub fn removeIdentityMapping() void {
-    var pageDirectory: *PageDirectory = undefined;
-    pageDirectory = @ptrFromInt(@as(usize, pageDirectoryIdentity.*[ENTRIES_PER_DIRECTORY - 1].address) << 12);
+    const pageDirectoryAddress = @as(usize, pageDirectoryIdentity.*[ENTRIES_PER_DIRECTORY - 1].address);
+    _ = pageDirectoryAddress;
+    pageDirectory = @as(*PageDirectory, @ptrFromInt(PAGE_DIRECTORY_UPPER_BASE));
     pageDirectory.*[0].address = 0;
     pageDirectory.*[0].flags = 0;
     asm volatile (
-        \\mov %cr0, %eax
-        \\mov %eax, %cr0
+        \\mov %cr3, %eax
+        \\mov %eax, %cr3
     );
 }
 
