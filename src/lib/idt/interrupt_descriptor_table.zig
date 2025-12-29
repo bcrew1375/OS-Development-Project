@@ -81,7 +81,7 @@ fn idt_load() void {
 export fn interrupt_handler(index: usize, stack_pointer: usize) callconv(.c) void {
     // Not ready to handle nested interrupts. Don't risk stack overflow.
     kernel_common.disableInterrupts();
-    kernel_common.printString("\nInterrupt: ");
+    kernel_common.printString("Interrupt: ");
     switch (index) {
         0x00 => {
             kernel_common.printString("Divide by zero.\n");

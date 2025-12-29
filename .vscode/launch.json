@@ -28,7 +28,7 @@
       "program": "${workspaceFolder}/zig-out/bin/kernel.elf",
       "gdb-remote-port": 1234,
       "initCommands": [
-        "target symbols add ${workspaceFolder}/zig-out/bin/kernel.elf --address 0xC0207000"
+        "target symbols add ${workspaceFolder}/zig-out/bin/kernel.elf --address 0xC0205000"
       ],
 
       "preLaunchTask": "Run QEMU",

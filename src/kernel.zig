@@ -54,18 +54,24 @@ pub export fn kernelSetup() linksection(".multiboot.text") callconv(.naked) nore
         \\jmp higherHalfEntry
         :
         : [setupHigherHalf] "{ebx}" (paging.setupHigherHalf),
-    );
+        : .{
+          .eax = true,
+          .ebx = true,
+        });
 }
 
 pub export fn higherHalfEntry() callconv(.naked) noreturn {
     asm volatile (
         \\mov %[kernel_stack], %esp
-        \\call kernelMain
+        \\call *%[kernelMain]
         \\jmp .
         :
         : [kernel_stack] "i" (@as([*]u8, &kernel_stack) + kernel_stack.len),
           [kernelMain] "{ebx}" (kernel_common.kernelMain),
-    );
+        : .{
+          .ebx = true,
+          .esp = true,
+        });
 }
 
 pub fn panic(message: []const u8, stack_trace: ?*std.builtin.StackTrace, number: ?usize) noreturn {

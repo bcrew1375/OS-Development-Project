@@ -12,72 +12,59 @@ const PAGE_SIZE = 4096;
 const ENTRIES_PER_DIRECTORY: usize = 1024;
 const ENTRIES_PER_TABLE: usize = 1024;
 const PAGE_TABLE_COUNT: usize = 1024;
-const PAGE_TABLE_UPPER_BASE: usize = 0xFFC00000;
-const PAGE_DIRECTORY_UPPER_BASE: usize = 0xFFFFF000;
+const PAGE_TABLES_BASE: usize = 0xFFC00000;
 
 pub const HIGHER_HALF_ADDRESS = 0xC0000000;
 const HIGHER_HALF_INDEX = HIGHER_HALF_ADDRESS / (PAGE_SIZE * ENTRIES_PER_TABLE);
 
-const PageDirectory = *[ENTRIES_PER_DIRECTORY]PageDirectoryEntry;
-
-const PageDirectoryEntry = packed struct {
+const PageEntry = packed struct {
     flags: u12 = 0,
     address: u20 = 0,
 };
 
-const PageTable = *[ENTRIES_PER_TABLE]PageTableEntry;
+const PageDirectory = [ENTRIES_PER_DIRECTORY]PageEntry;
+const PageTable = [ENTRIES_PER_TABLE]PageEntry;
 
-const PageTableEntry = packed struct {
-    flags: u12 = 0,
-    address: u20 = 0,
-};
-
-var pageDirectoryIdentity: PageDirectory align(PAGE_SIZE) linksection(".multiboot.text") = undefined;
-var pageDirectoryEntries: [ENTRIES_PER_DIRECTORY]PageDirectoryEntry align(PAGE_SIZE) linksection(".multiboot.text") = [_]PageDirectoryEntry{.{}} ** ENTRIES_PER_DIRECTORY;
-var pageTable0: PageTable align(PAGE_SIZE) linksection(".multiboot.text") = undefined;
-var pageTable0Entries: [ENTRIES_PER_TABLE]PageTableEntry align(PAGE_SIZE) linksection(".multiboot.text") = [_]PageTableEntry{.{}} ** ENTRIES_PER_TABLE;
-
-// Place virtual addresses for page tables at the end of the 32-bit address space.
 var pageDirectory: *PageDirectory = undefined;
+var pageTables: *[PAGE_TABLE_COUNT]PageTable = undefined;
+
+var pageDirectoryEntries: [ENTRIES_PER_DIRECTORY]PageEntry align(PAGE_SIZE) linksection(".multiboot.data") = [_]PageEntry{.{}} ** ENTRIES_PER_DIRECTORY;
+var pageTable0Entries: [ENTRIES_PER_TABLE]PageEntry align(PAGE_SIZE) linksection(".multiboot.data") = [_]PageEntry{.{}} ** ENTRIES_PER_TABLE;
 
 pub export fn setupHigherHalf() linksection(".multiboot.text") void {
-    pageDirectoryIdentity = &pageDirectoryEntries;
-    pageTable0 = &pageTable0Entries;
+    pageDirectoryEntries[0].address = @truncate(@intFromPtr(&pageTable0Entries) >> 12);
+    pageDirectoryEntries[0].flags = IS_PRESENT | IS_WRITEABLE;
 
-    pageDirectoryIdentity[0].address = @truncate(@intFromPtr(pageTable0) >> 12);
-    pageDirectoryIdentity[0].flags = IS_PRESENT | IS_WRITEABLE;
+    pageDirectoryEntries[HIGHER_HALF_INDEX].address = @truncate(@intFromPtr(&pageTable0Entries) >> 12);
+    pageDirectoryEntries[HIGHER_HALF_INDEX].flags = IS_PRESENT | IS_WRITEABLE;
 
-    pageDirectoryIdentity[HIGHER_HALF_INDEX].address = pageDirectoryIdentity[0].address;
-    pageDirectoryIdentity[HIGHER_HALF_INDEX].flags = pageDirectoryIdentity[0].flags;
+    // Recursive mapping setup.
+    pageDirectoryEntries[ENTRIES_PER_DIRECTORY - 1].address = @truncate(@intFromPtr(&pageDirectoryEntries) >> 12);
+    pageDirectoryEntries[ENTRIES_PER_DIRECTORY - 1].flags = IS_PRESENT | IS_WRITEABLE;
 
-    //Recursive mapping setup.
-    pageDirectoryIdentity[ENTRIES_PER_DIRECTORY - 1].address = @truncate(@intFromPtr(&pageDirectoryIdentity) >> 12);
-    pageDirectoryIdentity[ENTRIES_PER_DIRECTORY - 1].flags = IS_PRESENT | IS_WRITEABLE;
-
-    //Only map the first 4 MB.
-    //pmm.allocate();
+    // //Only map the first 4 MB.
+    // //pmm.allocate();
     for (0..ENTRIES_PER_TABLE) |table_index| {
-        pageTable0[table_index].address = @truncate((table_index * PAGE_SIZE) >> 12);
-        pageTable0[table_index].flags = IS_PRESENT | IS_WRITEABLE;
+        pageTable0Entries[table_index].address = @truncate((table_index * PAGE_SIZE) >> 12);
+        pageTable0Entries[table_index].flags = IS_PRESENT | IS_WRITEABLE;
     }
 
     asm volatile (
-        \\mov %[pageDirectory], %eax
+        \\mov %[pageDirectoryAddress], %eax
         \\mov %eax, %cr3
         \\mov %cr0, %eax
         \\or $0x80010000, %eax
         \\mov %eax, %cr0
         :
-        : [pageDirectory] "{ecx}" (pageDirectoryIdentity),
+        : [pageDirectoryAddress] "{ecx}" (&pageDirectoryEntries),
         : .{ .ecx = true, .memory = true });
 }
 
 pub fn removeIdentityMapping() void {
-    const pageDirectoryAddress = @as(usize, pageDirectoryIdentity.*[ENTRIES_PER_DIRECTORY - 1].address);
-    _ = pageDirectoryAddress;
-    pageDirectory = @as(*PageDirectory, @ptrFromInt(PAGE_DIRECTORY_UPPER_BASE));
-    pageDirectory.*[0].address = 0;
-    pageDirectory.*[0].flags = 0;
+    pageTables = @ptrFromInt(PAGE_TABLES_BASE);
+    pageDirectory = &pageTables[PAGE_TABLE_COUNT - 1];
+    pageDirectory[0].address = 0;
+    pageDirectory[0].flags = 0;
     asm volatile (
         \\mov %cr3, %eax
         \\mov %eax, %cr3
