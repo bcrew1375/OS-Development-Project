@@ -50,10 +50,10 @@ pub export fn kernelSetup() linksection(".multiboot.text") callconv(.naked) nore
         \\mov $0x01, %al
         \\out %al, $0x21
         //End remap of the master PIC.
-        \\call *%[setupHigherHalf]
+        \\call *%[paging_initialize]
         \\jmp higherHalfEntry
         :
-        : [setupHigherHalf] "{ebx}" (paging.setupHigherHalf),
+        : [paging_initialize] "{ebx}" (paging.initialize),
         : .{
           .eax = true,
           .ebx = true,

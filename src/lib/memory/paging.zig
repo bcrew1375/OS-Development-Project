@@ -31,7 +31,7 @@ var pageTables: *[PAGE_TABLE_COUNT]PageTable = undefined;
 var pageDirectoryEntries: [ENTRIES_PER_DIRECTORY]PageEntry align(PAGE_SIZE) linksection(".multiboot.data") = [_]PageEntry{.{}} ** ENTRIES_PER_DIRECTORY;
 var pageTable0Entries: [ENTRIES_PER_TABLE]PageEntry align(PAGE_SIZE) linksection(".multiboot.data") = [_]PageEntry{.{}} ** ENTRIES_PER_TABLE;
 
-pub export fn setupHigherHalf() linksection(".multiboot.text") void {
+pub export fn initialize() linksection(".multiboot.text") void {
     pageDirectoryEntries[0].address = @truncate(@intFromPtr(&pageTable0Entries) >> 12);
     pageDirectoryEntries[0].flags = IS_PRESENT | IS_WRITEABLE;
 

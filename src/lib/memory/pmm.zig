@@ -1,72 +1,85 @@
 const paging = @import("paging.zig");
 
-// Assume 4 GB of physical RAM for now.
-// 4 GB / 4096 frame size = 1 MB.
-const NUMBER_OF_FRAMES: usize = 1048576;
+// Assume 128 MBs of physical RAM for now.
+// 128 MBs / 4096 frame size = 32 KBs.
+pub const TOTAL_NUMBER_OF_FRAMES: u16 = 32768;
 
-const PmmError = error{
+// Reserve the first 4 MBs for the kernel and hardware.
+pub const KERNEL_BASE_FRAMES_COUNT: u16 = 1024;
+
+pub const PmmError = error{
     OutOfMemory,
+    InvalidSize,
+    InvalidIndex,
 };
 
-var allocationBitmap: [NUMBER_OF_FRAMES]bool = undefined;
+const FRAME_TAKEN = true;
+const FRAME_FREE = false;
 
-const kernelBaseFramesCount = 1024;
+var frameMap: [TOTAL_NUMBER_OF_FRAMES]bool = undefined;
 
 pub fn initialize() void {
-    for (0..kernelBaseFramesCount) |frame| {
-        allocationBitmap[frame] = 1;
+    mark_frames(0, KERNEL_BASE_FRAMES_COUNT);
+}
+
+pub fn allocate(needed_frames: usize) !void {
+    if ((needed_frames < 1) or
+        (needed_frames > (TOTAL_NUMBER_OF_FRAMES - KERNEL_BASE_FRAMES_COUNT)))
+    {
+        return PmmError.InvalidSize;
+    }
+
+    const start_frame = try get_start_frame(needed_frames);
+    mark_frames(start_frame, needed_frames);
+}
+
+pub fn free(start_frame: usize, total_frames: usize) !void {
+    // Kernel base is off limits.
+    if ((start_frame < KERNEL_BASE_FRAMES_COUNT) or
+        (start_frame + total_frames) > frameMap.len)
+    {
+        return PmmError.InvalidIndex;
+    }
+
+    const end_frame: usize = start_frame + total_frames;
+
+    for (start_frame..end_frame) |frame| {
+        frameMap[frame] = FRAME_FREE;
     }
 }
 
-pub fn allocate(needed_blocks: u32) !u32 {
-    const start_block = try get_start_block(needed_blocks);
-    mark_blocks_taken(start_block, needed_blocks);
-}
-
-pub fn free(frame: u32) !void {
-    // First 4 MBs are kernel base and off limits.
-    if ((frame >= kernelBaseFramesCount) and (frame < allocationBitmap.len)) {
-        allocationBitmap[frame] = 0;
-    }
-}
-
-fn get_start_block(needed_blocks: usize) !usize {
-    var current_block: usize = 0;
-    var start_block: usize = 0;
+fn get_start_frame(needed_frames: usize) !usize {
+    var frame_count: u32 = 0;
+    var start_frame: u32 = 0;
     var is_first: bool = true;
 
-    for (0..NUMBER_OF_FRAMES) |block_entry| {
-        if (get_entry_type(allocationBitmap[block_entry]) != 1) {
-            current_block = 0;
-            start_block = 0;
+    for (0..TOTAL_NUMBER_OF_FRAMES) |frame| {
+        if (frameMap[frame] == FRAME_TAKEN) {
+            frame_count = 0;
+            start_frame = 0;
             is_first = true;
             continue;
         }
 
         if (is_first) {
             is_first = false;
-            start_block = block_entry;
+            start_frame = frame;
         }
 
-        current_block += 1;
+        frame_count += 1;
 
-        if (current_block == needed_blocks) {
-            return start_block;
+        if (frame_count == needed_frames) {
+            return start_frame;
         }
     }
 
     return PmmError.OutOfMemory;
 }
 
-fn allocate_blocks(blocks: usize) !usize {
-    const start_block = try get_start_block(blocks);
-    mark_blocks_taken(start_block, blocks);
-}
+fn mark_frames(start_frame: usize, total_frames: usize) void {
+    const end_frame: usize = start_frame + total_frames;
 
-fn mark_blocks_taken(start_block: usize, total_blocks: usize) void {
-    const end_block: usize = start_block + total_blocks - 1;
-
-    for (start_block..(end_block + 1)) |block| {
-        allocationBitmap[block] = true;
+    for (start_frame..end_frame) |frame| {
+        frameMap[frame] = FRAME_TAKEN;
     }
 }

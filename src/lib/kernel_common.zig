@@ -3,7 +3,7 @@ const std = @import("std");
 const terminal = @import("terminal.zig");
 const gdt = @import("gdt.zig");
 const idt = @import("idt/interrupt_descriptor_table.zig");
-//const pmm = @import("memory/pmm.zig");
+const pmm = @import("memory/pmm.zig");
 const kernel_heap = @import("../lib/memory/kernel_heap.zig");
 const paging = @import("../lib/memory/paging.zig");
 const port_io = @import("../lib/port-io.zig");
@@ -38,6 +38,46 @@ pub export fn kernelMain() void {
     port_io.out8(0x40, @truncate(PIT_DIVISOR >> 8));
 
     terminal.initialize();
+    pmm.initialize();
+
+    // Test PMM function integrity.
+    {
+        var err = pmm.PmmError.InvalidSize;
+        if (pmm.allocate(0) != err) {
+            printFormat("PMM {s} testing failed!", .{@errorName(err)});
+            unrecoverableHalt();
+        }
+        if (pmm.allocate(pmm.TOTAL_NUMBER_OF_FRAMES - pmm.KERNEL_BASE_FRAMES_COUNT + 1) != err) {
+            printFormat("PMM {s} testing failed!", .{@errorName(err)});
+            unrecoverableHalt();
+        }
+
+        err = pmm.PmmError.OutOfMemory;
+        if (pmm.allocate(pmm.TOTAL_NUMBER_OF_FRAMES - pmm.KERNEL_BASE_FRAMES_COUNT) == err) {
+            printFormat("PMM {s} testing failed!", .{@errorName(err)});
+            unrecoverableHalt();
+        }
+        if (pmm.allocate(1) != err) {
+            printFormat("PMM {s} testing failed!", .{@errorName(err)});
+            unrecoverableHalt();
+        }
+
+        err = pmm.PmmError.InvalidIndex;
+        // Free RAM from OutOfMemory test.
+        if (pmm.free(pmm.KERNEL_BASE_FRAMES_COUNT, pmm.TOTAL_NUMBER_OF_FRAMES - pmm.KERNEL_BASE_FRAMES_COUNT) == err) {
+            printFormat("PMM {s} testing failed!", .{@errorName(err)});
+            unrecoverableHalt();
+        }
+
+        if (pmm.free(0, pmm.KERNEL_BASE_FRAMES_COUNT) != err) {
+            printFormat("PMM {s} testing failed!", .{@errorName(err)});
+            unrecoverableHalt();
+        }
+        if (pmm.free(pmm.TOTAL_NUMBER_OF_FRAMES, 1) != err) {
+            printFormat("PMM {s} testing failed!", .{@errorName(err)});
+            unrecoverableHalt();
+        }
+    }
 
     gdt.initialize();
     paging.removeIdentityMapping();
@@ -46,7 +86,7 @@ pub export fn kernelMain() void {
         printString(@errorName(err));
         unrecoverableHalt();
     };
-    //pmm.initialize();
+
     // kernel_heap.initialize() catch |err| {
     //     printString(@errorName(err));
     //     unrecoverableHalt();
