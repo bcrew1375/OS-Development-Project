@@ -3,32 +3,13 @@ const std = @import("std");
 const terminal = @import("terminal.zig");
 const gdt = @import("gdt.zig");
 const idt = @import("idt/interrupt_descriptor_table.zig");
-const pmm = @import("memory/pmm.zig");
+const pmm = @import("memory/pmm/pmm.zig");
 const kernel_heap = @import("../lib/memory/kernel_heap.zig");
 const paging = @import("../lib/memory/paging.zig");
 const port_io = @import("../lib/port-io.zig");
 
 pub const KERNEL_CODE_SELECTOR: u8 = 0x08;
 pub const KERNEL_DATA_SELECTOR: u8 = 0x10;
-
-pub const COLOR = enum(u8) {
-    BLACK = 0,
-    BLUE = 1,
-    GREEN = 2,
-    CYAN = 3,
-    RED = 4,
-    MAGENTA = 5,
-    BROWN = 6,
-    LIGHT_GRAY = 7,
-    DARK_GRAY = 8,
-    LIGHT_BLUE = 9,
-    LIGHT_GREEN = 10,
-    LIGHT_CYAN = 11,
-    LIGHT_RED = 12,
-    LIGHT_MAGENTA = 13,
-    YELLOW = 14,
-    WHITE = 15,
-};
 
 pub export fn kernelMain() void {
     //Set 100 Hz PIT divisor. 1193182 / 100 = ~100 Hz

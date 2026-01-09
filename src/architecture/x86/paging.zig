@@ -1,7 +1,3 @@
-//const pmm = @import("pmm.zig");
-const kernel_heap = @import("kernel_heap.zig");
-const kernel_common = @import("../kernel_common.zig");
-const terminal = @import("../terminal.zig");
 const CACHE_DISABLED: u8 = 0b00010000;
 const WRITE_THROUGH: u8 = 0b00001000;
 const ACCESS_FROM_ALL: u8 = 0b00000100;
@@ -43,7 +39,6 @@ pub export fn initialize() linksection(".multiboot.text") void {
     pageDirectoryEntries[ENTRIES_PER_DIRECTORY - 1].flags = IS_PRESENT | IS_WRITEABLE;
 
     // //Only map the first 4 MB.
-    // //pmm.allocate();
     for (0..ENTRIES_PER_TABLE) |table_index| {
         pageTable0Entries[table_index].address = @truncate((table_index * PAGE_SIZE) >> 12);
         pageTable0Entries[table_index].flags = IS_PRESENT | IS_WRITEABLE;
@@ -69,57 +64,6 @@ pub fn removeIdentityMapping() void {
         \\mov %cr3, %eax
         \\mov %eax, %cr3
     );
-}
-
-pub fn makePageDirectory(flags: u8) !void {
-    _ = flags;
-    //kernel_common.printString("Initializing Paging...");
-    //pageDirectory.entries = @ptrCast(@alignCast(try kernel_heap.kmalloc(@sizeOf(PageDirectoryEntry) * TOTAL_ENTRIES_PER_DIRECTORY)));
-
-    //Only map the first 8 MB.
-    //for (0..2) |directory_index| {
-    //    var page_table: PageTable = PageTable{};
-    //    page_table.entries = @ptrCast(@alignCast(try kernel_heap.kmalloc(@sizeOf(PageTableEntry) * TABLE_ENTRIES_PER_DIRECTORY_ENTRY)));
-
-    //    pageDirectory.entries[directory_index].address = @truncate((@intFromPtr(page_table.entries) & 0xFFFFF000) >> 12);
-    //    pageDirectory.entries[directory_index].flags = flags;
-
-    //    for (0..TABLE_ENTRIES_PER_DIRECTORY_ENTRY) |table_index| {
-    //        page_table.entries[table_index].address = @truncate((((directory_index * TABLE_ENTRIES_PER_DIRECTORY_ENTRY + table_index) * 0x1000) & 0xFFFFF000) >> 12);
-    //        page_table.entries[table_index].flags = flags;
-    //    }
-    //}
-
-    // Map kernel to higher-half (0xC0000000)
-    //var page_table: PageTable = PageTable{};
-    //page_table.entries = @ptrCast(@alignCast(try kernel_heap.kmalloc(@sizeOf(PageTableEntry) * TABLE_ENTRIES_PER_DIRECTORY_ENTRY)));
-    //pageDirectory.entries[768].address = @truncate((@intFromPtr(page_table.entries) & 0xFFFFF000) >> 12);
-
-    //for (0..1024) |table_index| {
-    //    page_table.entries[table_index].address = @truncate(((table_index * 0x1000) & 0xFFFFF000) >> 12);
-    //    page_table.entries[table_index].flags = flags;
-    //}
-
-    //const virtual_address = 0xc0100000;
-    //var page_directory_index: u10 = (virtual_address & 0xFFC00000) >> 22;
-    //var page_table_index: u10 = (virtual_address & 0x003FF000) >> 12;
-    //var offset: u12 = virtual_address & 0x00000FFF;
-
-    //page_directory_index += 0;
-    //page_table_index += 0;
-    //offset += 0;
-
-    //kernel_common.printFormat("Directory index: 0x{x}\n", .{page_directory_index});
-    //kernel_common.printFormat("Table index: 0x{x}\n", .{page_table_index});
-
-    //const page_table_address = @as(u20, @bitCast(pageDirectory.entries[page_directory_index].address));
-    //const page_table_ptr: *PageTable = @ptrFromInt(page_table_address);
-    //const page_table_entry = page_table_ptr.entries[page_table_index];
-
-    //const physical_address = (@as(u32, page_table_entry.address) & 0xFFFFF000) + offset;
-    //kernel_common.printFormat("Physical address: 0x{x}\n", .{physical_address});
-
-    //return pageDirectory;
 }
 
 pub fn getPhysicalAddress(virtual_address: usize) usize {

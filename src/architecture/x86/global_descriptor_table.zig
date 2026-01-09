@@ -30,6 +30,8 @@ var tss: [104]u8 = undefined;
 var gdt = GlobalDescriptorTable{};
 var gdtr = GlobalDescriptorTableRegister{};
 
+pub const CODE_SELECTOR = @offsetOf(GlobalDescriptorTable, "code_limit");
+
 pub fn initialize() void {
     const tss_address = @intFromPtr(&tss);
 

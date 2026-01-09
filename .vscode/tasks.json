@@ -2,6 +2,20 @@
   "version": "2.0.0",
   "tasks": [
     {
+      // "label": "Run QEMU",
+      // "type": "shell",
+      // "command": "qemu-system-i386",
+      // "args": [
+      //   "-kernel", "zig-out/bin/kernel.elf",
+      //   "-debugcon", "stdio",
+      //   "-s",
+      //   "-m", "1G",
+      //   "-no-reboot",
+      //   "-no-shutdown"
+      // ],
+      // "isBackground": true,
+      // "problemMatcher": []
+
       "label": "Run QEMU",
       "type": "shell",
       "command": "zig build run"

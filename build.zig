@@ -18,20 +18,37 @@ pub fn build(b: *std.Build) !void {
     const kernel = b.addExecutable(.{
         .name = "kernel.elf",
         .root_module = b.createModule(.{
-            .root_source_file = b.path("src/kernel.zig"),
+            .root_source_file = b.path(b.pathJoin(&.{"src/kernel.zig"})),
             .target = target,
             .optimize = optimize,
             .code_model = .kernel,
         }),
     });
 
-    kernel.setLinkerScript(b.path("src/linker.ld"));
+    const tests = b.addTest(.{
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("tests/tests.zig"),
+            .target = target,
+            .optimize = optimize,
+        }),
+    });
+
+    tests.root_module.addImport("kernel", kernel.root_module);
+
+    const run_tests = b.addRunArtifact(tests);
+    const test_step = b.step("tests", "Run unit tests");
+    test_step.dependOn(&run_tests.step);
+
+    kernel.setLinkerScript(b.path(b.pathJoin(&.{"src/linker.ld"})));
     b.installArtifact(kernel);
 
     const kernel_path = kernel.getEmittedBin();
     const qemu_cmd = b.addSystemCommand(&[_][]const u8{
         // zig fmt: off
         "qemu-system-i386",
+        //"-chardev", "stdio,id=char0,mux=on,logfile=serial.log,signal=off",
+        //"-serial", "chardev:char0", "-mon", "chardev=char0",
+        //"-debugcon", "stdio",
         "-S",
         "-s",
         "-m", "1G",
