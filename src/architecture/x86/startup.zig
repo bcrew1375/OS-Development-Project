@@ -1,8 +1,6 @@
-const cpu = @import("cpu.zig");
-const paging = @import("paging.zig");
+const arch = @import("architecture.zig");
 const gdt = @import("global_descriptor_table.zig");
 const idt = @import("interrupt_descriptor_table.zig");
-
 const std = @import("std");
 
 // OS Dev: https://wiki.osdev.org/Zig_Bare_Bones
@@ -40,9 +38,9 @@ pub export fn _start() linksection(".multiboot.text") callconv(.naked) noreturn 
 }
 
 pub fn finishStartup() !void {
-    cpu.setupTimer();
+    arch.cpu.setupTimer();
     gdt.initialize();
-    paging.removeIdentityMapping();
+    arch.paging.removeIdentityMapping();
     idt.initialize();
 }
 
@@ -64,7 +62,7 @@ export fn kernelSetup() linksection(".multiboot.text") callconv(.naked) noreturn
         \\call *%[paging_initialize]
         \\jmp higherHalfEntry
         :
-        : [paging_initialize] "{ebx}" (paging.initialize),
+        : [paging_initialize] "{ebx}" (arch.paging.initialize),
         : .{
           .eax = true,
           .ebx = true,

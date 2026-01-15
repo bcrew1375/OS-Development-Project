@@ -1,4 +1,4 @@
-// OS Dev: https://wiki.osdev.org/Zig_Bare_Bones
+// Modified from OS Dev: https://wiki.osdev.org/Zig_Bare_Bones
 const std = @import("std");
 
 pub fn build(b: *std.Build) !void {
@@ -26,11 +26,7 @@ pub fn build(b: *std.Build) !void {
     });
 
     const tests = b.addTest(.{
-        .root_module = b.createModule(.{
-            .root_source_file = b.path("tests/tests.zig"),
-            .target = target,
-            .optimize = optimize,
-        }),
+        .root_module = b.createModule(.{ .root_source_file = b.path("tests/tests.zig"), .target = b.graph.host, .optimize = optimize, .code_model = .normal }),
     });
 
     tests.root_module.addImport("kernel", kernel.root_module);
@@ -68,5 +64,4 @@ pub fn build(b: *std.Build) !void {
 
     const run_step = b.step("run", "Run kernel with qemu");
     run_step.dependOn(&qemu_cmd.step);
-    // OS Dev: https://wiki.osdev.org/Zig_Bare_Bones
 }

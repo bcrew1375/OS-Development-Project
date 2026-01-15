@@ -1,6 +1,8 @@
-const arch = @import("architecture/architecture.zig").Arch;
-pub const pmm = @import("memory_management/pmm.zig");
+const builtin = @import("builtin");
 
+const Arch = @import("architecture/architecture.zig");
+//pub const pmm = @import("memory_management/pmm.zig");
+const arch = Arch.getArch();
 const std = @import("std");
 
 pub export fn kernelMain() void {
@@ -8,7 +10,7 @@ pub export fn kernelMain() void {
         printString(@errorName(err));
         arch.cpu.unrecoverableHalt();
     };
-    pmm.initialize();
+    //pmm.initialize();
 
     // kernel_heap.initialize() catch |err| {
     //     printString(@errorName(err));
