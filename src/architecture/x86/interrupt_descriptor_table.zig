@@ -49,18 +49,6 @@ pub fn set(interrupt_number: u16, address: usize, type_attribute: u8) void {
     return;
 }
 
-pub fn enableInterrupts() void {
-    asm volatile (
-        \\sti
-    );
-}
-
-pub fn disableInterrupts() void {
-    asm volatile (
-        \\cli
-    );
-}
-
 pub fn acknowledgeInterrupt() void {
     port_io.out8(0x20, 0x20);
     port_io.out8(0xA0, 0x20);

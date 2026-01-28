@@ -1,6 +1,8 @@
-const arch = @import("architecture.zig");
+//const arch = @import("architecture.zig");
 const gdt = @import("global_descriptor_table.zig");
 const idt = @import("interrupt_descriptor_table.zig");
+const time = @import("time.zig");
+const paging = @import("paging.zig");
 const std = @import("std");
 
 // OS Dev: https://wiki.osdev.org/Zig_Bare_Bones
@@ -37,12 +39,14 @@ pub export fn _start() linksection(".multiboot.text") callconv(.naked) noreturn 
     );
 }
 
-pub fn finishStartup() !void {
-    arch.cpu.setupTimer();
-    gdt.initialize();
-    arch.paging.removeIdentityMapping();
-    idt.initialize();
-}
+pub const Startup = struct {
+    pub fn finishStartup() !void {
+        time.setupTimer();
+        gdt.initialize();
+        paging.removeIdentityMapping();
+        idt.initialize();
+    }
+};
 
 export fn kernelSetup() linksection(".multiboot.text") callconv(.naked) noreturn {
     asm volatile (
@@ -62,7 +66,7 @@ export fn kernelSetup() linksection(".multiboot.text") callconv(.naked) noreturn
         \\call *%[paging_initialize]
         \\jmp higherHalfEntry
         :
-        : [paging_initialize] "{ebx}" (arch.paging.initialize),
+        : [paging_initialize] "{ebx}" (paging.initialize),
         : .{
           .eax = true,
           .ebx = true,

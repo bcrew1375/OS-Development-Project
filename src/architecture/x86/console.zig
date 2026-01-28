@@ -31,25 +31,27 @@ const buffer_pointer: *volatile [TEXT_MODE_BUFFER_SIZE]u16 = @ptrFromInt(0xC00B8
 var row: u8 = 0;
 var column: u8 = 0;
 
-pub fn initialize() void {
-    row = 0;
-    column = 0;
-    @memset(buffer_pointer[0..TEXT_MODE_BUFFER_SIZE], makeChar(' ', COLOR.BLACK));
-}
-
-pub fn print(string: []const u8) void {
-    const string_ptr = string.ptr;
-    for (0..string.len) |i| {
-        writeChar(string_ptr[i], COLOR.WHITE);
+pub const Console = struct {
+    pub fn initialize() void {
+        row = 0;
+        column = 0;
+        @memset(buffer_pointer[0..TEXT_MODE_BUFFER_SIZE], makeChar(' ', COLOR.BLACK));
     }
-}
 
-pub fn printColor(string: []const u8, color: COLOR) void {
-    const string_ptr = string.ptr;
-    for (0..string.len) |i| {
-        writeChar(string_ptr[i], color);
+    pub fn print(string: []const u8) void {
+        const string_ptr = string.ptr;
+        for (0..string.len) |i| {
+            writeChar(string_ptr[i], COLOR.WHITE);
+        }
     }
-}
+
+    pub fn printColor(string: []const u8, color: COLOR) void {
+        const string_ptr = string.ptr;
+        for (0..string.len) |i| {
+            writeChar(string_ptr[i], color);
+        }
+    }
+};
 
 fn putChar(x_position: u8, y_position: u8, character: u8, color: COLOR) void {
     if (x_position > MAX_COLUMN_INDEX) {

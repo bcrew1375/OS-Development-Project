@@ -4,11 +4,12 @@ pub const Arch = struct {
     keyboard: Keyboard = undefined,
     paging: Paging = undefined,
     interrupts: Interrupts = undefined,
+    //devices: Devices = undefined,
     startup: Startup = undefined,
 
     pub const Cpu = struct {
+        setupTimer: fn () void,
         unrecoverableHalt: fn () noreturn,
-        setupTimer: fn () noreturn,
     };
 
     pub const Terminal = struct {
@@ -35,6 +36,10 @@ pub const Arch = struct {
         acknowledgeInterrupt: fn () void,
     };
 
+    // pub const Devices = struct {
+    //     pub fn input() =
+    // };
+
     pub const Startup = struct {
         finishStartup: fn () void,
     };
@@ -42,12 +47,12 @@ pub const Arch = struct {
 
 pub fn getArch() Arch {
     const arch: Arch = .{
-        .cpu = @import("x86/architecture.zig").cpu,
-        .terminal = @import("x86/architecture.zig").terminal,
-        .keyboard = @import("x86/architecture.zig").keyboard,
-        .paging = @import("x86/architecture.zig").paging,
-        .interrupts = @import("x86/architecture.zig").interrupts,
-        .startup = @import("x86/architecture.zig").startup,
+        .cpu = @import("x86/cpu.zig").Cpu(),
+        .console = @import("x86/console.zig").Console,
+        //.keyboard = @import("x86/architecture.zig").keyboard,
+        .paging = @import("x86/paging.zig").Paging,
+        .interrupts = @import("x86/interrupts.zig").Interrupts,
+        .startup = @import("x86/startup.zig").Startup,
 
         //.x86_64 => @import("architecture/x86_64/architecture.zig").arch,
         //.aarch64 => @import("architecture/aarch64/architecture.zig").arch,
