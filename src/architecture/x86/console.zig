@@ -1,3 +1,4 @@
+const console = @import("../architecture.zig").Arch.Console;
 const std = @import("std");
 
 const TEXT_MODE_WIDTH: u16 = 80;
@@ -7,53 +8,67 @@ const TEXT_MODE_BUFFER_SIZE = TEXT_MODE_WIDTH * TEXT_MODE_HEIGHT;
 const MAX_ROW_INDEX = TEXT_MODE_HEIGHT - 1;
 const MAX_COLUMN_INDEX = TEXT_MODE_WIDTH - 1;
 
-pub const COLOR = enum(u8) {
-    BLACK = 0,
-    BLUE = 1,
-    GREEN = 2,
-    CYAN = 3,
-    RED = 4,
-    MAGENTA = 5,
-    BROWN = 6,
-    LIGHT_GRAY = 7,
-    DARK_GRAY = 8,
-    LIGHT_BLUE = 9,
-    LIGHT_GREEN = 10,
-    LIGHT_CYAN = 11,
-    LIGHT_RED = 12,
-    LIGHT_MAGENTA = 13,
-    YELLOW = 14,
-    WHITE = 15,
-};
-
 const buffer_pointer: *volatile [TEXT_MODE_BUFFER_SIZE]u16 = @ptrFromInt(0xC00B8000);
 
 var row: u8 = 0;
 var column: u8 = 0;
 
-pub const Console = struct {
-    pub fn initialize() void {
-        row = 0;
-        column = 0;
-        @memset(buffer_pointer[0..TEXT_MODE_BUFFER_SIZE], makeChar(' ', COLOR.BLACK));
-    }
+TextColor: enum(u8) {
+    BLACK,
+    BLUE,
+    GREEN,
+    CYAN,
+    RED,
+    MAGENTA,
+    BROWN,
+    LIGHT_GRAY,
+    DARK_GRAY,
+    LIGHT_BLUE,
+    LIGHT_GREEN,
+    LIGHT_CYAN,
+    LIGHT_RED,
+    LIGHT_MAGENTA,
+    YELLOW,
+    WHITE,
+},
 
-    pub fn print(string: []const u8) void {
-        const string_ptr = string.ptr;
-        for (0..string.len) |i| {
-            writeChar(string_ptr[i], COLOR.WHITE);
-        }
-    }
+pub fn Console() console {
+    return console{
+        logLevel.traceText = TextColor.LIGHT_GRAY;
+        logLevel.infoText = TextColor.WHITE;
+        logLevel.warnText = TextColor.YELLOW;
+        logLevel.errorText = TextColor.RED;
+        logLevel.fatalText = TextColor.RED;
 
-    pub fn printColor(string: []const u8, color: COLOR) void {
-        const string_ptr = string.ptr;
-        for (0..string.len) |i| {
-            writeChar(string_ptr[i], color);
-        }
-    }
-};
+        .initialize = struct {
+            fn initialize() void {
+                row = 0;
+                column = 0;
+                @memset(buffer_pointer[0..TEXT_MODE_BUFFER_SIZE], makeChar(' ', console.TextColor.BLACK));
+            }
+        }.initialize,
 
-fn putChar(x_position: u8, y_position: u8, character: u8, color: COLOR) void {
+        .print = struct {
+            fn print(string: []const u8) void {
+                const string_ptr = string.ptr;
+                for (0..string.len) |i| {
+                    writeChar(string_ptr[i], TextColor.WHITE);
+                }
+            }
+        }.print,
+
+        .printColor = struct {
+            fn printColor(string: []const u8, color: console.logLevel) void {
+                const string_ptr = string.ptr;
+                for (0..string.len) |i| {
+                    writeChar(string_ptr[i], color);
+                }
+            }
+        }.printColor,
+    };
+}
+
+fn putChar(x_position: u8, y_position: u8, character: u8, color: console.logLevel) void {
     if (x_position > MAX_COLUMN_INDEX) {
         nextLine();
     }
@@ -63,7 +78,7 @@ fn putChar(x_position: u8, y_position: u8, character: u8, color: COLOR) void {
     column += 1;
 }
 
-fn writeChar(character: u8, color: COLOR) void {
+fn writeChar(character: u8, color: console.logLevel) void {
     if (character == '\n') {
         nextLine();
         return;
@@ -76,7 +91,7 @@ fn writeChar(character: u8, color: COLOR) void {
     putChar(column, row, character, color);
 }
 
-fn makeChar(character: u8, color: COLOR) u16 {
+fn makeChar(character: u8, color: console.logLevel) u16 {
     return (@as(u16, @intFromEnum(color)) << 8) | character;
 }
 
@@ -91,7 +106,7 @@ fn scrollLine() void {
     }
 
     for ((TEXT_MODE_BUFFER_SIZE - TEXT_MODE_WIDTH)..TEXT_MODE_BUFFER_SIZE) |i| {
-        buffer_pointer[i] = makeChar(' ', COLOR.BLACK);
+        buffer_pointer[i] = makeChar(' ', TextColor.BLACK);
     }
 
     row = MAX_ROW_INDEX;

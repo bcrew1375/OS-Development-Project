@@ -1,6 +1,6 @@
 pub const Arch = struct {
     cpu: Cpu = undefined,
-    terminal: Terminal = undefined,
+    console: Console = undefined,
     keyboard: Keyboard = undefined,
     paging: Paging = undefined,
     interrupts: Interrupts = undefined,
@@ -12,7 +12,15 @@ pub const Arch = struct {
         unrecoverableHalt: fn () noreturn,
     };
 
-    pub const Terminal = struct {
+    pub const Console = struct {
+        logLevel = enum(u3) {
+            traceText,
+            infoText,
+            warnText,
+            errorText,
+            fatalText,
+        },
+
         initialize: fn () void,
         print: fn ([]const u8) void,
         printColor: fn ([]const u8, u8) void,
@@ -48,7 +56,7 @@ pub const Arch = struct {
 pub fn getArch() Arch {
     const arch: Arch = .{
         .cpu = @import("x86/cpu.zig").Cpu(),
-        .console = @import("x86/console.zig").Console,
+        .console = @import("x86/console.zig").Console(),
         //.keyboard = @import("x86/architecture.zig").keyboard,
         .paging = @import("x86/paging.zig").Paging,
         .interrupts = @import("x86/interrupts.zig").Interrupts,
