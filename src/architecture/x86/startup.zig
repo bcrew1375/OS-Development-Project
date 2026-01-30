@@ -1,3 +1,4 @@
+const startup = @import("../architecture.zig").Arch.Startup;
 //const arch = @import("architecture.zig");
 const gdt = @import("global_descriptor_table.zig");
 const idt = @import("interrupt_descriptor_table.zig");
@@ -39,14 +40,18 @@ pub export fn _start() linksection(".multiboot.text") callconv(.naked) noreturn 
     );
 }
 
-pub const Startup = struct {
-    pub fn finishStartup() !void {
-        time.setupTimer();
-        gdt.initialize();
-        paging.removeIdentityMapping();
-        idt.initialize();
-    }
-};
+pub fn Startup() startup {
+    return startup{
+        .finishStartup = struct {
+            fn finishStartup() void {
+                //time.setupTimer();
+                gdt.initialize();
+                //paging.removeIdentityMapping();
+                idt.initialize();
+            }
+        }.finishStartup,
+    };
+}
 
 export fn kernelSetup() linksection(".multiboot.text") callconv(.naked) noreturn {
     asm volatile (

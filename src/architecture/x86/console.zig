@@ -13,7 +13,7 @@ const buffer_pointer: *volatile [TEXT_MODE_BUFFER_SIZE]u16 = @ptrFromInt(0xC00B8
 var row: u8 = 0;
 var column: u8 = 0;
 
-TextColor: enum(u8) {
+const TextColor = enum(u4) {
     BLACK,
     BLUE,
     GREEN,
@@ -30,21 +30,15 @@ TextColor: enum(u8) {
     LIGHT_MAGENTA,
     YELLOW,
     WHITE,
-},
+};
 
 pub fn Console() console {
     return console{
-        logLevel.traceText = TextColor.LIGHT_GRAY;
-        logLevel.infoText = TextColor.WHITE;
-        logLevel.warnText = TextColor.YELLOW;
-        logLevel.errorText = TextColor.RED;
-        logLevel.fatalText = TextColor.RED;
-
         .initialize = struct {
             fn initialize() void {
                 row = 0;
                 column = 0;
-                @memset(buffer_pointer[0..TEXT_MODE_BUFFER_SIZE], makeChar(' ', console.TextColor.BLACK));
+                @memset(buffer_pointer[0..TEXT_MODE_BUFFER_SIZE], @intFromEnum(TextColor.BLACK));
             }
         }.initialize,
 
@@ -52,33 +46,43 @@ pub fn Console() console {
             fn print(string: []const u8) void {
                 const string_ptr = string.ptr;
                 for (0..string.len) |i| {
-                    writeChar(string_ptr[i], TextColor.WHITE);
+                    writeChar(string_ptr[i], console.LogLevel.infoText);
                 }
             }
         }.print,
 
-        .printColor = struct {
-            fn printColor(string: []const u8, color: console.logLevel) void {
+        .printLog = struct {
+            fn printLog(string: []const u8, logLevel: console.LogLevel) void {
                 const string_ptr = string.ptr;
                 for (0..string.len) |i| {
-                    writeChar(string_ptr[i], color);
+                    writeChar(string_ptr[i], logLevel);
                 }
             }
-        }.printColor,
+        }.printLog,
     };
 }
 
-fn putChar(x_position: u8, y_position: u8, character: u8, color: console.logLevel) void {
+fn logLevelToColor(logLevel: console.LogLevel) TextColor {
+    return switch (logLevel) {
+        console.LogLevel.errorText => TextColor.RED,
+        console.LogLevel.warningText => TextColor.LIGHT_RED,
+        console.LogLevel.noticeText => TextColor.GREEN,
+        console.LogLevel.infoText => TextColor.WHITE,
+        console.LogLevel.debugText => TextColor.LIGHT_GRAY,
+    };
+}
+
+fn putChar(x_position: u8, y_position: u8, character: u8, logLevel: console.LogLevel) void {
     if (x_position > MAX_COLUMN_INDEX) {
         nextLine();
     }
 
-    buffer_pointer[(y_position * TEXT_MODE_WIDTH) + x_position] = makeChar(character, color);
+    buffer_pointer[(y_position * TEXT_MODE_WIDTH) + x_position] = makeChar(character, logLevel);
 
     column += 1;
 }
 
-fn writeChar(character: u8, color: console.logLevel) void {
+fn writeChar(character: u8, logLevel: console.LogLevel) void {
     if (character == '\n') {
         nextLine();
         return;
@@ -88,10 +92,11 @@ fn writeChar(character: u8, color: console.logLevel) void {
         scrollLine();
     }
 
-    putChar(column, row, character, color);
+    putChar(column, row, character, logLevel);
 }
 
-fn makeChar(character: u8, color: console.logLevel) u16 {
+fn makeChar(character: u8, logLevel: console.LogLevel) u16 {
+    const color = logLevelToColor(logLevel);
     return (@as(u16, @intFromEnum(color)) << 8) | character;
 }
 
@@ -106,7 +111,7 @@ fn scrollLine() void {
     }
 
     for ((TEXT_MODE_BUFFER_SIZE - TEXT_MODE_WIDTH)..TEXT_MODE_BUFFER_SIZE) |i| {
-        buffer_pointer[i] = makeChar(' ', TextColor.BLACK);
+        buffer_pointer[i] = @intFromEnum(TextColor.BLACK);
     }
 
     row = MAX_ROW_INDEX;

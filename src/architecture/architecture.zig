@@ -1,8 +1,7 @@
 pub const Arch = struct {
     cpu: Cpu = undefined,
     console: Console = undefined,
-    keyboard: Keyboard = undefined,
-    paging: Paging = undefined,
+    mmu: Mmu = undefined,
     interrupts: Interrupts = undefined,
     //devices: Devices = undefined,
     startup: Startup = undefined,
@@ -13,24 +12,20 @@ pub const Arch = struct {
     };
 
     pub const Console = struct {
-        logLevel = enum(u3) {
-            traceText,
-            infoText,
-            warnText,
+        pub const LogLevel = enum(u4) {
             errorText,
-            fatalText,
-        },
+            warningText,
+            noticeText,
+            infoText,
+            debugText,
+        };
 
         initialize: fn () void,
         print: fn ([]const u8) void,
-        printColor: fn ([]const u8, u8) void,
+        printLog: fn ([]const u8, LogLevel) void,
     };
 
-    pub const Keyboard = struct {
-        clearKeyboard: fn () void,
-    };
-
-    pub const Paging = struct {
+    pub const Mmu = struct {
         initialize: fn () void,
         removeIdentityMapping: fn () void,
         getPhysicalAddress: fn (usize) usize,
@@ -58,9 +53,9 @@ pub fn getArch() Arch {
         .cpu = @import("x86/cpu.zig").Cpu(),
         .console = @import("x86/console.zig").Console(),
         //.keyboard = @import("x86/architecture.zig").keyboard,
-        .paging = @import("x86/paging.zig").Paging,
-        .interrupts = @import("x86/interrupts.zig").Interrupts,
-        .startup = @import("x86/startup.zig").Startup,
+        //.mmu = @import("x86/paging.zig").Mmu(),
+        .interrupts = @import("x86/interrupts.zig").Interrupts(),
+        .startup = @import("x86/startup.zig").Startup(),
 
         //.x86_64 => @import("architecture/x86_64/architecture.zig").arch,
         //.aarch64 => @import("architecture/aarch64/architecture.zig").arch,

@@ -6,10 +6,9 @@ const arch = Arch.getArch();
 const std = @import("std");
 
 pub export fn kernelMain() void {
-    arch.startup.finishStartup() catch |err| {
-        printString(@errorName(err));
-        arch.cpu.unrecoverableHalt();
-    };
+    arch.startup.finishStartup();
+    arch.console.initialize();
+    arch.console.printLog("Hello, World!", Arch.Arch.Console.LogLevel.noticeText);
     //pmm.initialize();
 
     // kernel_heap.initialize() catch |err| {
@@ -21,15 +20,15 @@ pub export fn kernelMain() void {
     //     printString(@errorName(err));
     //     unrecoverableHalt();
     // };
-    arch.interrupts.enableInterrupts();
+    //arch.interrupts.enableInterrupts();
 }
 
 pub fn printString(string: []const u8) void {
-    arch.terminal.print(string);
+    arch.console.print(string);
 }
 
 pub fn printStringColor(string: []const u8, color: arch.terminal.COLOR) void {
-    arch.terminal.printColor(string, color);
+    arch.console.printLog(string, color);
 }
 
 pub fn printFormat(comptime string_fmt: []const u8, args: anytype) void {
@@ -75,9 +74,9 @@ pub fn numberToString(number: i32, digits_buffer: *[20]u8) u8 {
 }
 
 pub fn panic(message: []const u8, stack_trace: ?*std.builtin.StackTrace, number: ?usize) noreturn {
-    arch.terminal.print("\n!KERNEL PANIC!\n");
-    arch.terminal.print(message);
-    arch.terminal.print("\n");
+    arch.console.print("\n!KERNEL PANIC!\n");
+    arch.console.print(message);
+    arch.console.print("\n");
     _ = stack_trace;
     _ = number;
     while (true) {}
@@ -85,7 +84,7 @@ pub fn panic(message: []const u8, stack_trace: ?*std.builtin.StackTrace, number:
 
 export fn interrupt_handler(index: usize, stack_pointer: usize) callconv(.c) void {
     // Not ready to handle nested interrupts. Don't risk stack overflow.
-    arch.interrupts.disableInterrupts();
+    //arch.interrupts.disableInterrupts();
     printString("Interrupt: ");
     switch (index) {
         0x00 => {
@@ -113,7 +112,7 @@ export fn interrupt_handler(index: usize, stack_pointer: usize) callconv(.c) voi
         0x0D => {
             printString("General protection fault.\n");
             printFormat(" Stack Index: {x}\n", .{stack_pointer});
-            arch.cpu.unrecoverableHalt();
+            //arch.cpu.unrecoverableHalt();
         },
         0x0E => {
             const stack_array: *[4]usize = @ptrFromInt(stack_pointer);
@@ -122,7 +121,7 @@ export fn interrupt_handler(index: usize, stack_pointer: usize) callconv(.c) voi
             printString("Page fault.\n");
             printFormat("Error code: 0x{x}\n", .{error_code});
             printFormat("Virtual address: 0x{x}\n", .{virtual_address});
-            printFormat("Physical address: 0x{x}\n", .{arch.paging.getPhysicalAddress(virtual_address)});
+            //printFormat("Physical address: 0x{x}\n", .{arch.paging.getPhysicalAddress(virtual_address)});
         },
         0x0F => {},
         0x10 => {},
@@ -135,13 +134,13 @@ export fn interrupt_handler(index: usize, stack_pointer: usize) callconv(.c) voi
         },
         0x21 => {
             printString("Keyboard pressed.\n");
-            arch.keyboard.clearKeyboard();
+            //arch.keyboard.clearKeyboard();
         },
         0x22...0xFFFFFFFF => {},
     }
 
     printFormat(" --- Stack Index: {x}\n", .{stack_pointer});
 
-    arch.interrupts.acknowledgeInterrupt();
-    arch.interrupts.enableInterrupts();
+    //arch.interrupts.acknowledgeInterrupt();
+    //arch.interrupts.enableInterrupts();
 }
