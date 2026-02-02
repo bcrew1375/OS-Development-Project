@@ -23,7 +23,7 @@
     {
       "label": "Kill QEMU",
       "type": "shell",
-      "command": "pkill qemu"
+      "command": "pkill -F .qemu.pid"
     },
   ],
 }

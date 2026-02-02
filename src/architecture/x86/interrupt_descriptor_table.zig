@@ -1,9 +1,8 @@
 const interrupts = @import("../architecture.zig").Arch.Interrupts;
 const std = @import("std");
 const gdt = @import("global_descriptor_table.zig");
-const port_io = @import("port_io.zig");
 
-const TOTAL_INTERRUPTS: u16 = 256;
+const TOTAL_INTERRUPTS: usize = 256;
 
 const InterruptDescriptorTableStruct = packed struct {
     offset_low: u16 = 0, // Offset bits 0-15
@@ -28,41 +27,26 @@ var interrupt_descriptor_table_register: InterruptDescriptorTableRegisterStruct 
 
 var trampolines: [TOTAL_INTERRUPTS]Trampoline = undefined;
 
-pub fn Interrupts() interrupts {
-    return interrupts{
-        .initialize = struct {
-            fn initialize() void {
-                inline for (0..TOTAL_INTERRUPTS) |vec| {
-                    trampolines[vec] = makeTrampoline(vec);
-                    interrupts.set(@truncate(vec), @intFromPtr(trampolines[vec]), 0x8E);
-                }
+pub fn initialize() void {
+    inline for (0..TOTAL_INTERRUPTS) |vec| {
+        trampolines[vec] = makeTrampoline(vec);
+        set(@truncate(vec), @intFromPtr(trampolines[vec]), 0x8E);
+    }
 
-                interrupt_descriptor_table_register.limit = @sizeOf(@TypeOf(interrupt_descriptor_table)) - 1;
-                interrupt_descriptor_table_register.base = @intFromPtr(&interrupt_descriptor_table);
+    interrupt_descriptor_table_register.limit = @sizeOf(@TypeOf(interrupt_descriptor_table)) - 1;
+    interrupt_descriptor_table_register.base = @intFromPtr(&interrupt_descriptor_table);
 
-                idtLoad();
-            }
-        }.initialize,
+    idtLoad();
+}
 
-        .set = struct {
-            fn set(interrupt_number: u16, address: usize, type_attribute: u8) void {
-                var interrupt_descriptor: *InterruptDescriptorTableStruct = &interrupt_descriptor_table[interrupt_number];
-                interrupt_descriptor.offset_low = @truncate(address & 0xffff);
-                interrupt_descriptor.selector = gdt.CODE_SELECTOR;
-                interrupt_descriptor.unused_byte = 0x00;
-                interrupt_descriptor.type_attribute = type_attribute;
-                interrupt_descriptor.offset_high = @truncate(address >> 16);
-                return;
-            }
-        }.set,
-
-        .acknowledgeInterrupt = struct {
-            fn acknowledgeInterrupt() void {
-                port_io.out8(0x20, 0x20);
-                port_io.out8(0xA0, 0x20);
-            }
-        }.acknowledgeInterrupt,
-    };
+pub fn set(interrupt_number: usize, address: usize, type_attribute: usize) void {
+    var interrupt_descriptor: *InterruptDescriptorTableStruct = &interrupt_descriptor_table[interrupt_number];
+    interrupt_descriptor.offset_low = @truncate(address & 0xffff);
+    interrupt_descriptor.selector = gdt.CODE_SELECTOR;
+    interrupt_descriptor.unused_byte = 0x00;
+    interrupt_descriptor.type_attribute = @truncate(type_attribute);
+    interrupt_descriptor.offset_high = @truncate(address >> 16);
+    return;
 }
 
 // Generate a trampoline that calls the interrupt handler with the interrupt number.

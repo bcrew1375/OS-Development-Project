@@ -33,7 +33,7 @@ pub const Arch = struct {
 
     pub const Interrupts = struct {
         initialize: fn () void,
-        set: fn () void,
+        set: fn (usize, usize, usize) void,
         enableInterrupts: fn () void,
         disableInterrupts: fn () void,
         acknowledgeInterrupt: fn () void,
@@ -49,11 +49,20 @@ pub const Arch = struct {
 };
 
 pub fn getArch() Arch {
-    const arch: Arch = .{
+    const builtin = @import("builtin");
+
+    const arch: Arch = if (builtin.is_test) .{
+        .cpu = @import("mock/cpu.zig").Cpu(),
+        .console = @import("mock/console.zig").Console(),
+        //.keyboard = @import("x86/architecture.zig").keyboard,
+        .mmu = @import("x86/paging.zig").Mmu(),
+        .interrupts = @import("mock/interrupts.zig").Interrupts(),
+        .startup = @import("mock/startup.zig").Startup(),
+    } else .{
         .cpu = @import("x86/cpu.zig").Cpu(),
         .console = @import("x86/console.zig").Console(),
         //.keyboard = @import("x86/architecture.zig").keyboard,
-        //.mmu = @import("x86/paging.zig").Mmu(),
+        .mmu = @import("x86/paging.zig").Mmu(),
         .interrupts = @import("x86/interrupts.zig").Interrupts(),
         .startup = @import("x86/startup.zig").Startup(),
 
