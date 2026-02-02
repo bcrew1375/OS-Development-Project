@@ -46,7 +46,7 @@ pub fn Startup() startup {
             fn finishStartup() void {
                 //time.setupTimer();
                 gdt.initialize();
-                //paging.removeIdentityMapping();
+                paging.removeIdentityMapping();
                 idt.initialize();
             }
         }.finishStartup,

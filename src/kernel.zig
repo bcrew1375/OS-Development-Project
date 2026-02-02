@@ -2,14 +2,16 @@ const builtin = @import("builtin");
 
 const Arch = @import("architecture/architecture.zig");
 //pub const pmm = @import("memory_management/pmm.zig");
-const arch = Arch.getArch();
+pub const arch = Arch.getArch();
 const std = @import("std");
 
 pub export fn kernelMain() void {
     arch.startup.finishStartup();
     arch.console.initialize();
-    arch.console.printLog("Hello, World!", Arch.Arch.Console.LogLevel.noticeText);
-    //pmm.initialize();
+    arch.console.printLog("Initializing interrupts...", Arch.Arch.Console.LogLevel.infoText);
+    arch.interrupts.initialize();
+    arch.interrupts.enableInterrupts();
+    arch.console.printLog("done!\n", Arch.Arch.Console.LogLevel.noticeText);
 
     // kernel_heap.initialize() catch |err| {
     //     printString(@errorName(err));
@@ -20,7 +22,6 @@ pub export fn kernelMain() void {
     //     printString(@errorName(err));
     //     unrecoverableHalt();
     // };
-    //arch.interrupts.enableInterrupts();
 }
 
 pub fn printString(string: []const u8) void {
@@ -80,67 +81,4 @@ pub fn panic(message: []const u8, stack_trace: ?*std.builtin.StackTrace, number:
     _ = stack_trace;
     _ = number;
     while (true) {}
-}
-
-export fn interrupt_handler(index: usize, stack_pointer: usize) callconv(.c) void {
-    // Not ready to handle nested interrupts. Don't risk stack overflow.
-    //arch.interrupts.disableInterrupts();
-    printString("Interrupt: ");
-    switch (index) {
-        0x00 => {
-            printString("Divide by zero.\n");
-        },
-        0x01 => {
-            printString("Debug exception.\n");
-        },
-        0x02...0x05 => {},
-        0x06 => {
-            printString("Invalid opcode.\n");
-        },
-        0x07 => {},
-        0x08 => {
-            printString("Double fault.\n");
-        },
-        0x09 => {},
-        0x0A => {
-            printString("Invalid TSS.\n");
-        },
-        0x0B => {},
-        0x0C => {
-            printString("Stack segment fault.\n");
-        },
-        0x0D => {
-            printString("General protection fault.\n");
-            printFormat(" Stack Index: {x}\n", .{stack_pointer});
-            //arch.cpu.unrecoverableHalt();
-        },
-        0x0E => {
-            const stack_array: *[4]usize = @ptrFromInt(stack_pointer);
-            const error_code: usize = stack_array[0];
-            const virtual_address: usize = stack_array[1];
-            printString("Page fault.\n");
-            printFormat("Error code: 0x{x}\n", .{error_code});
-            printFormat("Virtual address: 0x{x}\n", .{virtual_address});
-            //printFormat("Physical address: 0x{x}\n", .{arch.paging.getPhysicalAddress(virtual_address)});
-        },
-        0x0F => {},
-        0x10 => {},
-        0x11 => {
-            printString("Alignment check.\n");
-        },
-        0x12...0x1F => {},
-        0x20 => {
-            printString("Timer.\n");
-        },
-        0x21 => {
-            printString("Keyboard pressed.\n");
-            //arch.keyboard.clearKeyboard();
-        },
-        0x22...0xFFFFFFFF => {},
-    }
-
-    printFormat(" --- Stack Index: {x}\n", .{stack_pointer});
-
-    //arch.interrupts.acknowledgeInterrupt();
-    //arch.interrupts.enableInterrupts();
 }
