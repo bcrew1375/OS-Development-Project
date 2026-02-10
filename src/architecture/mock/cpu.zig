@@ -3,7 +3,9 @@ const cpu = @import("../architecture.zig").Arch.Cpu;
 pub fn Cpu() cpu {
     return cpu{
         .setupTimer = struct {
-            fn setupTimer() void {}
+            fn setupTimer(frequency: usize) void {
+                _ = frequency;
+            }
         }.setupTimer,
 
         .unrecoverableHalt = struct {

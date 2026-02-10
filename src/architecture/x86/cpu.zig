@@ -1,26 +1,9 @@
-const cpu = @import("../architecture.zig").Arch.Cpu;
-const port_io = @import("port_io.zig");
+const arch = @import("../architecture.zig").Arch.Cpu;
 
-pub fn Cpu() cpu {
-    return cpu{
-        .setupTimer = struct {
-            fn setupTimer() void {
-                //Set 100 Hz PIT divisor. 1193182 / 100 = ~100 Hz
-                const PIT_DIVISOR: u16 = 65535;
-                port_io.out8(0x43, 0b00110100);
-                port_io.out8(0x40, @truncate(PIT_DIVISOR & 0xFF));
-                port_io.out8(0x40, @truncate(PIT_DIVISOR >> 8));
-            }
-        }.setupTimer,
+const cpu = @import("cpu/main.zig");
 
-        .unrecoverableHalt = struct {
-            fn unrecoverableHalt() noreturn {
-                asm volatile (
-                    \\cli
-                    \\hlt
-                );
-                unreachable;
-            }
-        }.unrecoverableHalt,
+pub fn Cpu() arch {
+    return arch{
+        .unrecoverableHalt = cpu.unrecoverableHalt,
     };
 }
