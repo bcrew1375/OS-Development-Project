@@ -4,10 +4,14 @@ pub fn Interrupts() interrupts {
     return interrupts{
         .initialize = struct {
             fn initialize() void {}
-        },
+        }.initialize,
 
         .set = struct {
-            fn set() void {}
+            fn set(interrupt_number: usize, address: usize, type_attribute: usize) void {
+                _ = interrupt_number;
+                _ = address;
+                _ = type_attribute;
+            }
         }.set,
 
         .enableInterrupts = struct {
@@ -19,7 +23,9 @@ pub fn Interrupts() interrupts {
         }.disableInterrupts,
 
         .acknowledgeInterrupt = struct {
-            fn acknowledgeInterrupt() void {}
+            fn acknowledgeInterrupt(vector: usize) void {
+                _ = vector;
+            }
         }.acknowledgeInterrupt,
     };
 }

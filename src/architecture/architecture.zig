@@ -3,7 +3,7 @@ pub const Arch = struct {
     console: Console = undefined,
     paging: Paging = undefined,
     interrupts: Interrupts = undefined,
-    // time: Time = undefined,
+    time: Time = undefined,
     // atomic: Atomic = undefined,
     startup: Startup = undefined,
 
@@ -163,7 +163,7 @@ pub fn getArch() Arch {
         .console = @import("mock/console.zig").Console(),
         .paging = @import("mock/paging.zig").Paging(),
         .interrupts = @import("mock/interrupts.zig").Interrupts(),
-        // .time = @import("mock/time.zig").Time(),
+        .time = @import("mock/time.zig").Time(),
         // .atomic = @import("mock/atomic.zig").Atomic(),
         .startup = @import("mock/startup.zig").Startup(),
     } else switch (builtin.cpu.arch) {
@@ -172,7 +172,7 @@ pub fn getArch() Arch {
             .console = @import("x86/console.zig").Console(),
             .paging = @import("x86/paging.zig").Paging(),
             .interrupts = @import("x86/interrupts.zig").Interrupts(),
-            // .time = @import("x86/time.zig").Time(),
+            .time = @import("x86/time.zig").Time(),
             // .atomic = @import("x86/atomic.zig").Atomic(),
             .startup = @import("x86/startup.zig").Startup(),
         },
@@ -203,6 +203,15 @@ pub fn getArch() Arch {
         //     .atomic = @import("riscv64/atomic.zig").Atomic(),
         //     .startup = @import("riscv64/startup.zig").Startup(),
         // },
-        else => @compileError("Unsupported architecture"),
+        //else => @compileError("Unsupported architecture"),
+        else => .{
+            .cpu = @import("mock/cpu.zig").Cpu(),
+            .console = @import("mock/console.zig").Console(),
+            .paging = @import("mock/paging.zig").Paging(),
+            .interrupts = @import("mock/interrupts.zig").Interrupts(),
+            .time = @import("mock/time.zig").Time(),
+            // .atomic = @import("mock/atomic.zig").Atomic(),
+            .startup = @import("mock/startup.zig").Startup(),
+        },
     };
 }
