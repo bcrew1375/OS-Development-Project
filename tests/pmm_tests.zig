@@ -5,29 +5,29 @@ pub const ErrSet = error{
     TestErr,
 };
 
-test "PMM allocation: InvalidSize" {
+test "PMM allocation - InvalidSize" {
     const err = kernel.pmm.PmmError.InvalidSize;
-    _ = err;
-    //const err = ErrSet.TestErr;
 
-    //try std.testing.expectError(err, kernel.pmm.allocate(0));
-    //try std.testing.expectError(err, kernel.pmm.allocate(kernel.pmm.TOTAL_NUMBER_OF_FRAMES - kernel.pmm.KERNEL_BASE_FRAMES_COUNT + 1));
+    kernel.pmm.initialize();
+
+    try std.testing.expectError(err, kernel.pmm.allocate(0));
+    try std.testing.expectError(err, kernel.pmm.allocate(kernel.pmm.TOTAL_NUMBER_OF_FRAMES - kernel.pmm.KERNEL_BASE_FRAMES_COUNT + 1));
 }
 
-// test "PMM allocation: OutOfMemory" {
-//     const err = kernel.pmm.PmmError.OutOfMemory;
+test "PMM allocation - OutOfMemory" {
+    const err = kernel.pmm.PmmError.OutOfMemory;
 
-//     try std.testing.expectError(err, kernel.pmm.allocate(kernel.pmm.TOTAL_NUMBER_OF_FRAMES - kernel.pmm.KERNEL_BASE_FRAMES_COUNT));
-//     try std.testing.expectError(err, kernel.pmm.allocate(1));
-// }
+    kernel.pmm.initialize();
 
-// test "PMM allocation: InvalidIndex" {
-//     const err = kernel.pmm.PmmError.InvalidIndex;
+    try kernel.pmm.allocate(kernel.pmm.TOTAL_NUMBER_OF_FRAMES - kernel.pmm.KERNEL_BASE_FRAMES_COUNT);
+    try std.testing.expectError(err, kernel.pmm.allocate(1));
+}
 
-//     try std.testing.expectError(err, kernel.pmm.free(0, kernel.pmm.KERNEL_BASE_FRAMES_COUNT));
-//     try std.testing.expectError(err, kernel.pmm.free(kernel.pmm.TOTAL_NUMBER_OF_FRAMES, 1));
-// }
+test "PMM allocation - InvalidIndex" {
+    const err = kernel.pmm.PmmError.InvalidIndex;
 
-fn errTest() !void {
-    return ErrSet.TestErr;
+    kernel.pmm.initialize();
+
+    try std.testing.expectError(err, kernel.pmm.free(0, kernel.pmm.KERNEL_BASE_FRAMES_COUNT));
+    try std.testing.expectError(err, kernel.pmm.free(kernel.pmm.TOTAL_NUMBER_OF_FRAMES, 1));
 }

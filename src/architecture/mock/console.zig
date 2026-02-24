@@ -10,13 +10,13 @@ pub fn Console() console {
 
         .print = struct {
             fn print(string: []const u8) void {
-                std.debug.print(string);
+                std.debug.print("{s}", .{string});
             }
         }.print,
 
         .printLog = struct {
             fn printLog(string: []const u8, logLevel: console.LogLevel) void {
-                std.debug.print(string);
+                std.debug.print("{s}", .{string});
                 _ = logLevel;
             }
         }.printLog,

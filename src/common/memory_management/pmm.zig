@@ -1,5 +1,5 @@
 // Assume 128 MBs of physical RAM for now.
-// 128 MBs / 4 KBs frame size = 32 KBs.
+// 128 MBs / 4 KB frame size = 32 KBs.
 pub const TOTAL_NUMBER_OF_FRAMES: u16 = 32768;
 
 // Reserve the first 4 MBs for the kernel and hardware.
@@ -47,8 +47,8 @@ pub fn free(start_frame: usize, total_frames: usize) !void {
 }
 
 fn get_start_frame(needed_frames: usize) !usize {
-    var frame_count: u32 = 0;
-    var start_frame: u32 = 0;
+    var frame_count: usize = 0;
+    var start_frame: usize = 0;
     var is_first: bool = true;
 
     for (0..TOTAL_NUMBER_OF_FRAMES) |frame| {

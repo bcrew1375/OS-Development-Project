@@ -29,7 +29,17 @@ pub fn build(b: *std.Build) !void {
         .root_module = b.createModule(.{ .root_source_file = b.path("tests/tests.zig"), .target = b.graph.host, .optimize = optimize, .code_model = .normal }),
     });
 
-    tests.root_module.addImport("kernel", kernel.root_module);
+    const test_kernel_module = b.addExecutable(.{
+        .name = "kernel.elf",
+        .root_module = b.createModule(.{
+            .root_source_file = b.path(b.pathJoin(&.{"src/kernel.zig"})),
+            .target = b.graph.host,
+            .optimize = optimize,
+            .code_model = .kernel,
+        }),
+    });
+
+    tests.root_module.addImport("kernel", test_kernel_module.root_module);
 
     const run_tests = b.addRunArtifact(tests);
     const tests_step = b.step("tests", "Run unit tests");
