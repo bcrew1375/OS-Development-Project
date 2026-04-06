@@ -1,5 +1,5 @@
 // Assume 128 MBs of physical RAM for now.
-// 128 MBs / 4096 frame size = 32 KBs.
+// 128 MBs / 4 KB frame size = 32 KBs.
 pub const TOTAL_NUMBER_OF_FRAMES: u16 = 32768;
 
 // Reserve the first 4 MBs for the kernel and hardware.

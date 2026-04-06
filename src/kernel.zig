@@ -16,6 +16,8 @@ pub export fn kernelMain() void {
     arch.interrupts.enableInterrupts();
     terminal.printLog("done!\n", LogLevels.infoText);
 
+    pmm.initialize();
+
     // kernel_heap.initialize() catch |err| {
     //     printString(@errorName(err));
     //     unrecoverableHalt();

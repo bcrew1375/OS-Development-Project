@@ -45,8 +45,8 @@ pub fn build(b: *std.Build) void {
     tests.root_module.addImport("kernel_common", kernel_common);
 
     const run_tests = b.addRunArtifact(tests);
-    const test_step = b.step("tests", "Run unit tests");
-    test_step.dependOn(&run_tests.step);
+    const tests_step = b.step("tests", "Run unit tests");
+    tests_step.dependOn(&run_tests.step);
 
     kernel.setLinkerScript(b.path(b.pathJoin(&.{"src/linker.ld"})));
     b.installArtifact(kernel);

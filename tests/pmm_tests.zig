@@ -1,7 +1,11 @@
 const kernel = @import("kernel_common");
 const std = @import("std");
 
-test "PMM allocation InvalidSize" {
+pub const ErrSet = error{
+    TestErr,
+};
+
+test "PMM allocation - InvalidSize" {
     const err = kernel.pmm.PmmError.InvalidSize;
 
     kernel.pmm.initialize();
@@ -10,7 +14,7 @@ test "PMM allocation InvalidSize" {
     try std.testing.expectError(err, kernel.pmm.allocate(kernel.pmm.TOTAL_NUMBER_OF_FRAMES - kernel.pmm.KERNEL_BASE_FRAMES_COUNT + 1));
 }
 
-test "PMM allocation OutOfMemory" {
+test "PMM allocation - OutOfMemory" {
     const err = kernel.pmm.PmmError.OutOfMemory;
 
     kernel.pmm.initialize();
@@ -19,7 +23,7 @@ test "PMM allocation OutOfMemory" {
     try std.testing.expectError(err, kernel.pmm.allocate(1));
 }
 
-test "PMM allocation InvalidIndex" {
+test "PMM allocation - InvalidIndex" {
     const err = kernel.pmm.PmmError.InvalidIndex;
 
     kernel.pmm.initialize();
