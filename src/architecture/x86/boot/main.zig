@@ -1,6 +1,6 @@
 const gdt = @import("../interrupts/global_descriptor_table.zig");
 const idt = @import("../interrupts/interrupt_descriptor_table.zig");
-const paging = @import("../paging/main.zig");
+const mmu = @import("../mmu/main.zig");
 
 const std = @import("std");
 
@@ -17,8 +17,6 @@ const MultibootHeader = packed struct {
     padding: u32 = 0,
 };
 
-extern fn kernelMain() void;
-
 export var multiboot: MultibootHeader linksection(".multiboot.header") = .{
     // Here we are adding magic and flags and ~ to get 1's complement and by adding 1 we get 2's complement
     .checksum = ~@as(u32, (MB_HEADER_MAGIC + FLAGS)) + 1,
@@ -27,6 +25,8 @@ export var multiboot: MultibootHeader linksection(".multiboot.header") = .{
 
 var startup_stack: [1024]u8 align(16) linksection(".multiboot.text") = undefined;
 var kernel_stack: [8192]u8 align(16) = undefined;
+
+extern fn kernelMain() void;
 
 pub export fn _start() linksection(".multiboot.text") callconv(.naked) noreturn {
     asm volatile (
@@ -53,10 +53,10 @@ export fn kernelSetup() linksection(".multiboot.text") callconv(.naked) noreturn
         \\mov $0x01, %al
         \\out %al, $0x21
         //End remap of the master PIC.
-        \\call *%[paging_initialize]
+        \\call *%[mmu_initialize]
         \\jmp higherHalfEntry
         :
-        : [paging_initialize] "{ebx}" (paging.initialize),
+        : [mmu_initialize] "{ebx}" (&mmu.initialize),
         : .{
           .eax = true,
           .ebx = true,
@@ -70,15 +70,16 @@ export fn higherHalfEntry() callconv(.naked) noreturn {
         \\jmp .
         :
         : [kernel_stack] "i" (@as([*]u8, &kernel_stack) + kernel_stack.len),
+          [kernelMain] "i" (&kernelMain),
         : .{
           .ebx = true,
           .esp = true,
         });
 }
 
-pub fn finishStartup() void {
+pub fn finishBoot() void {
     //time.setupTimer();
     gdt.initialize();
-    paging.removeIdentityMapping();
+    mmu.removeIdentityMapping();
     idt.initialize();
 }

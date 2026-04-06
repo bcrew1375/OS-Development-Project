@@ -1,17 +1,20 @@
 const builtin = @import("builtin");
 
-const Arch = @import("architecture/architecture.zig");
-//pub const pmm = @import("memory_management/pmm.zig");
-pub const arch = Arch.getArch();
+const arch = @import("arch").impl;
+const pmm = @import("kernel_common").pmm;
+const terminal = @import("kernel_common").terminal;
+const LogLevels = @import("kernel_common").LogLevels;
+
 const std = @import("std");
 
 pub export fn kernelMain() void {
-    arch.startup.finishStartup();
-    arch.console.initialize();
-    arch.console.printLog("Initializing interrupts...", Arch.Arch.Console.LogLevel.infoText);
+    arch.boot.finishBoot();
+    pmm.initialize();
+
+    terminal.printLog("Initializing interrupts...", LogLevels.infoText);
     arch.interrupts.initialize();
     arch.interrupts.enableInterrupts();
-    arch.console.printLog("done!\n", Arch.Arch.Console.LogLevel.noticeText);
+    terminal.printLog("done!\n", LogLevels.infoText);
 
     // kernel_heap.initialize() catch |err| {
     //     printString(@errorName(err));
@@ -25,9 +28,9 @@ pub export fn kernelMain() void {
 }
 
 pub fn panic(message: []const u8, stack_trace: ?*std.builtin.StackTrace, number: ?usize) noreturn {
-    arch.console.print("\n!KERNEL PANIC!\n");
-    arch.console.print(message);
-    arch.console.print("\n");
+    arch.platform.print("\n!KERNEL PANIC!\n");
+    arch.platform.print(message);
+    arch.platform.print("\n");
     _ = stack_trace;
     _ = number;
     while (true) {}

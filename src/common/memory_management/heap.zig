@@ -1,7 +1,6 @@
 const std = @import("std");
 
-const kernel_common = @import("../kernel_common.zig");
-const paging = @import("./paging.zig");
+const kernel_common = @import("kernel_common");
 
 const BLOCK_TAKEN: u8 = 0b0000_0001;
 const BLOCK_FREE: u8 = 0b0000_0000;

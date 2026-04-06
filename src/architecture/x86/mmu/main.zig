@@ -66,7 +66,7 @@ pub fn removeIdentityMapping() void {
     );
 }
 
-pub fn getPhysicalAddress(virtual_address: usize) ?usize {
+pub fn getPhysicalAddress(virtualAddress: usize) ?usize {
     // const page_directory_index = virtual_address >> 22;
     // const page_table_index = (virtual_address & 0x003FF000) >> 12;
     // const offset = virtual_address & 0xFFF;
@@ -78,7 +78,7 @@ pub fn getPhysicalAddress(virtual_address: usize) ?usize {
     // const physical_address = page_table_entry.address + offset;
 
     // return physical_address;
-    _ = virtual_address;
+    _ = virtualAddress;
     return 0;
 }
 
@@ -88,8 +88,8 @@ pub fn getPhysicalAddress(virtual_address: usize) ?usize {
 
 fn createPageTable() void {}
 
-fn tableExists(virtual_address: usize) bool {
-    _ = virtual_address;
+fn tableExists(virtualAddress: usize) bool {
+    _ = virtualAddress;
     return false;
 }
 

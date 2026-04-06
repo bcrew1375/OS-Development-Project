@@ -1,4 +1,4 @@
-const arch = @import("../../architecture.zig").Arch.Console;
+const LogLevels = @import("kernel_common").LogLevels;
 
 const std = @import("std");
 
@@ -42,28 +42,28 @@ pub fn initialize() void {
 pub fn print(string: []const u8) void {
     const string_ptr = string.ptr;
     for (0..string.len) |i| {
-        writeChar(string_ptr[i], arch.LogLevel.infoText);
+        writeChar(string_ptr[i], LogLevels.infoText);
     }
 }
 
-pub fn printLog(string: []const u8, logLevel: arch.LogLevel) void {
+pub fn printLog(string: []const u8, logLevel: LogLevels) void {
     const string_ptr = string.ptr;
     for (0..string.len) |i| {
         writeChar(string_ptr[i], logLevel);
     }
 }
 
-fn logLevelToColor(logLevel: arch.LogLevel) TextColor {
+fn logLevelToColor(logLevel: LogLevels) TextColor {
     return switch (logLevel) {
-        arch.LogLevel.errorText => TextColor.RED,
-        arch.LogLevel.warningText => TextColor.LIGHT_RED,
-        arch.LogLevel.noticeText => TextColor.GREEN,
-        arch.LogLevel.infoText => TextColor.WHITE,
-        arch.LogLevel.debugText => TextColor.LIGHT_GRAY,
+        LogLevels.errorText => TextColor.RED,
+        LogLevels.warningText => TextColor.LIGHT_RED,
+        LogLevels.noticeText => TextColor.GREEN,
+        LogLevels.infoText => TextColor.WHITE,
+        LogLevels.debugText => TextColor.LIGHT_GRAY,
     };
 }
 
-fn putChar(x_position: u8, y_position: u8, character: u8, logLevel: arch.LogLevel) void {
+fn putChar(x_position: u8, y_position: u8, character: u8, logLevel: LogLevels) void {
     if (x_position > MAX_COLUMN_INDEX) {
         nextLine();
     }
@@ -73,7 +73,7 @@ fn putChar(x_position: u8, y_position: u8, character: u8, logLevel: arch.LogLeve
     column += 1;
 }
 
-fn writeChar(character: u8, logLevel: arch.LogLevel) void {
+fn writeChar(character: u8, logLevel: LogLevels) void {
     if (character == '\n') {
         nextLine();
         return;
@@ -86,7 +86,7 @@ fn writeChar(character: u8, logLevel: arch.LogLevel) void {
     putChar(column, row, character, logLevel);
 }
 
-fn makeChar(character: u8, logLevel: arch.LogLevel) u16 {
+fn makeChar(character: u8, logLevel: LogLevels) u16 {
     const color = logLevelToColor(logLevel);
     return (@as(u16, @intFromEnum(color)) << 8) | character;
 }

@@ -1,7 +1,7 @@
 // Modified from OS Dev: https://wiki.osdev.org/Zig_Bare_Bones
 const std = @import("std");
 
-pub fn build(b: *std.Build) !void {
+pub fn build(b: *std.Build) void {
     const optimize = b.standardOptimizeOption(.{});
 
     const Target = std.Target.x86;
@@ -25,11 +25,24 @@ pub fn build(b: *std.Build) !void {
         }),
     });
 
+    const arch = b.createModule(.{
+        .root_source_file = b.path("src/architecture/architecture.zig"),
+        .target = b.graph.host,
+        .optimize = optimize,
+    });
+
+    const kernel_common = b.createModule(.{
+        .root_source_file = b.path("src/kernel_common.zig"),
+        .target = b.graph.host,
+        .optimize = optimize,
+    });
+
     const tests = b.addTest(.{
         .root_module = b.createModule(.{ .root_source_file = b.path("tests/tests.zig"), .target = b.graph.host, .optimize = optimize, .code_model = .normal }),
     });
 
-    tests.root_module.addImport("kernel", kernel.root_module);
+    tests.root_module.addImport("arch", arch);
+    tests.root_module.addImport("kernel_common", kernel_common);
 
     const run_tests = b.addRunArtifact(tests);
     const test_step = b.step("tests", "Run unit tests");

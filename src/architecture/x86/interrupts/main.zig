@@ -1,8 +1,8 @@
-const terminal = @import("../../../common/terminal/print.zig");
+const terminal = @import("kernel_common").terminal;
 
 pub const idt = @import("interrupt_descriptor_table.zig");
-pub const port_io = @import("../io/port_io.zig");
-const keyboard = @import("../io/keyboard.zig");
+pub const port_io = @import("../platform/io/port_io.zig");
+const keyboard = @import("../platform/io/keyboard.zig");
 
 pub fn enableInterrupts() void {
     asm volatile (
@@ -22,7 +22,7 @@ pub fn acknowledgeInterrupt(vector: usize) void {
     port_io.out8(0xA0, 0x20);
 }
 
-export fn interrupt_handler(vector: usize, stack_pointer: usize) callconv(.c) void {
+pub export fn interruptHandler(vector: usize, stack_pointer: usize) callconv(.c) void {
     // Not ready to handle nested interrupts. Don't risk stack overflow.
     //arch.interrupts.disableInterrupts();
     terminal.printString("Interrupt: ");

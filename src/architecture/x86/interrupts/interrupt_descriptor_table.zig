@@ -1,5 +1,5 @@
-const interrupts = @import("../../architecture.zig").Arch.Interrupts;
 const gdt = @import("global_descriptor_table.zig");
+const interruptHandler = @import("main.zig").interruptHandler;
 
 const std = @import("std");
 
@@ -40,12 +40,12 @@ pub fn initialize() void {
     idtLoad();
 }
 
-pub fn set(interrupt_number: usize, address: usize, type_attribute: usize) void {
-    var interrupt_descriptor: *InterruptDescriptorTableStruct = &interrupt_descriptor_table[interrupt_number];
+pub fn set(interruptVector: usize, address: usize, typeAttribute: usize) void {
+    var interrupt_descriptor: *InterruptDescriptorTableStruct = &interrupt_descriptor_table[interruptVector];
     interrupt_descriptor.offset_low = @truncate(address & 0xffff);
     interrupt_descriptor.selector = gdt.CODE_SELECTOR;
     interrupt_descriptor.unused_byte = 0x00;
-    interrupt_descriptor.type_attribute = @truncate(type_attribute);
+    interrupt_descriptor.type_attribute = @truncate(typeAttribute);
     interrupt_descriptor.offset_high = @truncate(address >> 16);
     return;
 }
@@ -55,13 +55,14 @@ fn makeTrampoline(comptime vector: u32) Trampoline {
     return struct {
         fn trampoline() align(16) callconv(.naked) noreturn {
             asm volatile (
-                \\ push %esp
-                \\ push %[vector]
-                \\ call interrupt_handler
-                \\ add $8, %esp
-                \\ iret
+                \\push %esp
+                \\push %[vector]
+                \\call interruptHandler
+                \\add $8, %esp
+                \\iret
                 :
                 : [vector] "i" (vector),
+                  [interruptHandler] "i" (&interruptHandler),
             );
         }
     }.trampoline;

@@ -16,6 +16,8 @@ const FRAME_FREE = false;
 
 var frameMap: [TOTAL_NUMBER_OF_FRAMES]bool = undefined;
 
+const std = @import("std");
+
 pub fn initialize() void {
     mark_frames(0, KERNEL_BASE_FRAMES_COUNT);
 }
@@ -47,8 +49,8 @@ pub fn free(start_frame: usize, total_frames: usize) !void {
 }
 
 fn get_start_frame(needed_frames: usize) !usize {
-    var frame_count: u32 = 0;
-    var start_frame: u32 = 0;
+    var frame_count: usize = 0;
+    var start_frame: usize = 0;
     var is_first: bool = true;
 
     for (0..TOTAL_NUMBER_OF_FRAMES) |frame| {

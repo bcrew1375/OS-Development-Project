@@ -1,5 +1,5 @@
 const heap = @import("heap.zig");
-const kernel_common = @import("../kernel_common.zig");
+const kernel_common = @import("kernel_common");
 
 const KERNEL_HEAP_BYTES_SIZE: u32 = 104857600;
 const TOTAL_TABLE_ENTRIES: u32 = KERNEL_HEAP_BYTES_SIZE / heap.BLOCK_SIZE;

@@ -1,8 +1,10 @@
-const kernel = @import("kernel");
+const kernel = @import("kernel_common");
 const std = @import("std");
 
 test "PMM allocation InvalidSize" {
     const err = kernel.pmm.PmmError.InvalidSize;
+
+    kernel.pmm.initialize();
 
     try std.testing.expectError(err, kernel.pmm.allocate(0));
     try std.testing.expectError(err, kernel.pmm.allocate(kernel.pmm.TOTAL_NUMBER_OF_FRAMES - kernel.pmm.KERNEL_BASE_FRAMES_COUNT + 1));
@@ -11,12 +13,16 @@ test "PMM allocation InvalidSize" {
 test "PMM allocation OutOfMemory" {
     const err = kernel.pmm.PmmError.OutOfMemory;
 
-    try std.testing.expectError(err, kernel.pmm.allocate(kernel.pmm.TOTAL_NUMBER_OF_FRAMES - kernel.pmm.KERNEL_BASE_FRAMES_COUNT));
+    kernel.pmm.initialize();
+
+    try kernel.pmm.allocate(kernel.pmm.TOTAL_NUMBER_OF_FRAMES - kernel.pmm.KERNEL_BASE_FRAMES_COUNT);
     try std.testing.expectError(err, kernel.pmm.allocate(1));
 }
 
 test "PMM allocation InvalidIndex" {
     const err = kernel.pmm.PmmError.InvalidIndex;
+
+    kernel.pmm.initialize();
 
     try std.testing.expectError(err, kernel.pmm.free(0, kernel.pmm.KERNEL_BASE_FRAMES_COUNT));
     try std.testing.expectError(err, kernel.pmm.free(kernel.pmm.TOTAL_NUMBER_OF_FRAMES, 1));
