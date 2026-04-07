@@ -1,4 +1,5 @@
-const terminal = @import("kernel_common").terminal;
+const arch = @import("arch");
+const console = arch.platform;
 
 pub const idt = @import("interrupt_descriptor_table.zig");
 pub const port_io = @import("../platform/io/port_io.zig");
@@ -17,69 +18,75 @@ pub fn disableInterrupts() void {
 }
 
 pub fn acknowledgeInterrupt(vector: usize) void {
-    _ = vector;
-    port_io.out8(0x20, 0x20);
-    port_io.out8(0xA0, 0x20);
+    // Only acknowledge hardware interrupts (IRQs)
+    // Assuming IRQs are remapped to 0x20 - 0x2F
+    if (vector >= 0x20 and vector <= 0x2F) {
+        if (vector >= 0x28) {
+            port_io.out8(0xA0, 0x20); // EOI to Slave
+        }
+        port_io.out8(0x20, 0x20); // EOI to Master
+    }
 }
 
 pub export fn interruptHandler(vector: usize, stack_pointer: usize) callconv(.c) void {
     // Not ready to handle nested interrupts. Don't risk stack overflow.
     //arch.interrupts.disableInterrupts();
-    terminal.printString("Interrupt: ");
+    console.print("Interrupt: ");
     switch (vector) {
         0x00 => {
-            terminal.printString("Divide by zero.\n");
+            console.print("Divide by zero.\n");
         },
         0x01 => {
-            terminal.printString("Debug exception.\n");
+            console.print("Debug exception.\n");
         },
         0x02...0x05 => {},
         0x06 => {
-            terminal.printString("Invalid opcode.\n");
+            console.print("Invalid opcode.\n");
         },
         0x07 => {},
         0x08 => {
-            terminal.printString("Double fault.\n");
+            console.print("Double fault.\n");
         },
         0x09 => {},
         0x0A => {
-            terminal.printString("Invalid TSS.\n");
+            console.print("Invalid TSS.\n");
         },
         0x0B => {},
         0x0C => {
-            terminal.printString("Stack segment fault.\n");
+            console.print("Stack segment fault.\n");
         },
         0x0D => {
-            terminal.printString("General protection fault.\n");
-            terminal.printFormat(" Stack Index: {x}\n", .{stack_pointer});
+            console.print("General protection fault.\n");
+            //console.writer.print(" Stack Index: {x}\n", .{stack_pointer}) catch {};
             //arch.cpu.unrecoverableHalt();
         },
         0x0E => {
-            const stack_array: *[4]usize = @ptrFromInt(stack_pointer);
-            const error_code: usize = stack_array[0];
-            const virtual_address: usize = stack_array[1];
-            terminal.printString("Page fault.\n");
-            terminal.printFormat("Error code: 0x{x}\n", .{error_code});
-            terminal.printFormat("Virtual address: 0x{x}\n", .{virtual_address});
+            // const stack_array: *[4]usize = @ptrFromInt(stack_pointer);
+            // const error_code: usize = stack_array[0];
+            // const virtual_address: usize = stack_array[1];
+            // console.print("Page fault.\n");
+            // console.writer.print("Error code: 0x{x}\n", .{error_code}) catch {};
+            // console.writer.print("Virtual address: 0x{x}\n", .{virtual_address}) catch {};
             //printFormat("Physical address: 0x{x}\n", .{arch.paging.getPhysicalAddress(virtual_address)});
         },
         0x0F => {},
         0x10 => {},
         0x11 => {
-            terminal.printString("Alignment check.\n");
+            console.print("Alignment check.\n");
         },
         0x12...0x1F => {},
         0x20 => {
-            terminal.printString("Timer.\n");
+            console.print("Timer.\n");
         },
         0x21 => {
-            terminal.printString("Keyboard pressed.\n");
+            console.print("Keyboard pressed.\n");
             keyboard.clearKeyboard();
         },
         0x22...0xFFFFFFFF => {},
     }
 
-    terminal.printFormat(" --- Stack Index: {x}\n", .{stack_pointer});
+    // console.writer.print(" --- Stack Index: {x}\n", .{stack_pointer}) catch {};
+    _ = stack_pointer;
 
     acknowledgeInterrupt(vector);
     enableInterrupts();

@@ -3,7 +3,7 @@ const builtin = @import("builtin");
 const arch = @import("arch").impl;
 const pmm = @import("kernel_common").pmm;
 const terminal = @import("kernel_common").terminal;
-const LogLevels = @import("kernel_common").LogLevels;
+const LogLevels = @import("arch").LogLevels;
 
 const std = @import("std");
 
@@ -11,10 +11,11 @@ pub export fn kernelMain() void {
     arch.boot.finishBoot();
     pmm.initialize();
 
-    terminal.printLog("Initializing interrupts...", LogLevels.infoText);
+    terminal.initialize();
+    terminal.print.printStringColor("Initializing interrupts...", LogLevels.infoText);
     arch.interrupts.initialize();
     arch.interrupts.enableInterrupts();
-    terminal.printLog("done!\n", LogLevels.infoText);
+    terminal.print.printStringColor("done!\n", LogLevels.infoText);
 
     pmm.initialize();
 

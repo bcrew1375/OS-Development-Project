@@ -1,6 +1,5 @@
-const LogLevels = @import("kernel_common").LogLevels;
-
 const std = @import("std");
+const LogLevels = @import("arch").LogLevels;
 
 const TEXT_MODE_WIDTH: u16 = 80;
 const TEXT_MODE_HEIGHT: u16 = 25;

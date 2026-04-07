@@ -27,24 +27,54 @@ pub fn build(b: *std.Build) void {
 
     const arch = b.createModule(.{
         .root_source_file = b.path("src/architecture/architecture.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+
+    arch.addImport("arch", arch);
+
+    const kernel_common = b.createModule(.{
+        .root_source_file = b.path("src/kernel_common.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+
+    kernel_common.addImport("arch", arch);
+    kernel_common.addImport("kernel_common", kernel_common);
+
+    kernel.root_module.addImport("arch", arch);
+    kernel.root_module.addImport("kernel_common", kernel_common);
+
+    const arch_test = b.createModule(.{
+        .root_source_file = b.path("src/architecture/architecture.zig"),
         .target = b.graph.host,
         .optimize = optimize,
     });
 
-    const kernel_common = b.createModule(.{
+    arch_test.addImport("arch", arch_test);
+
+    const kernel_common_test = b.createModule(.{
         .root_source_file = b.path("src/kernel_common.zig"),
         .target = b.graph.host,
         .optimize = optimize,
     });
 
+    kernel_common_test.addImport("arch", arch_test);
+    kernel_common_test.addImport("kernel_common", kernel_common_test);
+
     const tests = b.addTest(.{
         .root_module = b.createModule(.{ .root_source_file = b.path("tests/tests.zig"), .target = b.graph.host, .optimize = optimize, .code_model = .normal }),
     });
 
-    tests.root_module.addImport("arch", arch);
-    tests.root_module.addImport("kernel_common", kernel_common);
+    tests.root_module.addImport("arch", arch_test);
+    tests.root_module.addImport("kernel_common", kernel_common_test);
+
+    tests.root_module.error_tracing = true;
 
     const run_tests = b.addRunArtifact(tests);
+
+    run_tests.has_side_effects = true;
+
     const tests_step = b.step("tests", "Run unit tests");
     tests_step.dependOn(&run_tests.step);
 

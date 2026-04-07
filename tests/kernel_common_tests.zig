@@ -1,9 +1,10 @@
 const arch = @import("arch");
+const kernel = @import("kernel_common");
 
 test "Terminal - print" {
-    arch.platform.print("print test");
+    kernel.terminal.print.printString("print test");
 }
 
 test "Terminal - printLog" {
-    arch.platform.printLog("printLog test");
+    kernel.terminal.print.printStringColor("printLog test", arch.LogLevels.infoText);
 }

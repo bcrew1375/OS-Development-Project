@@ -1,15 +1,14 @@
 const builtin = @import("builtin");
 
-pub const impl = switch (builtin.cpu.arch) {
+pub const impl = if (builtin.is_test)
+    @import("mock/arch.zig")
+else switch (builtin.cpu.arch) {
     //.x86_64 => @import("x86_64/impl.zig"),
     .x86 => @import("x86/arch.zig"),
     //.aarch64 => @import("aarch64/impl.zig"),
     //.riscv64 => @import("riscv64/impl.zig"),
-    else => if (builtin.is_test)
-        @import("mock/arch.zig")
-    else
-        @compileError("unsupported architecture: " ++
-            @tagName(builtin.cpu.arch)),
+    else => @compileError("unsupported architecture: " ++
+        @tagName(builtin.cpu.arch)),
 };
 
 pub const boot = impl.boot;
@@ -18,7 +17,13 @@ pub const interrupts = impl.interrupts;
 pub const mmu = impl.mmu;
 pub const platform = impl.platform;
 
-//const LogLevels = @import("../log.zig").LogLevels;
+pub const LogLevels = enum(u4) {
+    errorText,
+    warningText,
+    noticeText,
+    infoText,
+    debugText,
+};
 
 pub fn validateImpl(comptime T: type) void {
     comptime {
@@ -41,7 +46,7 @@ pub fn validateImpl(comptime T: type) void {
         assertFn(T.platform, "initializeTimer", fn (frequency: usize) void);
         assertFn(T.platform, "initializeConsole", fn () void);
         assertFn(T.platform, "print", fn (string: []const u8) void);
-        //        assertFn(T.platform, "printLog", fn (string: []const u8, logLevel: LogLevels) void);
+        assertFn(T.platform, "printLog", fn (string: []const u8, logLevel: LogLevels) void);
         // boot
         assertFn(T.boot, "finishBoot", fn () void);
     }

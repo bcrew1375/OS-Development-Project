@@ -1,10 +1,6 @@
 const kernel = @import("kernel_common");
 const std = @import("std");
 
-pub const ErrSet = error{
-    TestErr,
-};
-
 test "PMM allocation - InvalidSize" {
     const err = kernel.pmm.PmmError.InvalidSize;
 

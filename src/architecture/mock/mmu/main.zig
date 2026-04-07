@@ -1,4 +1,4 @@
-pub fn initialize() void {}
+pub fn initialize() callconv(.c) void {}
 pub fn getPhysicalAddress(virtualAddress: usize) ?usize {
     _ = virtualAddress;
 }
