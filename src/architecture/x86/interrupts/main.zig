@@ -31,62 +31,60 @@ pub fn acknowledgeInterrupt(vector: usize) void {
 pub export fn interruptHandler(vector: usize, stack_pointer: usize) callconv(.c) void {
     // Not ready to handle nested interrupts. Don't risk stack overflow.
     //arch.interrupts.disableInterrupts();
-    console.print("Interrupt: ");
+    console.writer.writeAll("Interrupt: ") catch {};
     switch (vector) {
         0x00 => {
-            console.print("Divide by zero.\n");
+            console.writer.writeAll("Divide by zero.\n") catch {};
         },
         0x01 => {
-            console.print("Debug exception.\n");
+            console.writer.writeAll("Debug exception.\n") catch {};
         },
         0x02...0x05 => {},
         0x06 => {
-            console.print("Invalid opcode.\n");
+            console.writer.writeAll("Invalid opcode.\n") catch {};
         },
         0x07 => {},
         0x08 => {
-            console.print("Double fault.\n");
+            console.writer.writeAll("Double fault.\n") catch {};
         },
         0x09 => {},
         0x0A => {
-            console.print("Invalid TSS.\n");
+            console.writer.writeAll("Invalid TSS.\n") catch {};
         },
         0x0B => {},
         0x0C => {
-            console.print("Stack segment fault.\n");
+            console.writer.writeAll("Stack segment fault.\n") catch {};
         },
         0x0D => {
-            console.print("General protection fault.\n");
-            //console.writer.print(" Stack Index: {x}\n", .{stack_pointer}) catch {};
-            //arch.cpu.unrecoverableHalt();
+            console.writer.writeAll("General protection fault.\n") catch {};
+            console.writer.print(" Stack Index: 0x{x}\n", .{stack_pointer}) catch {};
         },
         0x0E => {
-            // const stack_array: *[4]usize = @ptrFromInt(stack_pointer);
-            // const error_code: usize = stack_array[0];
-            // const virtual_address: usize = stack_array[1];
-            // console.print("Page fault.\n");
-            // console.writer.print("Error code: 0x{x}\n", .{error_code}) catch {};
-            // console.writer.print("Virtual address: 0x{x}\n", .{virtual_address}) catch {};
+            const stack_array: *[4]usize = @ptrFromInt(stack_pointer);
+            const error_code: usize = stack_array[0];
+            const virtual_address: usize = stack_array[1];
+            console.writer.writeAll("Page fault.\n") catch {};
+            console.writer.print("Error code: 0x{x}\n", .{error_code}) catch {};
+            console.writer.print("Virtual address: 0x{x}\n", .{virtual_address}) catch {};
             //printFormat("Physical address: 0x{x}\n", .{arch.paging.getPhysicalAddress(virtual_address)});
         },
         0x0F => {},
         0x10 => {},
         0x11 => {
-            console.print("Alignment check.\n");
+            console.writer.writeAll("Alignment check.\n") catch {};
         },
         0x12...0x1F => {},
         0x20 => {
-            console.print("Timer.\n");
+            console.writer.writeAll("Timer.\n") catch {};
         },
         0x21 => {
-            console.print("Keyboard pressed.\n");
+            console.writer.writeAll("Keyboard pressed.\n") catch {};
             keyboard.clearKeyboard();
         },
         0x22...0xFFFFFFFF => {},
     }
 
-    // console.writer.print(" --- Stack Index: {x}\n", .{stack_pointer}) catch {};
-    _ = stack_pointer;
+    console.writer.print(" --- Stack Index: {x}\n", .{stack_pointer}) catch {};
 
     acknowledgeInterrupt(vector);
     enableInterrupts();

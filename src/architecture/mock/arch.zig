@@ -35,6 +35,5 @@ pub const mmu = struct {
 pub const platform = struct {
     pub const initializeConsole = platform_impl.initializeConsole;
     pub const initializeTimer = platform_impl.initializeTimer;
-    pub const print = platform_impl.print;
-    pub const printLog = platform_impl.printLog;
+    pub const writer = platform_impl.writer;
 };

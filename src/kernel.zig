@@ -3,19 +3,18 @@ const builtin = @import("builtin");
 const arch = @import("arch").impl;
 const pmm = @import("kernel_common").pmm;
 const terminal = @import("kernel_common").terminal;
-const LogLevels = @import("arch").LogLevels;
+const TextColor = @import("arch").TextColor;
 
 const std = @import("std");
 
 pub export fn kernelMain() void {
     arch.boot.finishBoot();
     pmm.initialize();
-
     terminal.initialize();
-    terminal.print.printStringColor("Initializing interrupts...", LogLevels.infoText);
+    terminal.print.printStringColor("Initializing interrupts...", TextColor.WHITE);
     arch.interrupts.initialize();
     arch.interrupts.enableInterrupts();
-    terminal.print.printStringColor("done!\n", LogLevels.infoText);
+    terminal.print.printStringColor("done!\n", TextColor.GREEN);
 
     pmm.initialize();
 
@@ -31,9 +30,11 @@ pub export fn kernelMain() void {
 }
 
 pub fn panic(message: []const u8, stack_trace: ?*std.builtin.StackTrace, number: ?usize) noreturn {
-    arch.platform.print("\n!KERNEL PANIC!\n");
-    arch.platform.print(message);
-    arch.platform.print("\n");
+    arch.interrupts.disableInterrupts();
+    arch.platform.setColor(TextColor.RED);
+    arch.platform.writer.writeAll("\n!KERNEL PANIC!\n") catch {};
+    arch.platform.writer.writeAll(message) catch {};
+    arch.platform.writer.writeAll("\n") catch {};
     _ = stack_trace;
     _ = number;
     while (true) {}

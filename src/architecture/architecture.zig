@@ -17,16 +17,30 @@ pub const interrupts = impl.interrupts;
 pub const mmu = impl.mmu;
 pub const platform = impl.platform;
 
-pub const LogLevels = enum(u4) {
-    errorText,
-    warningText,
-    noticeText,
-    infoText,
-    debugText,
+pub const TextColor = enum(u8) {
+    BLACK,
+    BLUE,
+    GREEN,
+    CYAN,
+    RED,
+    MAGENTA,
+    BROWN,
+    LIGHT_GRAY,
+    DARK_GRAY,
+    LIGHT_BLUE,
+    LIGHT_GREEN,
+    LIGHT_CYAN,
+    LIGHT_RED,
+    LIGHT_MAGENTA,
+    YELLOW,
+    WHITE,
 };
 
 pub fn validateImpl(comptime T: type) void {
     comptime {
+        // boot
+        assertFn(T.boot, "finishBoot", fn () void);
+
         // cpu
         assertFn(T.cpu, "unrecoverableHalt", fn () noreturn);
 
@@ -45,10 +59,9 @@ pub fn validateImpl(comptime T: type) void {
         // platform
         assertFn(T.platform, "initializeTimer", fn (frequency: usize) void);
         assertFn(T.platform, "initializeConsole", fn () void);
-        assertFn(T.platform, "print", fn (string: []const u8) void);
-        assertFn(T.platform, "printLog", fn (string: []const u8, logLevel: LogLevels) void);
-        // boot
-        assertFn(T.boot, "finishBoot", fn () void);
+        assertFn(T.platform, "setColor", fn (color: TextColor) void);
+        if (!@hasDecl(T.platform, "writer"))
+            @compileError(@typeName(T.platform) ++ " is missing 'writer' instance");
     }
 }
 

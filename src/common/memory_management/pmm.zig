@@ -11,12 +11,9 @@ pub const PmmError = error{
     InvalidIndex,
 };
 
-const FRAME_TAKEN = true;
-const FRAME_FREE = false;
-
-var frameMap: [TOTAL_NUMBER_OF_FRAMES]bool = undefined;
-
 const std = @import("std");
+const FrameBitmap = std.StaticBitSet(TOTAL_NUMBER_OF_FRAMES);
+var frameMap: FrameBitmap = FrameBitmap.initEmpty();
 
 pub fn initialize() void {
     mark_frames(0, KERNEL_BASE_FRAMES_COUNT);
@@ -36,7 +33,7 @@ pub fn allocate(needed_frames: usize) !void {
 pub fn free(start_frame: usize, total_frames: usize) !void {
     // Kernel base is off limits.
     if ((start_frame < KERNEL_BASE_FRAMES_COUNT) or
-        (start_frame + total_frames) > frameMap.len)
+        (start_frame + total_frames) > TOTAL_NUMBER_OF_FRAMES)
     {
         return PmmError.InvalidIndex;
     }
@@ -44,7 +41,7 @@ pub fn free(start_frame: usize, total_frames: usize) !void {
     const end_frame: usize = start_frame + total_frames;
 
     for (start_frame..end_frame) |frame| {
-        frameMap[frame] = FRAME_FREE;
+        frameMap.unset(frame);
     }
 }
 
@@ -54,7 +51,7 @@ fn get_start_frame(needed_frames: usize) !usize {
     var is_first: bool = true;
 
     for (0..TOTAL_NUMBER_OF_FRAMES) |frame| {
-        if (frameMap[frame] == FRAME_TAKEN) {
+        if (frameMap.isSet(frame)) {
             frame_count = 0;
             start_frame = 0;
             is_first = true;
@@ -80,6 +77,6 @@ fn mark_frames(start_frame: usize, total_frames: usize) void {
     const end_frame: usize = start_frame + total_frames;
 
     for (start_frame..end_frame) |frame| {
-        frameMap[frame] = FRAME_TAKEN;
+        frameMap.set(frame);
     }
 }

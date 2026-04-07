@@ -35,6 +35,6 @@ pub const mmu = struct {
 pub const platform = struct {
     pub const initializeTimer = platform_impl.time.initializeTimer;
     pub const initializeConsole = platform_impl.console.initialize;
-    pub const print = platform_impl.console.print;
-    pub const printLog = platform_impl.console.printLog;
+    pub const setColor = platform_impl.console.setColor;
+    pub const writer = platform_impl.console.writer;
 };
