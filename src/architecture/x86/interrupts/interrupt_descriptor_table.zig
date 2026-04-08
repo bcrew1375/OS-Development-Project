@@ -18,6 +18,11 @@ const InterruptDescriptorTableRegisterStruct = packed struct {
     base: u32 = 0, // Base address of the start of the interrupt descriptor table
 };
 
+comptime {
+    std.debug.assert(@sizeOf(InterruptDescriptorTableStruct) == 8);
+    std.debug.assert(@bitSizeOf(InterruptDescriptorTableRegisterStruct) == 48);
+}
+
 const Trampoline = *const fn () callconv(.naked) noreturn;
 
 var interrupt_descriptor_table: [TOTAL_INTERRUPTS]InterruptDescriptorTableStruct align(16) =

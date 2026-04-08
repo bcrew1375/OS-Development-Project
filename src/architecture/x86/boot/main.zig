@@ -22,14 +22,15 @@ export var multiboot_header: MultibootHeader align(32) linksection(".multiboot.h
 };
 // OS Dev: https://wiki.osdev.org/Zig_Bare_Bones
 
-const MultibootInfo = packed struct {
+const MultibootInfo = extern struct {
     flags: u32,
     mem_lower: u32,
     mem_upper: u32,
     boot_device: u32,
-    cmdline: u32,
+    cmdline_ptr: u32,
     mods_count: u32,
     mods_addr: u32,
+    syms_0: u32,
     syms_1: u32,
     syms_2: u32,
     syms_3: u32,
@@ -115,8 +116,8 @@ export fn higherHalfEntry() callconv(.naked) noreturn {
 }
 
 pub fn finishBoot() void {
-    //time.setupTimer();
     gdt.initialize();
+    mmu.initializeMemoryMap();
     mmu.removeIdentityMapping();
     idt.initialize();
 }

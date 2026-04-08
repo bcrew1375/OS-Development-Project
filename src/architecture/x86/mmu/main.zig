@@ -23,9 +23,27 @@ const PageEntry = packed struct {
 const PageDirectory = [ENTRIES_PER_DIRECTORY]PageEntry;
 const PageTable = [ENTRIES_PER_TABLE]PageEntry;
 
+const MAX_MMAP_ENTRIES = 128;
+
 const MemoryMap = struct {
+    entries: [MAX_MMAP_ENTRIES]MemoryMapEntry = undefined,
     length: u32 = 0,
-    address: u32 = 0,
+};
+
+const MemoryMapEntry = struct {
+    address_low: u32,
+    address_high: u32,
+    length_low: u32,
+    length_high: u32,
+    type: MemoryMapEntryTypes,
+};
+
+const MemoryMapEntryTypes = enum(u8) {
+    AVAILABLE = 1,
+    RESERVED = 2,
+    ACPI_RECLAIMABLE = 3,
+    ACPI_NVS = 4,
+    BAD_MEMORY = 5,
 };
 
 var pageDirectory: *PageDirectory = undefined;
@@ -34,10 +52,9 @@ var pageTables: *[PAGE_TABLE_COUNT]PageTable = undefined;
 var pageDirectoryEntries: [ENTRIES_PER_DIRECTORY]PageEntry align(PAGE_SIZE) linksection(".multiboot.data") = [_]PageEntry{.{}} ** ENTRIES_PER_DIRECTORY;
 var pageTable0Entries: [ENTRIES_PER_TABLE]PageEntry align(PAGE_SIZE) linksection(".multiboot.data") = [_]PageEntry{.{}} ** ENTRIES_PER_TABLE;
 
-var memoryMap: MemoryMap linksection(".multiboot.data") = MemoryMap{};
+var memoryMap: MemoryMap = MemoryMap{};
 
 pub export fn initialize() linksection(".multiboot.text") void {
-    initializeMemoryMap();
     pageDirectoryEntries[0].address = @truncate(@intFromPtr(&pageTable0Entries) >> 12);
     pageDirectoryEntries[0].flags = IS_PRESENT | IS_WRITEABLE;
 
@@ -178,4 +195,22 @@ fn tableExists(virtualAddress: usize) bool {
 
 pub fn initializeMemoryMap() linksection(".multiboot.text") void {
     memoryMap.length = multiboot.multiboot_info.mmap_length;
+
+    var offset: u32 = 0;
+
+    for (0..MAX_MMAP_ENTRIES) |entry| {
+        if (offset >= memoryMap.length) {
+            break;
+        }
+
+        const entry_base: [*]u32 = @ptrFromInt(multiboot.multiboot_info.mmap_addr + offset);
+
+        memoryMap.entries[entry].address_low = entry_base[1];
+        memoryMap.entries[entry].address_high = entry_base[2];
+        memoryMap.entries[entry].length_low = entry_base[3];
+        memoryMap.entries[entry].length_high = entry_base[4];
+        memoryMap.entries[entry].type = @as(MemoryMapEntryTypes, @enumFromInt(entry_base[5]));
+
+        offset += entry_base[0];
+    }
 }
