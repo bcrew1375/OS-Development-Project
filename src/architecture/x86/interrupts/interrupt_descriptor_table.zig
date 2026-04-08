@@ -71,7 +71,7 @@ fn makeTrampoline(comptime vector: u32) Trampoline {
 fn idtLoad() void {
     asm volatile (
         \\cli
-        \\lidt (%ecx)
+        \\lidt (%[interrupt_descriptor_table_register])
         :
         : [interrupt_descriptor_table_register] "{ecx}" (&interrupt_descriptor_table_register),
         : .{ .ecx = true, .memory = true });

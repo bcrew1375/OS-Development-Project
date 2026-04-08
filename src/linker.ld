@@ -6,6 +6,7 @@ KERNEL_VIRTUAL_ADDRESS = 0xC0000000;
 SECTIONS
 {
     . = 2M;
+	_kernel_start = .;
 
 	.multiboot.header ALIGN(4): AT (ADDR (.multiboot.header)) {
 		KEEP(*(.multiboot.header))
@@ -35,4 +36,6 @@ SECTIONS
 		*(.bss)
 		*(.bootstrap_stack)
 	}
+
+	_kernel_end = . - KERNEL_VIRTUAL_ADDRESS;
 }

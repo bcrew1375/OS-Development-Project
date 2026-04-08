@@ -1,3 +1,5 @@
+const multiboot = @import("../boot/main.zig");
+
 const CACHE_DISABLED: u8 = 0b00010000;
 const WRITE_THROUGH: u8 = 0b00001000;
 const ACCESS_FROM_ALL: u8 = 0b00000100;
@@ -21,13 +23,21 @@ const PageEntry = packed struct {
 const PageDirectory = [ENTRIES_PER_DIRECTORY]PageEntry;
 const PageTable = [ENTRIES_PER_TABLE]PageEntry;
 
+const MemoryMap = struct {
+    length: u32 = 0,
+    address: u32 = 0,
+};
+
 var pageDirectory: *PageDirectory = undefined;
 var pageTables: *[PAGE_TABLE_COUNT]PageTable = undefined;
 
 var pageDirectoryEntries: [ENTRIES_PER_DIRECTORY]PageEntry align(PAGE_SIZE) linksection(".multiboot.data") = [_]PageEntry{.{}} ** ENTRIES_PER_DIRECTORY;
 var pageTable0Entries: [ENTRIES_PER_TABLE]PageEntry align(PAGE_SIZE) linksection(".multiboot.data") = [_]PageEntry{.{}} ** ENTRIES_PER_TABLE;
 
+var memoryMap: MemoryMap linksection(".multiboot.data") = MemoryMap{};
+
 pub export fn initialize() linksection(".multiboot.text") void {
+    initializeMemoryMap();
     pageDirectoryEntries[0].address = @truncate(@intFromPtr(&pageTable0Entries) >> 12);
     pageDirectoryEntries[0].flags = IS_PRESENT | IS_WRITEABLE;
 
@@ -165,3 +175,7 @@ fn tableExists(virtualAddress: usize) bool {
 //         }
 //     }
 // }
+
+pub fn initializeMemoryMap() linksection(".multiboot.text") void {
+    memoryMap.length = multiboot.multiboot_info.mmap_length;
+}

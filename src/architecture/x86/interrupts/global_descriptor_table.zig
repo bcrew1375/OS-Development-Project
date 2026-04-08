@@ -43,7 +43,7 @@ pub fn initialize() void {
     gdtr.size = @sizeOf(GlobalDescriptorTable) - 1;
 
     asm volatile (
-        \\lgdt (%ecx)
+        \\lgdt (%[gdtr])
         \\
         \\mov $0x10, %ax
         \\mov %ax, %ds

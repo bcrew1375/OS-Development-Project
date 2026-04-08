@@ -11,12 +11,10 @@ pub export fn kernelMain() void {
     arch.boot.finishBoot();
     pmm.initialize();
     terminal.initialize();
-    terminal.print.printStringColor("Initializing interrupts...", TextColor.WHITE);
+    terminal.print.printString("Initializing interrupts...");
     arch.interrupts.initialize();
     arch.interrupts.enableInterrupts();
     terminal.print.printStringColor("done!\n", TextColor.GREEN);
-
-    pmm.initialize();
 
     // kernel_heap.initialize() catch |err| {
     //     printString(@errorName(err));
