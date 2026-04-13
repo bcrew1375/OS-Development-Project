@@ -1,5 +1,7 @@
 const multiboot = @import("../boot/main.zig");
 
+const std = @import("std");
+
 const CACHE_DISABLED: u8 = 0b00010000;
 const WRITE_THROUGH: u8 = 0b00001000;
 const ACCESS_FROM_ALL: u8 = 0b00000100;
@@ -31,11 +33,9 @@ const MemoryMap = struct {
 };
 
 const MemoryMapEntry = struct {
-    address_low: u32,
-    address_high: u32,
-    length_low: u32,
-    length_high: u32,
-    type: MemoryMapEntryTypes,
+    address: u64,
+    length: u64,
+    entry_type: MemoryMapEntryTypes,
 };
 
 const MemoryMapEntryTypes = enum(u8) {
@@ -196,7 +196,7 @@ fn tableExists(virtualAddress: usize) bool {
 pub fn initializeMemoryMap() linksection(".multiboot.text") void {
     memoryMap.length = multiboot.multiboot_info.mmap_length;
 
-    var offset: u32 = 0;
+    var offset: usize = 0;
 
     for (0..MAX_MMAP_ENTRIES) |entry| {
         if (offset >= memoryMap.length) {
@@ -205,12 +205,21 @@ pub fn initializeMemoryMap() linksection(".multiboot.text") void {
 
         const entry_base: [*]u32 = @ptrFromInt(multiboot.multiboot_info.mmap_addr + offset);
 
-        memoryMap.entries[entry].address_low = entry_base[1];
-        memoryMap.entries[entry].address_high = entry_base[2];
-        memoryMap.entries[entry].length_low = entry_base[3];
-        memoryMap.entries[entry].length_high = entry_base[4];
-        memoryMap.entries[entry].type = @as(MemoryMapEntryTypes, @enumFromInt(entry_base[5]));
+        memoryMap.entries[entry].address = std.mem.readInt(u64, @ptrCast(&entry_base[1]), .little);
+        memoryMap.entries[entry].length = std.mem.readInt(u64, @ptrCast(&entry_base[3]), .little);
 
-        offset += entry_base[0];
+        var entry_type: MemoryMapEntryTypes = undefined;
+
+        switch (entry_base[5]) {
+            1 => entry_type = MemoryMapEntryTypes.AVAILABLE,
+            3 => entry_type = MemoryMapEntryTypes.ACPI_RECLAIMABLE,
+            4 => entry_type = MemoryMapEntryTypes.ACPI_NVS,
+            5 => entry_type = MemoryMapEntryTypes.BAD_MEMORY,
+            else => entry_type = MemoryMapEntryTypes.RESERVED,
+        }
+
+        memoryMap.entries[entry].entry_type = entry_type;
+
+        offset += entry_base[0] + 4;
     }
 }

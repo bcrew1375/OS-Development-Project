@@ -18,12 +18,34 @@
 
       "label": "Run QEMU",
       "type": "shell",
-      "command": "zig build run"
+      "command": "zig build debug",
+      //"isBackground": true,
+      // "presentation": {
+      //   "reveal": "always",
+      //   "close": true,
+      //   "revealProblems": "never"
+      // },
+      // "problemMatcher": {
+      //   "pattern": {
+      //     "regexp": "^$"
+      //   },
+      //   "background": {
+      //     "activeOnStart": true,
+      //     "beginsPattern": "^$",
+      //     "endsPattern": "^$"
+      //   }
+      // }
     },
     {
       "label": "Kill QEMU",
       "type": "shell",
-      "command": "pkill -F .qemu.pid"
-    },
+      "linux": { "command" : "pkill -F .qemu.pid" },
+      "windows": { "command": "if (Test-Path .qemu.pid) { Stop-Process -Id (Get-Content .qemu.pid) -Force -ErrorAction SilentlyContinue; Remove-Item .qemu.pid }"},
+      "command": "",
+      "presentation": {
+        "reveal": "silent",
+        "close": true,
+      }
+    }
   ],
 }

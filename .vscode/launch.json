@@ -22,18 +22,36 @@
 {
   "configurations": [
     {
+      // "name": "QEMU i386 remote (:1234)",
+      // "type": "lldb-dap",
+      // "request": "attach",
+      // "program": "${workspaceFolder}/zig-out/bin/kernel.elf",
+      // "gdb-remote-port": 1234,
+      // "": "${workspaceFolder}/lldb-dap.log",
+      // "initCommands": [
+      //   "target symbols add ${workspaceFolder}/zig-out/bin/kernel.elf --address 0xC0205000",
+      // ],
+
+      // "preLaunchTask": "Run QEMU",
+      // "postDebugTask": "Kill QEMU"
       "name": "QEMU i386 remote (:1234)",
-      "type": "lldb-dap",
+      "type": "lldb",
       "request": "attach",
       "program": "${workspaceFolder}/zig-out/bin/kernel.elf",
-      "gdb-remote-port": 1234,
-      "initCommands": [
-        "target symbols add ${workspaceFolder}/zig-out/bin/kernel.elf --address 0xC0205000",
-        "settings set format hex"
+      "targetCreateCommands": [
+        "target create ${workspaceFolder}/zig-out/bin/kernel.elf",
+        "target modules load --file ${workspaceFolder}/zig-out/bin/kernel.elf .text 0xC0205000"
       ],
-
+      //"debugServer": 1234,
+      "processCreateCommands": [
+        "gdb-remote 1234",
+        "settings set plugin.process.gdb-remote.packet-timeout 2"
+      ],
       "preLaunchTask": "Run QEMU",
-      "postDebugTask": "Kill QEMU"
+      "postDebugTask": "Kill QEMU",
+      "initCommands": [
+        "process handle SIGTRAP --stop false --pass true --notify false",
+      ],
     }
   ]
 }
