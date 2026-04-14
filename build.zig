@@ -146,9 +146,9 @@ fn spawnQemu(step: *std.Build.Step, options: std.Build.Step.MakeOptions) anyerro
         kernel_path,
     }, step.owner.allocator);
 
-    child.stdin_behavior = .Ignore;
-    child.stdout_behavior = .Ignore;
-    child.stderr_behavior = .Ignore;
+    child.stdin_behavior = .Inherit;
+    child.stdout_behavior = .Inherit;
+    child.stderr_behavior = .Inherit;
     try child.spawn();
 
     const addr = try std.net.Address.parseIp("127.0.0.1", 1234);
@@ -156,6 +156,8 @@ fn spawnQemu(step: *std.Build.Step, options: std.Build.Step.MakeOptions) anyerro
     while (attempts < 100) : (attempts += 1) {
         if (std.net.tcpConnectToAddress(addr)) |conn| {
             conn.close();
+            std.debug.print("QEMU Ready\n", .{});
+            _ = try child.wait();
             return;
         } else |_| {
             std.Thread.sleep(100 * std.time.ns_per_ms);
