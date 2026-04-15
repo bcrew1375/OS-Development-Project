@@ -1,7 +1,8 @@
-// Assume 128 MBs of physical RAM for now.
-// 128 MBs / 4 KB frame size = 32 KBs.
-pub const TOTAL_NUMBER_OF_FRAMES: usize = 32768;
+const arch = @import("arch");
+
 pub const FRAME_SIZE: usize = 4096;
+// Max 64 GBs for now.
+pub const MAX_FRAMES: usize = 2097152;
 
 // Reserve the first 4 MBs for the kernel and hardware.
 extern const _kernel_start: anyopaque;
@@ -13,23 +14,43 @@ pub const PmmError = error{
     InvalidIndex,
 };
 
+var kernelBaseStartFrame: usize = undefined;
+var kernelBaseEndFrame: usize = undefined;
+var totalAvailableRAM: usize = 0;
+
 const std = @import("std");
-const FrameBitmap = std.StaticBitSet(TOTAL_NUMBER_OF_FRAMES);
+const FrameBitmap = std.StaticBitSet(MAX_FRAMES);
+
 var frameMap: FrameBitmap linksection(".bss") = FrameBitmap.initEmpty();
 
-pub fn initialize() void {
-    const start_frame = @intFromPtr(&_kernel_start) / FRAME_SIZE;
-    const end_frame = (@intFromPtr(&_kernel_end) + (FRAME_SIZE - 1)) / FRAME_SIZE;
+pub fn initialize() !void {
+    kernelBaseStartFrame = @intFromPtr(&_kernel_start) / FRAME_SIZE;
+    kernelBaseEndFrame = (@intFromPtr(&_kernel_end) + (FRAME_SIZE - 1)) / FRAME_SIZE;
 
-    mark_frames(start_frame, end_frame - start_frame);
+    const memoryMap: *arch.MemoryMap = arch.mmu.getMemoryMap();
+
+    for (0..memoryMap.length) |entry| {
+        const start_frame: usize = @truncate(try std.math.divCeil(u64, memoryMap.entries[entry].address, FRAME_SIZE));
+        const total_frames: usize = @truncate(try std.math.divTrunc(u64, memoryMap.entries[entry].length, FRAME_SIZE));
+
+        switch (memoryMap.entries[entry].available) {
+            true => {
+                try free(start_frame, total_frames);
+                totalAvailableRAM += @truncate((total_frames * FRAME_SIZE));
+            },
+            else => mark_frames(start_frame, total_frames),
+        }
+    }
+
+    mark_frames(kernelBaseStartFrame, kernelBaseEndFrame - kernelBaseEndFrame);
 
     // Also reserve the first 1MB for BIOS/Real Mode structures usually found on x86
-    mark_frames(0, 0x100000 / FRAME_SIZE);
+    //mark_frames(0, 0x100000 / FRAME_SIZE);
 }
 
 pub fn allocate(needed_frames: usize) !usize {
     if ((needed_frames < 1) or
-        (needed_frames > TOTAL_NUMBER_OF_FRAMES))
+        (needed_frames > totalAvailableRAM))
     {
         return PmmError.InvalidSize;
     }
@@ -41,7 +62,7 @@ pub fn allocate(needed_frames: usize) !usize {
 }
 
 pub fn reserve(start_frame: usize, total_frames: usize) !void {
-    if (start_frame + total_frames > TOTAL_NUMBER_OF_FRAMES) {
+    if (start_frame + total_frames > totalAvailableRAM) {
         return PmmError.InvalidIndex;
     }
 
@@ -72,7 +93,7 @@ fn get_start_frame(needed_frames: usize) !usize {
     var start_frame: usize = 0;
     var is_first: bool = true;
 
-    for (0..TOTAL_NUMBER_OF_FRAMES) |frame| {
+    for (0..totalAvailableRAM) |frame| {
         if (frameMap.isSet(frame)) {
             frame_count = 0;
             start_frame = 0;
@@ -101,4 +122,8 @@ fn mark_frames(start_frame: usize, total_frames: usize) void {
     for (start_frame..end_frame) |frame| {
         frameMap.set(frame);
     }
+}
+
+pub fn getTotalRAM() usize {
+    return totalAvailableRAM;
 }

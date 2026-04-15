@@ -36,6 +36,19 @@ pub const TextColor = enum(u8) {
     WHITE,
 };
 
+pub const MAX_MEMORY_MAP_ENTRIES = 128;
+
+pub const MemoryMap = struct {
+    entries: [MAX_MEMORY_MAP_ENTRIES]MemoryMapEntry = undefined,
+    length: usize = 0,
+};
+
+const MemoryMapEntry = struct {
+    address: u64,
+    length: u64,
+    available: bool,
+};
+
 pub fn validateImpl(comptime T: type) void {
     comptime {
         // boot
@@ -48,6 +61,8 @@ pub fn validateImpl(comptime T: type) void {
         assertFn(T.mmu, "initialize", fn () callconv(.c) void);
         assertFn(T.mmu, "removeIdentityMapping", fn () void);
         assertFn(T.mmu, "getPhysicalAddress", fn (virtualAddress: usize) ?usize);
+        assertFn(T.mmu, "initializeMemoryMap", fn () void);
+        assertFn(T.mmu, "getMemoryMap", fn () *MemoryMap);
 
         // interrupts
         assertFn(T.interrupts, "initialize", fn () void);

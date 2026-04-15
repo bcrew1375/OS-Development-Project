@@ -1,8 +1,20 @@
 {
   "version": "2.0.0",
   "tasks": [
+    // {
+    //   "label": "Build Kernel",
+    //   "type": "shell",
+    //   "command": "zig build",
+    //   "isBackground": false,
+    //   "presentation": {
+    //     "panel": "shared",
+    //     "revealProblems": "onProblem",
+    //     "clear": true,
+    //     "close": true,
+    //   },
+    // },
     {
-      "label": "Debug Kernel",
+      "label": "Run QEMU",
       "type": "shell",
       "command": "zig build debug",
       "isBackground": true,
@@ -18,56 +30,36 @@
             }
           ],
           "background": {
-            // Treat "task started" as soon as the shell launches QEMU.
-            "activeOnStart": true,
-            "beginsPattern": { "regexp": "." },
-            "endsPattern": { "regexp": "^QEMU Ready$" }, //"^.*Listening on.*:1234.*$"
+            "activeOnStart": false,
+            "beginsPattern": { "regexp": "^QEMU Starting$" },
+            "endsPattern": { "regexp": "^QEMU Ready$" },
           }
         }
       ],
       "presentation": {
         "panel": "dedicated",
         "reveal": "silent",
+        "revealProblems": "onProblem",
         "clear": true,
-        "close": true
+        "close": true,
       },
     },
     // {
-    //   "label": "Run QEMU",
+    //   "label": "Debug Kernel",
     //   "type": "shell",
-    //   "dependsOn": ["Debug Kernel"], 
-    //   "command": "qemu-system-i386",
-    //   "args": [
-    //     "-kernel", "zig-out/bin/kernel.elf",
-    //     "-S",
-    //     "-s",
-    //     "-m", "1G",
-    //     "-pidfile", ".qemu.pid",
-    //     "-no-reboot",
-    //     "-no-shutdown"
+    //   "command": "",
+    //   "isBackground": false,
+    //   "dependsOn": [
+    //     "Build Kernel",
+    //     "Run QEMU",
     //   ],
-    // },
-
-      // "label": "Run QEMU",
-      // "type": "shell",
-      // "command": "zig build debug",
-      // "isBackground": true,
-      // "presentation": {
-      //   "reveal": "silent",
-      //   "close": true,
-      //   "echo": true,
-      //   "revealProblems": "always"
-      // },
-      // "problemMatcher": {
-      //   "pattern": {
-      //     "regexp": "^$"
-      //   },
-      //   "background": {
-      //     "activeOnStart": true,
-      //     "beginsPattern": "^$",
-      //     "endsPattern": "^$"
-      //   }
-      // }
+    //   "dependsOrder": "sequence",
+    //   "presentation": {
+    //     "panel": "new",
+    //     "revealProblems": "onProblem",
+    //     "clear": true,
+    //     "close": true,
+    //   },
     // },
     {
       "label": "Kill QEMU",
@@ -76,11 +68,11 @@
       "windows": { "command": "if (Test-Path .qemu.pid) { Stop-Process -Id (Get-Content .qemu.pid) -Force -ErrorAction SilentlyContinue; Remove-Item .qemu.pid }"},
       "command": "",
       "presentation": {
-        "reveal": "silent",
-        "close": true,
-        "echo": true,
-        "revealProblems": "always"
-      }
+        "panel": "shared",
+        "reveal": "always",
+        "clear": true,
+        "close": true
+      },
     }
   ],
 }

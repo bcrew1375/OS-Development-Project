@@ -112,6 +112,7 @@ pub fn build(b: *std.Build) void {
     //     qemu_cmd.step.dependOn(b.getInstallStep());
 
     const debug_step = b.step("debug", "Build and launch QEMU for debugging");
+    //debug_step.dependOn(b.
     debug_step.dependOn(b.getInstallStep());
     debug_step.makeFn = spawnQemu;
 }
@@ -149,6 +150,7 @@ fn spawnQemu(step: *std.Build.Step, options: std.Build.Step.MakeOptions) anyerro
     child.stdin_behavior = .Inherit;
     child.stdout_behavior = .Inherit;
     child.stderr_behavior = .Inherit;
+    std.debug.print("QEMU Starting\n", .{});
     try child.spawn();
 
     const addr = try std.net.Address.parseIp("127.0.0.1", 1234);
@@ -163,5 +165,5 @@ fn spawnQemu(step: *std.Build.Step, options: std.Build.Step.MakeOptions) anyerro
             std.Thread.sleep(100 * std.time.ns_per_ms);
         }
     }
-    return error.QemuTimeout; //     //std.Thread.sleep(5000000000);
+    return error.QemuTimeout;
 }

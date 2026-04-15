@@ -30,6 +30,8 @@ pub const mmu = struct {
     pub const initialize = mmu_impl.initialize;
     pub const removeIdentityMapping = mmu_impl.removeIdentityMapping;
     pub const getPhysicalAddress = mmu_impl.getPhysicalAddress;
+    pub const initializeMemoryMap = mmu_impl.initializeMemoryMap;
+    pub const getMemoryMap = mmu_impl.getMemoryMap;
 };
 
 pub const platform = struct {

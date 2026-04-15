@@ -9,12 +9,13 @@ const std = @import("std");
 
 pub export fn kernelMain() void {
     arch.boot.finishBoot();
-    pmm.initialize();
+    pmm.initialize() catch {};
     terminal.initialize();
     terminal.print.printString("Initializing interrupts...");
     arch.interrupts.initialize();
     arch.interrupts.enableInterrupts();
     terminal.print.printStringColor("done!\n", TextColor.GREEN);
+    try arch.platform.writer.print("Total Available RAM: {d} KB\n", .{pmm.getTotalRAM()});
 
     // kernel_heap.initialize() catch |err| {
     //     printString(@errorName(err));
