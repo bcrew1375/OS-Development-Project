@@ -14,7 +14,8 @@ RUN apt-get update && apt-get install -y \
     qemu-system \
     qemu-utils \
     qemu-user && \
-    rm -rf /var/lib/apt/lists/*
+    rm -rf /var/lib/apt/lists/* && \
+    mkdir -p /tmp/zig-local-cache /tmp/zig-global-cache
 
 # Detect architecture and download correct Zig binary
 RUN set -eux; \
@@ -28,3 +29,6 @@ RUN set -eux; \
     mv zig-${ARCH}-* /opt/zig; \
     ln -s /opt/zig/zig /usr/local/bin/zig; \
     rm zig.tar.xz
+
+ENV ZIG_GLOBAL_CACHE_DIR=/tmp/zig-global-cache
+ENV ZIG_LOCAL_CACHE_DIR=/tmp/zig-local-cache

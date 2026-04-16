@@ -1,8 +1,6 @@
 const arch = @import("arch");
 const multiboot = @import("../boot/main.zig");
 
-const std = @import("std");
-
 const CACHE_DISABLED: u8 = 0b00010000;
 const WRITE_THROUGH: u8 = 0b00001000;
 const ACCESS_FROM_ALL: u8 = 0b00000100;

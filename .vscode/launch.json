@@ -1,7 +1,7 @@
 {
   "configurations": [
     {
-      "name": "QEMU i386 remote (:1234)",
+      "name": "Kernel Debug",
       "type": "lldb",
       "request": "attach",
       "program": "${workspaceFolder}/zig-out/bin/kernel.elf",

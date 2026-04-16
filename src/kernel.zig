@@ -1,5 +1,3 @@
-const builtin = @import("builtin");
-
 const arch = @import("arch").impl;
 const pmm = @import("kernel_common").pmm;
 const terminal = @import("kernel_common").terminal;
@@ -15,7 +13,7 @@ pub export fn kernelMain() void {
     arch.interrupts.initialize();
     arch.interrupts.enableInterrupts();
     terminal.print.printStringColor("done!\n", TextColor.GREEN);
-    try arch.platform.writer.print("Total Available RAM: {d} KB\n", .{pmm.getTotalRAM()});
+    try arch.platform.writer.print("Total Available RAM: {d} KB\n", .{pmm.getTotalAvailableRAM() / 1024});
 
     // kernel_heap.initialize() catch |err| {
     //     printString(@errorName(err));

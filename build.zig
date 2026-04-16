@@ -81,7 +81,6 @@ pub fn build(b: *std.Build) void {
     kernel.setLinkerScript(b.path(b.pathJoin(&.{"src/linker.ld"})));
     b.installArtifact(kernel);
 
-    const kernel_path = kernel.getEmittedBin();
     const qemu_cmd = b.addSystemCommand(&[_][]const u8{
         // zig fmt: off
         "qemu-system-i386",
@@ -102,6 +101,7 @@ pub fn build(b: *std.Build) void {
     });
     // zig fmt: on
     qemu_cmd.addArg("-kernel");
+    const kernel_path = kernel.getEmittedBin();
     qemu_cmd.addFileArg(kernel_path);
     qemu_cmd.step.dependOn(b.getInstallStep());
 
