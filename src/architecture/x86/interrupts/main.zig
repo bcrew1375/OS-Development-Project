@@ -29,8 +29,6 @@ pub fn acknowledgeInterrupt(vector: usize) void {
 }
 
 pub export fn interruptHandler(vector: usize, stack_pointer: usize) callconv(.c) void {
-    // Not ready to handle nested interrupts. Don't risk stack overflow.
-    //arch.interrupts.disableInterrupts();
     console.writer.writeAll("Interrupt: ") catch {};
     switch (vector) {
         0x00 => {
@@ -87,5 +85,4 @@ pub export fn interruptHandler(vector: usize, stack_pointer: usize) callconv(.c)
     console.writer.print(" --- Stack Index: {x}\n", .{stack_pointer}) catch {};
 
     acknowledgeInterrupt(vector);
-    enableInterrupts();
 }

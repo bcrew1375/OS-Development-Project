@@ -7,8 +7,15 @@ const std = @import("std");
 
 pub export fn kernelMain() void {
     arch.boot.finishBoot();
-    pmm.initialize() catch {};
+    arch.platform.initializeTimer(100);
     terminal.initialize();
+    terminal.print.printString("Initializing PMM...");
+    pmm.initialize() catch |err| {
+        arch.platform.setColor(TextColor.RED);
+        arch.platform.writer.print("PMM init failed with error: {s}\n", .{@errorName(err)}) catch {};
+        arch.cpu.unrecoverableHalt();
+    };
+    terminal.print.printStringColor("done!\n", TextColor.GREEN);
     terminal.print.printString("Initializing interrupts...");
     arch.interrupts.initialize();
     arch.interrupts.enableInterrupts();

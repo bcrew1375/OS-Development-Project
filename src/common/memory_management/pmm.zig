@@ -20,7 +20,14 @@ var kernelBaseStartFrame: usize = undefined;
 var kernelBaseEndFrame: usize = undefined;
 var totalAvailableFrames: usize = 0;
 
+FrameMap = packed struct {
+    free: bool,
+    used: bool,
+    reserved: bool,
+};
+
 const FrameBitmap = std.StaticBitSet(MAX_FRAMES);
+const memoryMap: *arch.MemoryMap = undefined;
 
 var frameMap: FrameBitmap linksection(".bss") = FrameBitmap.initEmpty();
 
@@ -33,7 +40,7 @@ pub fn initialize() !void {
         kernelBaseEndFrame = (@intFromPtr(&_kernel_end) + (FRAME_SIZE - 1)) / FRAME_SIZE;
     }
 
-    const memoryMap: *arch.MemoryMap = arch.mmu.getMemoryMap();
+    memoryMap = arch.mmu.getMemoryMap();
 
     for (0..memoryMap.length) |entry| {
         const region_start_frame: usize = @truncate(try std.math.divCeil(u64, memoryMap.entries[entry].address, FRAME_SIZE));
@@ -81,12 +88,7 @@ pub fn reserve(start_frame: usize, total_frames: usize) !void {
     }
 }
 
-pub fn free(start_frame: usize, total_frames: usize) !void {
-    //Kernel base is off limits.
-    if ((start_frame >= kernelBaseStartFrame) and
-        ((start_frame + total_frames) <= kernelBaseEndFrame) or
-        ((start_frame + total_frames) > totalAvailableFrames))
-    {
+pub fn free(frame: usize) !void {
         return PmmError.InvalidIndex;
     }
 

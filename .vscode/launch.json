@@ -11,12 +11,14 @@
       ],
       "processCreateCommands": [
         "gdb-remote 1234",
+        "continue"
       ],
+      "stopOnEntry": false,
       "preLaunchTask": "Run QEMU",
       "postDebugTask": "Kill QEMU",
-      "initCommands": [
-        "process handle SIGTRAP --stop false --pass true --notify false",
-      ],
+      "exitCommands": [
+        "quit"
+      ]
     }
   ]
 }

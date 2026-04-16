@@ -42,7 +42,7 @@
     {
       "label": "Kill QEMU",
       "type": "shell",
-      "command": "pkill -F .qemu.pid",
+      "command": "pkill -F .qemu.pid || true",
       "presentation": {
         "panel": "dedicated",
         "reveal": "silent",
