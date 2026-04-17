@@ -20,16 +20,12 @@ var kernelBaseStartFrame: usize = undefined;
 var kernelBaseEndFrame: usize = undefined;
 var totalAvailableFrames: usize = 0;
 
-FrameMap = packed struct {
+const FrameInfo = packed struct {
     free: bool,
     used: bool,
-    reserved: bool,
 };
 
-const FrameBitmap = std.StaticBitSet(MAX_FRAMES);
-const memoryMap: *arch.MemoryMap = undefined;
-
-var frameMap: FrameBitmap linksection(".bss") = FrameBitmap.initEmpty();
+var frameMap: [MAX_FRAMES]FrameBitmap linksection(".bss") = FrameBitmap.initEmpty();
 
 pub fn initialize() !void {
     if (builtin.is_test) {

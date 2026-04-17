@@ -43,10 +43,17 @@ pub const MemoryMap = struct {
     length: usize = 0,
 };
 
-const MemoryMapEntry = struct {
+pub const MemoryMapEntry = struct {
     address: u64,
     length: u64,
-    available: bool,
+    type: MemoryMapEntryType,
+};
+
+pub const MemoryMapEntryType = enum(u8) {
+    AVAILABLE,
+    RESERVED,
+    RECLAIMABLE,
+    BAD,
 };
 
 pub fn validateImpl(comptime T: type) void {

@@ -106,8 +106,6 @@ pub fn getPhysicalAddress(virtualAddress: usize) ?usize {
 //    _ = ptr;
 //}
 
-fn createPageTable() void {}
-
 fn tableExists(virtualAddress: usize) bool {
     _ = virtualAddress;
     return false;
@@ -186,7 +184,7 @@ fn tableExists(virtualAddress: usize) bool {
 //     }
 // }
 
-pub fn initializeMemoryMap() linksection(".multiboot.text") void {
+pub fn initializeMemoryMap() void {
     memoryMap = arch.MemoryMap{ .length = 0 };
     var offset: usize = 0;
 
@@ -201,17 +199,17 @@ pub fn initializeMemoryMap() linksection(".multiboot.text") void {
         memoryMap.entries[entry].length = map_entry.length;
 
         switch (map_entry.entry_type) {
-            MultibootMemoryMapEntryTypes.AVAILABLE => memoryMap.entries[entry].available = true, //MultibootMemoryMapEntryTypes.AVAILABLE,
-            // 3 => memoryMap.entries[entry].entry_type = MultibootMemoryMapEntryTypes.ACPI_RECLAIMABLE,
-            // 4 => memoryMap.entries[entry].entry_type = MultibootMemoryMapEntryTypes.ACPI_NVS,
-            // 5 => memoryMap.entries[entry].entry_type = MultibootMemoryMapEntryTypes.BAD_MEMORY,
-            else => memoryMap.entries[entry].available = false, //MultibootMemoryMapEntryTypes.RESERVED,
+            MultibootMemoryMapEntryTypes.AVAILABLE => memoryMap.entries[entry].type = arch.MemoryMapEntryType.AVAILABLE,
+            MultibootMemoryMapEntryTypes.ACPI_RECLAIMABLE => memoryMap.entries[entry].type = arch.MemoryMapEntryType.RECLAIMABLE,
+            else => memoryMap.entries[entry].type = arch.MemoryMapEntryType.RESERVED,
         }
 
         memoryMap.length += 1;
         offset += map_entry.size + 4;
     }
 }
+
+pub fn initializeEarlyAllocator() void {}
 
 pub fn getMemoryMap() *arch.MemoryMap {
     return &memoryMap;
