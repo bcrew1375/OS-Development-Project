@@ -13,7 +13,8 @@ RUN apt-get update && apt-get install -y \
     build-essential \
     qemu-system \
     qemu-utils \
-    qemu-user && \
+    qemu-user 
+    git && \
     rm -rf /var/lib/apt/lists/* && \
     mkdir -p /tmp/zig-local-cache /tmp/zig-global-cache
 

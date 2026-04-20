@@ -7,9 +7,6 @@ pub const FRAME_SIZE: usize = 4096;
 // Max 64 GBs for now.
 pub const MAX_FRAMES: usize = 2097152;
 
-extern const _kernel_start: usize;
-extern const _kernel_end: usize;
-
 pub const PmmError = error{
     OutOfMemory,
     InvalidSize,

@@ -34,7 +34,6 @@ SECTIONS
 	.bss ALIGN (4K) : AT (ADDR (.bss) - KERNEL_VIRTUAL_ADDRESS)
 	{
 		*(.bss)
-		*(.bootstrap_stack)
 	}
 
 	_kernel_end = . - KERNEL_VIRTUAL_ADDRESS;

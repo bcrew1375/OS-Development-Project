@@ -95,7 +95,7 @@ pub fn build(b: *std.Build) void {
         "-M",
         "accel=tcg,smm=off",
         "-D", "qemu.log",
-        "-d", "int",
+        "-d", "int,cpu_reset,guest_errors",
         "-no-reboot",
         "-no-shutdown",
     });

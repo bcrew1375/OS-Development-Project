@@ -20,6 +20,7 @@
       "presentation": {
         "panel": "dedicated",
         "reveal": "always",
+        "clear": true,
       },
     },
     // {

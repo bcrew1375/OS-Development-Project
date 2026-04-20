@@ -24,19 +24,20 @@ const PageEntry = packed struct {
 const PageDirectory = [ENTRIES_PER_DIRECTORY]PageEntry;
 const PageTable = [ENTRIES_PER_TABLE]PageEntry;
 
-const MultibootMemoryMapEntry = struct {
+const MultibootMemoryMapEntry = extern struct {
     size: u32,
     address: u64,
     length: u64,
-    entry_type: MultibootMemoryMapEntryTypes,
+    region_type: MultibootMemoryMapEntryTypes,
 };
 
-const MultibootMemoryMapEntryTypes = enum(u8) {
+const MultibootMemoryMapEntryTypes = enum(u32) {
     AVAILABLE = 1,
     RESERVED = 2,
     ACPI_RECLAIMABLE = 3,
     ACPI_NVS = 4,
     BAD_MEMORY = 5,
+    _,
 };
 
 var pageDirectory: *PageDirectory = undefined;
@@ -45,7 +46,8 @@ var pageTables: *[PAGE_TABLE_COUNT]PageTable = undefined;
 var pageDirectoryEntries: [ENTRIES_PER_DIRECTORY]PageEntry align(PAGE_SIZE) linksection(".multiboot.data") = [_]PageEntry{.{}} ** ENTRIES_PER_DIRECTORY;
 var pageTable0Entries: [ENTRIES_PER_TABLE]PageEntry align(PAGE_SIZE) linksection(".multiboot.data") = [_]PageEntry{.{}} ** ENTRIES_PER_TABLE;
 
-var memoryMap: arch.MemoryMap = undefined;
+var memoryMapEntries: [arch.MAX_MEMORY_MAP_ENTRIES]arch.MemoryMapEntry linksection(".multiboot.data") = [_]arch.MemoryMapEntry{.{}} ** arch.MAX_MEMORY_MAP_ENTRIES;
+var memoryMap: arch.MemoryMap linksection(".multiboot.data") = undefined;
 
 pub export fn initialize() linksection(".multiboot.text") void {
     pageDirectoryEntries[0].address = @truncate(@intFromPtr(&pageTable0Entries) >> 12);
@@ -184,24 +186,27 @@ fn tableExists(virtualAddress: usize) bool {
 //     }
 // }
 
-pub fn initializeMemoryMap() void {
-    memoryMap = arch.MemoryMap{ .length = 0 };
+pub fn initializeMemoryMap() void {}
+
+pub fn readMultibootMemoryMap() linksection(".multiboot.text") void {
+    memoryMap.entries = &memoryMapEntries;
+
     var offset: usize = 0;
 
     for (0..arch.MAX_MEMORY_MAP_ENTRIES) |entry| {
-        if (offset >= multiboot.multiboot_info.mmap_length) {
+        if (offset >= multiboot.multibootInfo.mmap_length) {
             break;
         }
 
-        const map_entry: *MultibootMemoryMapEntry = @ptrFromInt(multiboot.multiboot_info.mmap_addr + offset);
+        const map_entry: *MultibootMemoryMapEntry = @ptrFromInt(multiboot.multibootInfo.mmap_addr + offset);
 
         memoryMap.entries[entry].address = map_entry.address;
-        memoryMap.entries[entry].length = map_entry.length;
+        memoryMap.entries[entry].size = map_entry.length;
 
-        switch (map_entry.entry_type) {
-            MultibootMemoryMapEntryTypes.AVAILABLE => memoryMap.entries[entry].type = arch.MemoryMapEntryType.AVAILABLE,
-            MultibootMemoryMapEntryTypes.ACPI_RECLAIMABLE => memoryMap.entries[entry].type = arch.MemoryMapEntryType.RECLAIMABLE,
-            else => memoryMap.entries[entry].type = arch.MemoryMapEntryType.RESERVED,
+        switch (map_entry.region_type) {
+            MultibootMemoryMapEntryTypes.AVAILABLE => memoryMap.entries[entry].region_type = arch.MemoryMapEntryType.AVAILABLE,
+            MultibootMemoryMapEntryTypes.ACPI_RECLAIMABLE => memoryMap.entries[entry].region_type = arch.MemoryMapEntryType.RECLAIMABLE,
+            else => memoryMap.entries[entry].region_type = arch.MemoryMapEntryType.RESERVED,
         }
 
         memoryMap.length += 1;
@@ -209,8 +214,7 @@ pub fn initializeMemoryMap() void {
     }
 }
 
-pub fn initializeEarlyAllocator() void {}
-
-pub fn getMemoryMap() *arch.MemoryMap {
+pub fn getMemoryMap() linksection(".multiboot.text") *arch.MemoryMap {
+    readMultibootMemoryMap();
     return &memoryMap;
 }

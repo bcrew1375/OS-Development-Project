@@ -1,6 +1,8 @@
 const gdt = @import("../interrupts/global_descriptor_table.zig");
 const idt = @import("../interrupts/interrupt_descriptor_table.zig");
 const mmu = @import("../mmu/main.zig");
+const earlyAllocator = @import("early_allocator.zig");
+
 const std = @import("std");
 
 // OS Dev: https://wiki.osdev.org/Zig_Bare_Bones
@@ -9,7 +11,7 @@ const MB_FLAG_ALIGN = 1 << 0;
 const MB_FLAG_MEMINFO = 1 << 1;
 const FLAGS = MB_FLAG_ALIGN | MB_FLAG_MEMINFO;
 
-const MultibootHeader = packed struct {
+const MultibootHeader = extern struct {
     magic: u32 = MB_HEADER_MAGIC,
     flags: u32 = FLAGS,
     checksum: u32,
@@ -58,27 +60,29 @@ const MultibootInfo = extern struct {
     color_info_1: u8,
 };
 
-pub var multiboot_info: *MultibootInfo linksection(".multiboot.data") = undefined;
+pub var multibootInfo: *MultibootInfo linksection(".multiboot.data") = undefined;
 
-var startup_stack: [1024]u8 align(16) linksection(".multiboot.text") = undefined;
-var kernel_stack: [8192]u8 align(16) = undefined;
+var startupStack: [16 * 1024]u8 align(16) linksection(".multiboot.data") = undefined;
+var kernelStack: [16 * 1024]u8 align(16) = undefined;
 
 extern fn kernelMain() void;
 
 pub export fn _start() linksection(".multiboot.text") callconv(.naked) noreturn {
     asm volatile (
         \\cli
-        \\mov %[startup_stack], %esp
+        \\movl %ebx, (%[multibootInfo:P])
+        \\mov %[startupStack], %esp
         \\jmp kernelSetup
         :
-        : [startup_stack] "i" (@as([*]u8, &startup_stack) + startup_stack.len),
+        : [multibootInfo] "i" (&multibootInfo),
+          [kernelSetup] "i" (&kernelSetup),
+          [startupStack] "i" (@as([*]u8, &startupStack) + startupStack.len),
     );
 }
 
-export fn kernelSetup() linksection(".multiboot.text") callconv(.naked) noreturn {
+export fn kernelSetup() linksection(".multiboot.text") noreturn {
     asm volatile (
-        \\movl %ebx, (%[multiboot_info:P])
-        //ICW1: start init, edge triggered, ICW4 needed
+    //ICW1: start init, edge triggered, ICW4 needed
         \\mov $0x11, %al
         \\out %al, $0x20
         //ICW2: interrupt vector offset (0x20 = IRQ0 → INT 0x20)
@@ -91,24 +95,33 @@ export fn kernelSetup() linksection(".multiboot.text") callconv(.naked) noreturn
         \\mov $0x01, %al
         \\out %al, $0x21
         //End remap of the master PIC.
-        \\call (%[mmu_initialize:P])
-        \\jmp higherHalfEntry
-        :
-        : [mmu_initialize] "i" (&mmu.initialize),
-          [multiboot_info] "i" (&multiboot_info),
-        : .{
-          .eax = true,
-          .memory = true,
+        ::: .{
+            .eax = true,
+            .memory = true,
         });
+
+    earlyAllocator.initialize();
+    const pmm_alloc = earlyAllocator.allocate(4000000);
+    _ = pmm_alloc;
+    mmu.initialize();
+
+    // mmu.initializeMemoryMap();
+    // _ = mmu.getMemoryMap();
+
+    asm volatile (
+        \\jmp higherHalfEntry
+    );
+
+    unreachable;
 }
 
 export fn higherHalfEntry() callconv(.naked) noreturn {
     asm volatile (
-        \\mov %[kernel_stack], %esp
+        \\mov %[kernelStack], %esp
         \\call kernelMain
         \\jmp .
         :
-        : [kernel_stack] "i" (@as([*]u8, &kernel_stack) + kernel_stack.len),
+        : [kernelStack] "i" (@as([*]u8, &kernelStack) + kernelStack.len),
         : .{
           .ebx = true,
           .esp = true,
@@ -117,7 +130,7 @@ export fn higherHalfEntry() callconv(.naked) noreturn {
 
 pub fn finishBoot() void {
     gdt.initialize();
-    mmu.initializeMemoryMap();
+    //mmu.initializeMemoryMap();
     mmu.removeIdentityMapping();
     idt.initialize();
 }
