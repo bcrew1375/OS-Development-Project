@@ -1,5 +1,8 @@
 const arch = @import("arch");
 const multiboot = @import("../boot/main.zig");
+const earlyAllocator = @import("../boot/early_allocator.zig");
+
+const std = @import("std");
 
 const CACHE_DISABLED: u8 = 0b00010000;
 const WRITE_THROUGH: u8 = 0b00001000;
@@ -40,24 +43,27 @@ const MultibootMemoryMapEntryTypes = enum(u32) {
     _,
 };
 
-var pageDirectory: *PageDirectory = undefined;
-var pageTables: *[PAGE_TABLE_COUNT]PageTable = undefined;
+// var pageDirectory: *PageDirectory = undefined;
+// var pageTables: *[PAGE_TABLE_COUNT]PageTable = undefined;
 
-var pageDirectoryEntries: [ENTRIES_PER_DIRECTORY]PageEntry align(PAGE_SIZE) linksection(".multiboot.data") = [_]PageEntry{.{}} ** ENTRIES_PER_DIRECTORY;
-var pageTable0Entries: [ENTRIES_PER_TABLE]PageEntry align(PAGE_SIZE) linksection(".multiboot.data") = [_]PageEntry{.{}} ** ENTRIES_PER_TABLE;
+// var pageDirectoryEntries: *[ENTRIES_PER_DIRECTORY]PageEntry = undefined; // align(PAGE_SIZE) = [_]PageEntry{.{}} ** ENTRIES_PER_DIRECTORY;
+// var pageTable0Entries: *[ENTRIES_PER_TABLE]PageEntry = undefined; // align(PAGE_SIZE) linksection(".multiboot.data") = [_]PageEntry{.{}} ** ENTRIES_PER_TABLE;
 
 var memoryMapEntries: [arch.MAX_MEMORY_MAP_ENTRIES]arch.MemoryMapEntry linksection(".multiboot.data") = [_]arch.MemoryMapEntry{.{}} ** arch.MAX_MEMORY_MAP_ENTRIES;
 var memoryMap: arch.MemoryMap linksection(".multiboot.data") = undefined;
 
 pub export fn initialize() linksection(".multiboot.text") void {
-    pageDirectoryEntries[0].address = @truncate(@intFromPtr(&pageTable0Entries) >> 12);
+    var pageDirectoryEntries: *[ENTRIES_PER_DIRECTORY]PageEntry = @ptrCast(@alignCast(earlyAllocator.allocate(@sizeOf(PageEntry) * ENTRIES_PER_DIRECTORY, PAGE_SIZE, earlyAllocator.ReservedMapEntryType.PERSISTENT)));
+    var pageTable0Entries: *[ENTRIES_PER_TABLE]PageEntry = @ptrCast(@alignCast(earlyAllocator.allocate(@sizeOf(PageEntry) * ENTRIES_PER_TABLE, PAGE_SIZE, earlyAllocator.ReservedMapEntryType.PERSISTENT)));
+
+    pageDirectoryEntries[0].address = @truncate(@intFromPtr(pageTable0Entries) >> 12);
     pageDirectoryEntries[0].flags = IS_PRESENT | IS_WRITEABLE;
 
-    pageDirectoryEntries[HIGHER_HALF_INDEX].address = @truncate(@intFromPtr(&pageTable0Entries) >> 12);
+    pageDirectoryEntries[HIGHER_HALF_INDEX].address = @truncate(@intFromPtr(pageTable0Entries) >> 12);
     pageDirectoryEntries[HIGHER_HALF_INDEX].flags = IS_PRESENT | IS_WRITEABLE;
 
     // Recursive mapping setup.
-    pageDirectoryEntries[ENTRIES_PER_DIRECTORY - 1].address = @truncate(@intFromPtr(&pageDirectoryEntries) >> 12);
+    pageDirectoryEntries[ENTRIES_PER_DIRECTORY - 1].address = @truncate(@intFromPtr(pageDirectoryEntries) >> 12);
     pageDirectoryEntries[ENTRIES_PER_DIRECTORY - 1].flags = IS_PRESENT | IS_WRITEABLE;
 
     // //Only map the first 4 MB.
@@ -73,13 +79,13 @@ pub export fn initialize() linksection(".multiboot.text") void {
         \\or $0x80010000, %eax
         \\mov %eax, %cr0
         :
-        : [pageDirectoryAddress] "{ecx}" (&pageDirectoryEntries),
+        : [pageDirectoryAddress] "{ecx}" (pageDirectoryEntries),
         : .{ .ecx = true, .memory = true });
 }
 
 pub fn removeIdentityMapping() void {
-    pageTables = @ptrFromInt(PAGE_TABLES_BASE);
-    pageDirectory = &pageTables[PAGE_TABLE_COUNT - 1];
+    const pageTables: *[PAGE_TABLE_COUNT]PageTable = @ptrFromInt(PAGE_TABLES_BASE);
+    var pageDirectory = pageTables[PAGE_TABLE_COUNT - 1];
     pageDirectory[0].address = 0;
     pageDirectory[0].flags = 0;
     asm volatile (
@@ -185,8 +191,6 @@ fn tableExists(virtualAddress: usize) bool {
 //         }
 //     }
 // }
-
-pub fn initializeMemoryMap() void {}
 
 pub fn readMultibootMemoryMap() linksection(".multiboot.text") void {
     memoryMap.entries = &memoryMapEntries;

@@ -1,10 +1,18 @@
 const arch = @import("arch");
 
+const std = @import("std");
+
 const MAX_RESERVATIONS = 128;
+
+pub const ReservedMapEntryType = enum {
+    TEMPORARY,
+    PERSISTENT,
+};
 
 const ReservedMapEntry = struct {
     address: usize,
     size: usize,
+    entry_type: ReservedMapEntryType,
 };
 
 const ReservedMap = struct {
@@ -31,58 +39,48 @@ pub fn initialize() linksection(".multiboot.text") void {
 
     for (memoryMap.entries[0..memoryMap.length]) |entry| {
         if (entry.region_type != arch.MemoryMapEntryType.AVAILABLE) {
-            reserve(@truncate(entry.address), @truncate(entry.size));
+            reserve(@truncate(entry.address), @truncate(entry.size), ReservedMapEntryType.PERSISTENT);
         }
     }
 
-    reserve(kernel_start_address, kernel_end_address - kernel_start_address);
+    reserve(0, 1048576, ReservedMapEntryType.PERSISTENT);
+    reserve(kernel_start_address, kernel_end_address - kernel_start_address, ReservedMapEntryType.PERSISTENT);
 }
 
-pub fn allocate(needed_size: usize) linksection(".multiboot.text") *usize {
-    for (memoryMap.entries[0..memoryMap.length]) |region_entry| {
-        if (region_entry.region_type != arch.MemoryMapEntryType.AVAILABLE) {
+pub fn allocate(needed_size: usize, alignment: usize, entry_type: ReservedMapEntryType) linksection(".multiboot.text") *anyopaque {
+    for (memoryMap.entries[0..memoryMap.length]) |region| {
+        if (region.region_type != arch.MemoryMapEntryType.AVAILABLE) {
             continue;
         }
 
-        var current_start_address: usize = @truncate(region_entry.address);
-        var current_end_address: usize = @truncate(region_entry.address + (needed_size - 1));
+        const region_start: usize = @truncate(region.address);
+        const region_end: usize = region_start + @as(usize, @truncate(region.size)) - 1;
 
-        const region_size = region_entry.size;
+        // Initial candidate address must be within the region and aligned
+        var candidate_start: usize = (region_start +| (alignment - 1)) & ~(alignment - 1);
 
-        if (region_size < needed_size) {
-            continue;
-        }
+        find_gap: while (true) {
+            const candidate_end = candidate_start +| (needed_size - 1);
 
-        const region_end_address: usize = @truncate(region_entry.address + (region_size - 1));
+            // Check if the current candidate still fits inside the available memory region
+            if (candidate_end > region_end or candidate_start > region_end) {
+                break :find_gap;
+            }
 
-        while (current_end_address < region_end_address) {
-            var overlapped: bool = false;
+            for (reservedMap.entries[0..reservedMap.length]) |reserved| {
+                const reserved_start = reserved.address;
+                const reserved_end = reserved_start +| (reserved.size - 1);
 
-            for (reservedMap.entries[0..reservedMap.length]) |reserved_entry| {
-                const reserved_start_address = reserved_entry.address;
-                const reserved_end_address: usize = @truncate(reserved_entry.address + (reserved_entry.size - 1));
-
-                // Does the candidate address overlap with an already reserved region?
-                if (((current_start_address >= reserved_start_address) and (current_start_address <= reserved_end_address)) or
-                    ((current_end_address >= reserved_start_address) and (current_end_address <= reserved_end_address)) or
-                    ((current_start_address <= reserved_start_address) and (current_end_address >= reserved_end_address)))
-                {
-                    overlapped = true;
-
-                    current_start_address = reserved_end_address + 1;
-                    current_end_address = @truncate(current_start_address + (needed_size - 1));
+                if (candidate_start <= reserved_end and candidate_end >= reserved_start) {
+                    // Conflict found: bump start address past the reserved region and re-align
+                    candidate_start = (reserved_end +| 1 + (alignment - 1)) & ~(alignment - 1);
+                    continue :find_gap;
                 }
             }
 
-            if (overlapped == false) {
-                break;
-            }
-        }
-
-        // Does the needed size still fit within the candidate region?
-        if (current_end_address < region_end_address) {
-            reserve(current_start_address, needed_size);
-            return @ptrFromInt(current_start_address);
+            // If we reached here, no overlaps were found for this candidate
+            reserve(candidate_start, candidate_end - candidate_start, entry_type);
+            return @ptrFromInt(candidate_start);
         }
     }
 
@@ -90,7 +88,7 @@ pub fn allocate(needed_size: usize) linksection(".multiboot.text") *usize {
     arch.cpu.unrecoverableHalt();
 }
 
-fn reserve(address: usize, size: usize) linksection(".multiboot.text") void {
+fn reserve(address: usize, size: usize, entry_type: ReservedMapEntryType) linksection(".multiboot.text") void {
     if (reservedMap.length >= MAX_RESERVATIONS) {
         arch.platform.writer.print("Early allocation failed with error: {s}", .{@errorName(EarlyAllocError.OutOfReservations)}) catch {};
         arch.cpu.unrecoverableHalt();
@@ -98,6 +96,7 @@ fn reserve(address: usize, size: usize) linksection(".multiboot.text") void {
 
     reservedMap.entries[reservedMap.length].address = address;
     reservedMap.entries[reservedMap.length].size = size;
+    reservedMap.entries[reservedMap.length].entry_type = entry_type;
 
     reservedMap.length += 1;
 }

@@ -101,12 +101,9 @@ export fn kernelSetup() linksection(".multiboot.text") noreturn {
         });
 
     earlyAllocator.initialize();
-    const pmm_alloc = earlyAllocator.allocate(4000000);
+    const pmm_alloc = earlyAllocator.allocate(999999999, 4096, earlyAllocator.ReservedMapEntryType.PERSISTENT);
     _ = pmm_alloc;
     mmu.initialize();
-
-    // mmu.initializeMemoryMap();
-    // _ = mmu.getMemoryMap();
 
     asm volatile (
         \\jmp higherHalfEntry
