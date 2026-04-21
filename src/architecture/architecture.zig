@@ -37,6 +37,7 @@ pub const TextColor = enum(u8) {
 };
 
 pub const MAX_MEMORY_MAP_ENTRIES = 128;
+pub const MAX_EARLY_RESERVATIONS = 128;
 
 pub const MemoryMap = struct {
     entries: *[MAX_MEMORY_MAP_ENTRIES]MemoryMapEntry = undefined,
@@ -56,9 +57,31 @@ pub const MemoryMapEntryType = enum(u8) {
     BAD,
 };
 
+pub const ReservedMapEntryType = enum {
+    TEMPORARY,
+    PERSISTENT,
+};
+
+pub const ReservedMapEntry = struct {
+    address: usize,
+    size: usize,
+    entry_type: ReservedMapEntryType,
+};
+
+pub const ReservedMap = struct {
+    entries: [MAX_EARLY_RESERVATIONS]ReservedMapEntry = undefined,
+    length: usize = 0,
+};
+
+pub const EarlyAllocError = error{
+    OutOfReservations,
+    OutOfSpace,
+};
+
 pub fn validateImpl(comptime T: type) void {
     comptime {
         // boot
+        assertFn(T.boot, "allocate", fn (neededSize: usize, alignment: usize, entryType: ReservedMapEntryType) *anyopaque);
         assertFn(T.boot, "finishBoot", fn () void);
 
         // cpu
@@ -68,8 +91,8 @@ pub fn validateImpl(comptime T: type) void {
         assertFn(T.mmu, "initialize", fn () callconv(.c) void);
         assertFn(T.mmu, "removeIdentityMapping", fn () void);
         assertFn(T.mmu, "getPhysicalAddress", fn (virtualAddress: usize) ?usize);
-        //assertFn(T.mmu, "initializeMemoryMap", fn () void);
         assertFn(T.mmu, "getMemoryMap", fn () *MemoryMap);
+        assertFn(T.mmu, "mapPage", fn (virtualAddress: usize, physicalAddress: usize, flags: usize) void);
 
         // interrupts
         assertFn(T.interrupts, "initialize", fn () void);

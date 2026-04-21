@@ -4,23 +4,28 @@ const earlyAllocator = @import("../boot/early_allocator.zig");
 
 const std = @import("std");
 
-const CACHE_DISABLED: u8 = 0b00010000;
-const WRITE_THROUGH: u8 = 0b00001000;
-const ACCESS_FROM_ALL: u8 = 0b00000100;
-const IS_WRITEABLE: u8 = 0b00000010;
-const IS_PRESENT: u8 = 0b00000001;
 const PAGE_SIZE = 4096;
 
 const ENTRIES_PER_DIRECTORY: usize = 1024;
 const ENTRIES_PER_TABLE: usize = 1024;
+
 const PAGE_TABLE_COUNT: usize = 1024;
-const PAGE_TABLES_BASE: usize = 0xFFC00000;
+const PAGE_TABLES_BASE = 0xFFC00000;
 
 pub const HIGHER_HALF_ADDRESS = 0xC0000000;
 const HIGHER_HALF_INDEX = HIGHER_HALF_ADDRESS / (PAGE_SIZE * ENTRIES_PER_TABLE);
 
 const PageEntry = packed struct {
-    flags: u12 = 0,
+    present: bool = false,
+    writeable: bool = false,
+    user_accessible: bool = false,
+    write_through: bool = false,
+    cache_disabled: bool = false,
+    accessed: bool = false,
+    dirty: bool = false,
+    page_size: bool = false,
+    global: bool = false,
+    available: u3 = 0,
     address: u20 = 0,
 };
 
@@ -43,8 +48,8 @@ const MultibootMemoryMapEntryTypes = enum(u32) {
     _,
 };
 
-// var pageDirectory: *PageDirectory = undefined;
-// var pageTables: *[PAGE_TABLE_COUNT]PageTable = undefined;
+var pageDirectory: *PageDirectory = undefined;
+var pageTables: *[PAGE_TABLE_COUNT]PageTable = undefined;
 
 // var pageDirectoryEntries: *[ENTRIES_PER_DIRECTORY]PageEntry = undefined; // align(PAGE_SIZE) = [_]PageEntry{.{}} ** ENTRIES_PER_DIRECTORY;
 // var pageTable0Entries: *[ENTRIES_PER_TABLE]PageEntry = undefined; // align(PAGE_SIZE) linksection(".multiboot.data") = [_]PageEntry{.{}} ** ENTRIES_PER_TABLE;
@@ -53,23 +58,27 @@ var memoryMapEntries: [arch.MAX_MEMORY_MAP_ENTRIES]arch.MemoryMapEntry linksecti
 var memoryMap: arch.MemoryMap linksection(".multiboot.data") = undefined;
 
 pub export fn initialize() linksection(".multiboot.text") void {
-    var pageDirectoryEntries: *[ENTRIES_PER_DIRECTORY]PageEntry = @ptrCast(@alignCast(earlyAllocator.allocate(@sizeOf(PageEntry) * ENTRIES_PER_DIRECTORY, PAGE_SIZE, earlyAllocator.ReservedMapEntryType.PERSISTENT)));
-    var pageTable0Entries: *[ENTRIES_PER_TABLE]PageEntry = @ptrCast(@alignCast(earlyAllocator.allocate(@sizeOf(PageEntry) * ENTRIES_PER_TABLE, PAGE_SIZE, earlyAllocator.ReservedMapEntryType.PERSISTENT)));
+    var pageDirectoryEntries: *[ENTRIES_PER_DIRECTORY]PageEntry = @ptrCast(@alignCast(earlyAllocator.allocate(@sizeOf(PageEntry) * ENTRIES_PER_DIRECTORY, PAGE_SIZE, arch.ReservedMapEntryType.PERSISTENT)));
+    var pageTable0Entries: *[ENTRIES_PER_TABLE]PageEntry = @ptrCast(@alignCast(earlyAllocator.allocate(@sizeOf(PageEntry) * ENTRIES_PER_TABLE, PAGE_SIZE, arch.ReservedMapEntryType.PERSISTENT)));
 
     pageDirectoryEntries[0].address = @truncate(@intFromPtr(pageTable0Entries) >> 12);
-    pageDirectoryEntries[0].flags = IS_PRESENT | IS_WRITEABLE;
+    pageDirectoryEntries[0].present = true;
+    pageDirectoryEntries[0].writeable = true;
 
     pageDirectoryEntries[HIGHER_HALF_INDEX].address = @truncate(@intFromPtr(pageTable0Entries) >> 12);
-    pageDirectoryEntries[HIGHER_HALF_INDEX].flags = IS_PRESENT | IS_WRITEABLE;
+    pageDirectoryEntries[HIGHER_HALF_INDEX].present = true;
+    pageDirectoryEntries[HIGHER_HALF_INDEX].writeable = true;
 
     // Recursive mapping setup.
     pageDirectoryEntries[ENTRIES_PER_DIRECTORY - 1].address = @truncate(@intFromPtr(pageDirectoryEntries) >> 12);
-    pageDirectoryEntries[ENTRIES_PER_DIRECTORY - 1].flags = IS_PRESENT | IS_WRITEABLE;
+    pageDirectoryEntries[ENTRIES_PER_DIRECTORY - 1].present = true;
+    pageDirectoryEntries[ENTRIES_PER_DIRECTORY - 1].writeable = true;
 
     // //Only map the first 4 MB.
     for (0..ENTRIES_PER_TABLE) |table_index| {
         pageTable0Entries[table_index].address = @truncate((table_index * PAGE_SIZE) >> 12);
-        pageTable0Entries[table_index].flags = IS_PRESENT | IS_WRITEABLE;
+        pageTable0Entries[table_index].present = true;
+        pageTable0Entries[table_index].writeable = true;
     }
 
     asm volatile (
@@ -84,10 +93,13 @@ pub export fn initialize() linksection(".multiboot.text") void {
 }
 
 pub fn removeIdentityMapping() void {
-    const pageTables: *[PAGE_TABLE_COUNT]PageTable = @ptrFromInt(PAGE_TABLES_BASE);
-    var pageDirectory = pageTables[PAGE_TABLE_COUNT - 1];
+    pageTables = @as(*[PAGE_TABLE_COUNT]PageTable, @ptrFromInt(PAGE_TABLES_BASE));
+    pageDirectory = &pageTables[PAGE_TABLE_COUNT - 1];
     pageDirectory[0].address = 0;
-    pageDirectory[0].flags = 0;
+    pageDirectory[0].present = false;
+    pageDirectory[0].writeable = false;
+    pageDirectory[0].accessed = false;
+
     asm volatile (
         \\mov %cr3, %eax
         \\mov %eax, %cr3
@@ -95,19 +107,17 @@ pub fn removeIdentityMapping() void {
 }
 
 pub fn getPhysicalAddress(virtualAddress: usize) ?usize {
-    // const page_directory_index = virtual_address >> 22;
-    // const page_table_index = (virtual_address & 0x003FF000) >> 12;
-    // const offset = virtual_address & 0xFFF;
+    const page_directory_index = virtualAddress >> 22;
+    const page_table_index = (virtualAddress & 0x003FF000) >> 12;
+    const offset = virtualAddress & 0xFFF;
 
-    // const page_table_address = @as(usize, @truncate(@as(usize, pageDirectory.*[page_directory_index].address << 12)));
-    // const page_table: *PageTable = @ptrFromInt(page_table_address);
-    // const page_table_entry = page_table.*[page_table_index];
+    const page_table_address = @as(usize, @truncate(@as(usize, pageDirectory.*[page_directory_index].address << 12)));
+    const page_table: *PageTable = @ptrFromInt(page_table_address);
+    const page_table_entry = page_table.*[page_table_index];
 
-    // const physical_address = page_table_entry.address + offset;
+    const physical_address = page_table_entry.address + offset;
 
-    // return physical_address;
-    _ = virtualAddress;
-    return 0;
+    return physical_address;
 }
 
 //fn free(heap_struct: *const Heap, ptr: *u8) !void {
@@ -191,6 +201,16 @@ fn tableExists(virtualAddress: usize) bool {
 //         }
 //     }
 // }
+
+pub fn mapPage(virtualAddress: usize, physicalAddress: usize, flags: usize) void {
+    _ = virtualAddress;
+    _ = physicalAddress;
+    _ = flags;
+}
+
+pub fn unmapPage(virtualAddress: usize) void {
+    _ = virtualAddress;
+}
 
 pub fn readMultibootMemoryMap() linksection(".multiboot.text") void {
     memoryMap.entries = &memoryMapEntries;

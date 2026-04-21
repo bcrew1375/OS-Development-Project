@@ -1,7 +1,10 @@
+const arch = @import("arch");
+
 const gdt = @import("../interrupts/global_descriptor_table.zig");
 const idt = @import("../interrupts/interrupt_descriptor_table.zig");
 const mmu = @import("../mmu/main.zig");
-const earlyAllocator = @import("early_allocator.zig");
+
+pub const earlyAllocator = @import("early_allocator.zig");
 
 const std = @import("std");
 
@@ -101,7 +104,7 @@ export fn kernelSetup() linksection(".multiboot.text") noreturn {
         });
 
     earlyAllocator.initialize();
-    const pmm_alloc = earlyAllocator.allocate(999999999, 4096, earlyAllocator.ReservedMapEntryType.PERSISTENT);
+    const pmm_alloc = earlyAllocator.allocate(999999999, 4096, arch.ReservedMapEntryType.PERSISTENT);
     _ = pmm_alloc;
     mmu.initialize();
 
@@ -112,7 +115,7 @@ export fn kernelSetup() linksection(".multiboot.text") noreturn {
     unreachable;
 }
 
-export fn higherHalfEntry() callconv(.naked) noreturn {
+export fn higherHalfEntry() noreturn {
     asm volatile (
         \\mov %[kernelStack], %esp
         \\call kernelMain
@@ -123,11 +126,14 @@ export fn higherHalfEntry() callconv(.naked) noreturn {
           .ebx = true,
           .esp = true,
         });
+
+    arch.cpu.unrecoverableHalt();
+    unreachable;
 }
 
 pub fn finishBoot() void {
     gdt.initialize();
+    idt.initialize();
     //mmu.initializeMemoryMap();
     mmu.removeIdentityMapping();
-    idt.initialize();
 }

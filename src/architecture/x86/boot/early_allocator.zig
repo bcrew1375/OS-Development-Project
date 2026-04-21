@@ -2,30 +2,7 @@ const arch = @import("arch");
 
 const std = @import("std");
 
-const MAX_RESERVATIONS = 128;
-
-pub const ReservedMapEntryType = enum {
-    TEMPORARY,
-    PERSISTENT,
-};
-
-const ReservedMapEntry = struct {
-    address: usize,
-    size: usize,
-    entry_type: ReservedMapEntryType,
-};
-
-const ReservedMap = struct {
-    entries: [MAX_RESERVATIONS]ReservedMapEntry = undefined,
-    length: usize = 0,
-};
-
-const EarlyAllocError = error{
-    OutOfReservations,
-    OutOfSpace,
-};
-
-var reservedMap linksection(".multiboot.data") = ReservedMap{};
+var reservedMap linksection(".multiboot.data") = arch.ReservedMap{};
 var memoryMap: *arch.MemoryMap linksection(".multiboot.data") = undefined;
 
 extern const _kernel_start: anyopaque;
@@ -39,15 +16,15 @@ pub fn initialize() linksection(".multiboot.text") void {
 
     for (memoryMap.entries[0..memoryMap.length]) |entry| {
         if (entry.region_type != arch.MemoryMapEntryType.AVAILABLE) {
-            reserve(@truncate(entry.address), @truncate(entry.size), ReservedMapEntryType.PERSISTENT);
+            reserve(@truncate(entry.address), @truncate(entry.size), arch.ReservedMapEntryType.PERSISTENT);
         }
     }
 
-    reserve(0, 1048576, ReservedMapEntryType.PERSISTENT);
-    reserve(kernel_start_address, kernel_end_address - kernel_start_address, ReservedMapEntryType.PERSISTENT);
+    reserve(0, 1048576, arch.ReservedMapEntryType.PERSISTENT);
+    reserve(kernel_start_address, kernel_end_address - kernel_start_address, arch.ReservedMapEntryType.PERSISTENT);
 }
 
-pub fn allocate(needed_size: usize, alignment: usize, entry_type: ReservedMapEntryType) linksection(".multiboot.text") *anyopaque {
+pub fn allocate(neededSize: usize, alignment: usize, entryType: arch.ReservedMapEntryType) linksection(".multiboot.text") *anyopaque {
     for (memoryMap.entries[0..memoryMap.length]) |region| {
         if (region.region_type != arch.MemoryMapEntryType.AVAILABLE) {
             continue;
@@ -60,7 +37,7 @@ pub fn allocate(needed_size: usize, alignment: usize, entry_type: ReservedMapEnt
         var candidate_start: usize = (region_start +| (alignment - 1)) & ~(alignment - 1);
 
         find_gap: while (true) {
-            const candidate_end = candidate_start +| (needed_size - 1);
+            const candidate_end = candidate_start +| (neededSize - 1);
 
             // Check if the current candidate still fits inside the available memory region
             if (candidate_end > region_end or candidate_start > region_end) {
@@ -79,18 +56,18 @@ pub fn allocate(needed_size: usize, alignment: usize, entry_type: ReservedMapEnt
             }
 
             // If we reached here, no overlaps were found for this candidate
-            reserve(candidate_start, candidate_end - candidate_start, entry_type);
+            reserve(candidate_start, candidate_end - candidate_start, entryType);
             return @ptrFromInt(candidate_start);
         }
     }
 
-    arch.platform.writer.print("Early allocation failed with error {s}", .{@errorName(EarlyAllocError.OutOfSpace)}) catch {};
+    arch.platform.writer.print("Early allocation failed with error {s}", .{@errorName(arch.EarlyAllocError.OutOfSpace)}) catch {};
     arch.cpu.unrecoverableHalt();
 }
 
-fn reserve(address: usize, size: usize, entry_type: ReservedMapEntryType) linksection(".multiboot.text") void {
-    if (reservedMap.length >= MAX_RESERVATIONS) {
-        arch.platform.writer.print("Early allocation failed with error: {s}", .{@errorName(EarlyAllocError.OutOfReservations)}) catch {};
+fn reserve(address: usize, size: usize, entry_type: arch.ReservedMapEntryType) linksection(".multiboot.text") void {
+    if (reservedMap.length >= arch.MAX_EARLY_RESERVATIONS) {
+        arch.platform.writer.print("Early allocation failed with error: {s}", .{@errorName(arch.EarlyAllocError.OutOfReservations)}) catch {};
         arch.cpu.unrecoverableHalt();
     }
 
