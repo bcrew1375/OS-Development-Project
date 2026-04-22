@@ -6,6 +6,7 @@ const TextColor = @import("arch").TextColor;
 const std = @import("std");
 
 pub export fn kernelMain() void {
+    terminal.initialize();
     terminal.print.printString("Initializing PMM...");
     pmm.initialize() catch |err| {
         arch.platform.setColor(TextColor.RED);
@@ -14,7 +15,6 @@ pub export fn kernelMain() void {
     };
     arch.boot.finishBoot();
     arch.platform.initializeTimer(100);
-    terminal.initialize();
     terminal.print.printStringColor("done!\n", TextColor.GREEN);
     terminal.print.printString("Initializing interrupts...");
     arch.interrupts.initialize();

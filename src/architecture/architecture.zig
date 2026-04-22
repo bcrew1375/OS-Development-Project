@@ -42,6 +42,7 @@ pub const MAX_EARLY_RESERVATIONS = 128;
 pub const MemoryMap = struct {
     entries: *[MAX_MEMORY_MAP_ENTRIES]MemoryMapEntry = undefined,
     length: usize = 0,
+    available_regions: usize = 0,
 };
 
 pub const MemoryMapEntry = struct {
