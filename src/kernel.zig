@@ -1,20 +1,20 @@
 const arch = @import("arch").impl;
-//const pmm = @import("kernel_common").pmm;
+const pmm = @import("kernel_common").pmm;
 const terminal = @import("kernel_common").terminal;
 const TextColor = @import("arch").TextColor;
 
 const std = @import("std");
 
 pub export fn kernelMain() void {
+    terminal.print.printString("Initializing PMM...");
+    pmm.initialize() catch |err| {
+        arch.platform.setColor(TextColor.RED);
+        arch.platform.writer.print("PMM init failed with error: {s}\n", .{@errorName(err)}) catch {};
+        arch.cpu.unrecoverableHalt();
+    };
     arch.boot.finishBoot();
     arch.platform.initializeTimer(100);
     terminal.initialize();
-    terminal.print.printString("Initializing PMM...");
-    // pmm.initialize() catch |err| {
-    //     arch.platform.setColor(TextColor.RED);
-    //     arch.platform.writer.print("PMM init failed with error: {s}\n", .{@errorName(err)}) catch {};
-    //     arch.cpu.unrecoverableHalt();
-    // };
     terminal.print.printStringColor("done!\n", TextColor.GREEN);
     terminal.print.printString("Initializing interrupts...");
     arch.interrupts.initialize();

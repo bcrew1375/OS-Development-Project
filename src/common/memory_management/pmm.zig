@@ -15,14 +15,19 @@ pub const PmmError = error{
 
 var kernelBaseStartFrame: usize = undefined;
 var kernelBaseEndFrame: usize = undefined;
-var totalAvailableFrames: usize = 0;
+var totalFrames: usize = undefined;
+var totalAvailableFrames: usize = undefined;
 
-const FrameInfo = packed struct {
+const FrameInfo = extern struct {
     free: bool,
     used: bool,
+    reserved: bool,
 };
 
-var frameMap: [MAX_FRAMES]FrameBitmap linksection(".bss") = FrameBitmap.initEmpty();
+var frameMap: [*]FrameInfo = undefined;
+
+extern const _kernel_start: anyopaque;
+extern const _kernel_end: anyopaque;
 
 pub fn initialize() !void {
     if (builtin.is_test) {
@@ -33,15 +38,21 @@ pub fn initialize() !void {
         kernelBaseEndFrame = (@intFromPtr(&_kernel_end) + (FRAME_SIZE - 1)) / FRAME_SIZE;
     }
 
-    memoryMap = arch.mmu.getMemoryMap();
+    const memoryMap = arch.mmu.getMemoryMap();
+
+    for (memoryMap.entries[0..memoryMap.length]) |entry| {
+        totalFrames += @truncate(try std.math.divCeil(u64, entry.size, FRAME_SIZE));
+    }
+
+    frameMap = @as([*]FrameInfo, @ptrCast(arch.boot.allocate(totalFrames * @sizeOf(FrameInfo), FRAME_SIZE, arch.ReservedMapEntryType.PERSISTENT)));
 
     for (0..memoryMap.length) |entry| {
         const region_start_frame: usize = @truncate(try std.math.divCeil(u64, memoryMap.entries[entry].address, FRAME_SIZE));
-        const region_total_frames: usize = @truncate(try std.math.divTrunc(u64, memoryMap.entries[entry].length, FRAME_SIZE));
+        const region_total_frames: usize = @truncate(try std.math.divTrunc(u64, memoryMap.entries[entry].size, FRAME_SIZE));
 
-        switch (memoryMap.entries[entry].available) {
-            true => {
-                try free(region_start_frame, region_total_frames);
+        switch (memoryMap.entries[entry].region_type) {
+            arch.MemoryMapEntryType.AVAILABLE => {
+                //try free(region_start_frame, region_total_frames);
                 totalAvailableFrames += region_total_frames;
             },
             else => mark_frames(region_start_frame, region_total_frames),
@@ -81,16 +92,16 @@ pub fn reserve(start_frame: usize, total_frames: usize) !void {
     }
 }
 
-pub fn free(frame: usize) !void {
-        return PmmError.InvalidIndex;
-    }
+// pub fn free(frame: usize) !void {
+//         return PmmError.InvalidIndex;
+//     }
 
-    const end_frame: usize = start_frame + total_frames;
+//     const end_frame: usize = start_frame + total_frames;
 
-    for (start_frame..end_frame) |frame| {
-        frameMap.unset(frame);
-    }
-}
+//     for (start_frame..end_frame) |frame| {
+//         frameMap.unset(frame);
+//     }
+// }
 
 fn get_start_frame(needed_frames: usize) !usize {
     var frame_count: usize = 0;
@@ -124,7 +135,7 @@ fn mark_frames(start_frame: usize, total_frames: usize) void {
     const end_frame: usize = start_frame + total_frames;
 
     for (start_frame..end_frame) |frame| {
-        frameMap.set(frame);
+        frameMap[frame].used = true;
     }
 }
 

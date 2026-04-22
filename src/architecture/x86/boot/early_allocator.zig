@@ -56,7 +56,7 @@ pub fn allocate(neededSize: usize, alignment: usize, entryType: arch.ReservedMap
             }
 
             // If we reached here, no overlaps were found for this candidate
-            reserve(candidate_start, candidate_end - candidate_start, entryType);
+            reserve(candidate_start, neededSize, entryType);
             return @ptrFromInt(candidate_start);
         }
     }

@@ -66,7 +66,7 @@ const MultibootInfo = extern struct {
 pub var multibootInfo: *MultibootInfo linksection(".multiboot.data") = undefined;
 
 var startupStack: [16 * 1024]u8 align(16) linksection(".multiboot.data") = undefined;
-var kernelStack: [16 * 1024]u8 align(16) = undefined;
+var kernelStack: [16 * 1024]u8 align(16) linksection(".bss") = undefined;
 
 extern fn kernelMain() void;
 
