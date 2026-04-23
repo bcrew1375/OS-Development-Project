@@ -89,7 +89,7 @@ pub fn build(b: *std.Build) void {
         //"-debugcon", "stdio",
         "-S",
         "-s",
-        "-m", "1G",
+        "-m", "4G",
         "-daemonize",
         "-pidfile", ".qemu.pid",
         "-M",

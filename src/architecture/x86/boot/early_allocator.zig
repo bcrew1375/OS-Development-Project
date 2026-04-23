@@ -8,7 +8,7 @@ var memoryMap: *arch.MemoryMap linksection(".multiboot.data") = undefined;
 extern const _kernel_start: anyopaque;
 extern const _kernel_end: anyopaque;
 
-pub fn initialize() linksection(".multiboot.text") void {
+pub fn initialize() linksection(".multiboot.text") arch.EarlyAllocError!void {
     memoryMap = arch.mmu.getMemoryMap();
 
     const kernel_start_address = @intFromPtr(&_kernel_start);
@@ -16,15 +16,19 @@ pub fn initialize() linksection(".multiboot.text") void {
 
     for (memoryMap.entries[0..memoryMap.length]) |entry| {
         if (entry.region_type != arch.MemoryMapEntryType.AVAILABLE) {
-            reserve(@truncate(entry.address), @truncate(entry.size), arch.ReservedMapEntryType.PERSISTENT);
+            try reserve(@truncate(entry.address), @truncate(entry.size), arch.ReservedMapEntryType.PERSISTENT);
         }
     }
 
-    reserve(0, 1048576, arch.ReservedMapEntryType.PERSISTENT);
-    reserve(kernel_start_address, kernel_end_address - kernel_start_address, arch.ReservedMapEntryType.PERSISTENT);
+    try reserve(0, 1048576, arch.ReservedMapEntryType.PERSISTENT);
+    try reserve(kernel_start_address, kernel_end_address - kernel_start_address, arch.ReservedMapEntryType.PERSISTENT);
 }
 
-pub fn allocate(neededSize: usize, alignment: usize, entryType: arch.ReservedMapEntryType) linksection(".multiboot.text") *anyopaque {
+pub fn allocate(neededSize: usize, alignment: usize, entryType: arch.ReservedMapEntryType) linksection(".multiboot.text") arch.EarlyAllocError!*anyopaque {
+    if (neededSize == 0) {
+        return arch.EarlyAllocError.InvalidSize;
+    }
+
     for (memoryMap.entries[0..memoryMap.length]) |region| {
         if (region.region_type != arch.MemoryMapEntryType.AVAILABLE) {
             continue;
@@ -56,19 +60,17 @@ pub fn allocate(neededSize: usize, alignment: usize, entryType: arch.ReservedMap
             }
 
             // If we reached here, no overlaps were found for this candidate
-            reserve(candidate_start, neededSize, entryType);
+            try reserve(candidate_start, neededSize, entryType);
             return @ptrFromInt(candidate_start);
         }
     }
 
-    arch.platform.writer.print("Early allocation failed with error {s}", .{@errorName(arch.EarlyAllocError.OutOfSpace)}) catch {};
-    arch.cpu.unrecoverableHalt();
+    return arch.EarlyAllocError.OutOfSpace;
 }
 
-fn reserve(address: usize, size: usize, entry_type: arch.ReservedMapEntryType) linksection(".multiboot.text") void {
+fn reserve(address: usize, size: usize, entry_type: arch.ReservedMapEntryType) linksection(".multiboot.text") arch.EarlyAllocError!void {
     if (reservedMap.length >= arch.MAX_EARLY_RESERVATIONS) {
-        arch.platform.writer.print("Early allocation failed with error: {s}", .{@errorName(arch.EarlyAllocError.OutOfReservations)}) catch {};
-        arch.cpu.unrecoverableHalt();
+        return arch.EarlyAllocError.OutOfReservations;
     }
 
     reservedMap.entries[reservedMap.length].address = address;

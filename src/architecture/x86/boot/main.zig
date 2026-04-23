@@ -103,10 +103,8 @@ export fn kernelSetup() linksection(".multiboot.text") noreturn {
             .memory = true,
         });
 
-    earlyAllocator.initialize();
-    const pmm_alloc = earlyAllocator.allocate(999999999, 4096, arch.ReservedMapEntryType.PERSISTENT);
-    _ = pmm_alloc;
-    mmu.initialize();
+    earlyAllocator.initialize() catch {};
+    mmu.initialize() catch {};
 
     asm volatile (
         \\jmp higherHalfEntry

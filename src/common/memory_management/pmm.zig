@@ -16,24 +16,15 @@ pub const PmmError = error{
 var kernelBaseStartFrame: usize = undefined;
 var kernelBaseEndFrame: usize = undefined;
 var totalFrames: usize = undefined;
+var totalSystemFrames: usize = undefined;
 var totalAvailableFrames: usize = undefined;
 
-const FrameAvailability = enum(u8) {
-    Free,
-    Used,
-    Reserved,
-};
-
 const FrameInfo = extern struct {
-    availability: FrameAvailability,
+    used: bool = undefined,
+    reserved: bool = undefined,
 };
 
-const MemoryRegion = extern struct {
-    base_address: u64,
-    frames: []FrameInfo,
-};
-
-var frameMap: *[]MemoryRegion = undefined;
+var frameMap: []FrameInfo = undefined;
 
 extern const _kernel_start: anyopaque;
 extern const _kernel_end: anyopaque;
@@ -49,102 +40,150 @@ pub fn initialize() !void {
 
     const memoryMap = arch.mmu.getMemoryMap();
 
-    frameMap = @as([*]FrameInfo, @ptrCast(arch.boot.allocate(totalFrames * @sizeOf(FrameInfo), FRAME_SIZE, arch.ReservedMapEntryType.PERSISTENT)))[0..totalFrames];
+    var max_address: u64 = 0;
 
-    for (memoryMap.entries[0..memoryMap.length]) |entry| {
-        try initializeFrameRegion(entry.address, entry.size, entry.region_type);
+    for (memoryMap.entries[0..memoryMap.length]) |region| {
+        if (region.region_type != arch.MemoryMapEntryType.AVAILABLE) {
+            continue;
+        }
+
+        if (region.address + region.size > max_address) {
+            max_address = region.address + region.size;
+        }
     }
 
-    markFrames(kernelBaseStartFrame, kernelBaseEndFrame - kernelBaseStartFrame, arch.MemoryMapEntryType.RESERVED);
+    totalFrames = @truncate(try std.math.divFloor(u64, max_address, FRAME_SIZE));
+
+    frameMap = @as([*]FrameInfo, @ptrCast(@alignCast(try arch.boot.allocate(totalFrames * @sizeOf(FrameInfo), FRAME_SIZE, arch.ReservedMapEntryType.PERSISTENT))))[0..totalFrames];
+
+    for (memoryMap.entries[0..memoryMap.length]) |region| {
+        const region_start_frame: usize = @truncate(try std.math.divCeil(u64, region.address, FRAME_SIZE));
+        const region_end_frame: usize = @truncate(try std.math.divTrunc(u64, region.address + region.size, FRAME_SIZE));
+
+        if (region_end_frame > totalFrames) {
+            continue;
+        }
+
+        var used = true;
+        var reserved = true;
+
+        switch (region.region_type) {
+            arch.MemoryMapEntryType.AVAILABLE => {
+                used = false;
+                reserved = false;
+
+                totalAvailableFrames += region_end_frame - region_start_frame;
+            },
+            else => {
+                used = true;
+                reserved = true;
+            },
+        }
+
+        for (region_start_frame..region_end_frame) |frame| {
+            frameMap[frame].used = used;
+            frameMap[frame].reserved = reserved;
+        }
+    }
+
+    //markFrames(kernelBaseStartFrame, kernelBaseEndFrame - kernelBaseStartFrame, arch.MemoryMapEntryType.RESERVED);
 
     // Also reserve the first 1MB for BIOS/Real Mode structures usually found on x86
     //mark_frames(0, 0x100000 / FRAME_SIZE);
 }
 
-pub fn initializeFrameRegion(address: u64, size: u64, region_type: arch.MemoryMapEntryType) !*MemoryRegion {
-    var region_start_frame: usize = undefined;
-    var region_total_frames: usize = undefined;
+// pub fn initializeFrameRegion(index: usize, address: u64, size: u64, region_type: arch.MemoryMapEntryType) !void {
+//     const region_start_frame: usize = @truncate(try std.math.divCeil(u64, address, FRAME_SIZE));
+//     var region_total_frames: usize = @truncate(try std.math.divTrunc(u64, size, FRAME_SIZE));
 
-    if (region_type == arch.MemoryMapEntryType.AVAILABLE) {
-        region_start_frame = @truncate(try std.math.divCeil(u64, address, FRAME_SIZE));
-        region_total_frames = @truncate(try std.math.divFloor(u64, size, FRAME_SIZE));
+//     if (region_total_frames == 0) {
+//         region_total_frames = 1;
+//     }
 
-        totalAvailableFrames += region_total_frames;
-    }
+//     if (region_type == arch.MemoryMapEntryType.AVAILABLE) {
+//         totalAvailableFrames += region_total_frames;
+//     } else {
+//         memoryRegions[index].reserved = true;
+//     }
 
-    markFrames(region_start_frame, region_total_frames, region_type);
-}
+//     totalFrames += region_total_frames;
 
-pub fn allocate(needed_frames: usize) !usize {
-    if ((needed_frames < 1) or
-        (needed_frames > (totalAvailableFrames - getKernelBaseFrames())))
-    {
-        return PmmError.InvalidSize;
-    }
+//     memoryRegions[index].base_address = region_start_frame * FRAME_SIZE;
+//     memoryRegions[index].frames = @as([*]FrameInfo, @ptrCast(@alignCast(try arch.boot.allocate(region_total_frames * @sizeOf(FrameInfo), FRAME_SIZE, arch.ReservedMapEntryType.PERSISTENT))));
 
-    std.debug.print("Needed Frames: {d}\n", .{needed_frames});
-    std.debug.print("Total Frames: {d}\n", .{totalAvailableFrames});
-    std.debug.print("Kernel Frames: {d}\n", .{getKernelBaseFrames()});
+//     //markFrames(region_start_frame, region_total_frames, region_type);
+// }
 
-    const start_frame = try get_start_frame(needed_frames);
-    const end_frame: usize = start_frame + needed_frames;
+// pub fn allocate(needed_frames: usize) !usize {
+//     if ((needed_frames < 1) or
+//         (needed_frames > (totalAvailableFrames - getKernelBaseFrames())))
+//     {
+//         return PmmError.InvalidSize;
+//     }
 
-    for (start_frame..end_frame) |frame| {
-        frameMap[frame].availability = FrameAvailability.Used;
-    }
+//     std.debug.print("Needed Frames: {d}\n", .{needed_frames});
+//     std.debug.print("Total Frames: {d}\n", .{totalAvailableFrames});
+//     std.debug.print("Kernel Frames: {d}\n", .{getKernelBaseFrames()});
 
-    return start_frame * FRAME_SIZE;
-}
+//     const start_frame = try get_start_frame(needed_frames);
+//     const end_frame: usize = start_frame + needed_frames;
 
-pub fn reserve(start_frame: usize, total_frames: usize) !void {
-    if (start_frame + total_frames > totalAvailableFrames) {
-        return PmmError.InvalidIndex;
-    }
+//     for (start_frame..end_frame) |frame| {
+//         frameMap[frame].availability = FrameAvailability.Used;
+//     }
 
-    for (start_frame..start_frame + total_frames) |frame| {
-        frameMap[frame].reserved = true;
-    }
-}
+//     return start_frame * FRAME_SIZE;
+// }
 
-pub fn free(start_frame: usize, total_frames: usize) !void {
-    if (start_frame > totalAvailableFrames) {
-        return PmmError.InvalidIndex;
-    }
+// pub fn reserve(start_frame: usize, total_frames: usize) !void {
+//     if (start_frame + total_frames > totalAvailableFrames) {
+//         return PmmError.InvalidIndex;
+//     }
 
-    const end_frame: usize = start_frame + total_frames;
+//     for (start_frame..start_frame + total_frames) |frame| {
+//         frameMap[frame].reserved = true;
+//     }
+// }
 
-    for (start_frame..end_frame) |frame| {
-        frameMap[frame].availability = FrameAvailability.Free;
-    }
-}
+// pub fn free(start_frame: usize, total_frames: usize) !void {
+//     if (start_frame > totalAvailableFrames) {
+//         return PmmError.InvalidIndex;
+//     }
 
-fn get_start_frame(needed_frames: usize) !usize {
-    var frame_count: usize = 0;
-    var start_frame: usize = 0;
-    var is_first: bool = true;
+//     const end_frame: usize = start_frame + total_frames;
 
-    for (0..totalAvailableFrames) |frame| {
-        if (frameMap.isSet(frame)) {
-            frame_count = 0;
-            start_frame = 0;
-            is_first = true;
-            continue;
-        }
+//     for (start_frame..end_frame) |frame| {
+//         frameMap[frame].availability = FrameAvailability.Free;
+//     }
+// }
 
-        if (is_first) {
-            is_first = false;
-            start_frame = frame;
-        }
+// fn get_start_frame(needed_frames: usize) !usize {
+//     var frame_count: usize = 0;
+//     var start_frame: usize = 0;
+//     var is_first: bool = true;
 
-        frame_count += 1;
+//     for (0..totalAvailableFrames) |frame| {
+//         if (frameMap.isSet(frame)) {
+//             frame_count = 0;
+//             start_frame = 0;
+//             is_first = true;
+//             continue;
+//         }
 
-        if (frame_count == needed_frames) {
-            return start_frame;
-        }
-    }
+//         if (is_first) {
+//             is_first = false;
+//             start_frame = frame;
+//         }
 
-    return PmmError.OutOfMemory;
-}
+//         frame_count += 1;
+
+//         if (frame_count == needed_frames) {
+//             return start_frame;
+//         }
+//     }
+
+//     return PmmError.OutOfMemory;
+// }
 
 fn markFrames(start_frame: usize, total_frames: usize, region_type: arch.MemoryMapEntryType) void {
     const end_frame: usize = start_frame + total_frames;
@@ -152,10 +191,10 @@ fn markFrames(start_frame: usize, total_frames: usize, region_type: arch.MemoryM
     for (start_frame..end_frame) |frame| {
         switch (region_type) {
             arch.MemoryMapEntryType.AVAILABLE => {
-                frameMap[frame].availability = FrameAvailability.Free;
+                frameMap[frame].used = false;
             },
             else => {
-                frameMap[frame].availability = FrameAvailability.Reserved;
+                frameMap[frame].reserved = true;
             },
         }
     }

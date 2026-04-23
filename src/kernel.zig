@@ -20,7 +20,8 @@ pub export fn kernelMain() void {
     arch.interrupts.initialize();
     arch.interrupts.enableInterrupts();
     terminal.print.printStringColor("done!\n", TextColor.GREEN);
-    //try arch.platform.writer.print("Total Available RAM: {d} KB\n", .{pmm.getTotalAvailableRAM() / 1024});
+    try arch.platform.writer.print("Total Available RAM: {d} KB\n", .{pmm.getTotalAvailableRAM() / 1024});
+    arch.cpu.unrecoverableHalt();
 
     // kernel_heap.initialize() catch |err| {
     //     printString(@errorName(err));

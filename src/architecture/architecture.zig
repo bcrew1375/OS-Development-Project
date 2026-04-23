@@ -77,19 +77,20 @@ pub const ReservedMap = struct {
 pub const EarlyAllocError = error{
     OutOfReservations,
     OutOfSpace,
+    InvalidSize,
 };
 
 pub fn validateImpl(comptime T: type) void {
     comptime {
         // boot
-        assertFn(T.boot, "allocate", fn (neededSize: usize, alignment: usize, entryType: ReservedMapEntryType) *anyopaque);
+        assertFn(T.boot, "allocate", fn (neededSize: usize, alignment: usize, entryType: ReservedMapEntryType) EarlyAllocError!*anyopaque);
         assertFn(T.boot, "finishBoot", fn () void);
 
         // cpu
         assertFn(T.cpu, "unrecoverableHalt", fn () noreturn);
 
         // mmu
-        assertFn(T.mmu, "initialize", fn () callconv(.c) void);
+        assertFn(T.mmu, "initialize", fn () EarlyAllocError!void);
         assertFn(T.mmu, "removeIdentityMapping", fn () void);
         assertFn(T.mmu, "getPhysicalAddress", fn (virtualAddress: usize) ?usize);
         assertFn(T.mmu, "getMemoryMap", fn () *MemoryMap);
