@@ -78,6 +78,7 @@ pub const EarlyAllocError = error{
     OutOfReservations,
     OutOfSpace,
     InvalidSize,
+    InvalidAlignment,
 };
 
 pub fn validateImpl(comptime T: type) void {
@@ -90,11 +91,11 @@ pub fn validateImpl(comptime T: type) void {
         assertFn(T.cpu, "unrecoverableHalt", fn () noreturn);
 
         // mmu
-        assertFn(T.mmu, "initialize", fn () EarlyAllocError!void);
         assertFn(T.mmu, "removeIdentityMapping", fn () void);
         assertFn(T.mmu, "getPhysicalAddress", fn (virtualAddress: usize) ?usize);
         assertFn(T.mmu, "getMemoryMap", fn () *MemoryMap);
-        assertFn(T.mmu, "mapPage", fn (virtualAddress: usize, physicalAddress: usize, flags: usize) void);
+        assertFn(T.mmu, "mapPage", fn (virtualAddress: usize, physicalAddress: usize) void);
+        assertFn(T.mmu, "unmapPage", fn (virtualAddress: usize) void);
 
         // interrupts
         assertFn(T.interrupts, "initialize", fn () void);

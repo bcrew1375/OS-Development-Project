@@ -28,7 +28,6 @@ pub const interrupts = struct {
 };
 
 pub const mmu = struct {
-    pub const initialize = mmu_impl.initialize;
     pub const removeIdentityMapping = mmu_impl.removeIdentityMapping;
     pub const getPhysicalAddress = mmu_impl.getPhysicalAddress;
     pub const getMemoryMap = mmu_impl.getMemoryMap;

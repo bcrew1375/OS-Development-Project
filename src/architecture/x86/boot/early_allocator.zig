@@ -1,9 +1,12 @@
 const arch = @import("arch");
+const mmu = @import("../mmu/main.zig");
 
 const std = @import("std");
 
 var reservedMap linksection(".multiboot.data") = arch.ReservedMap{};
 var memoryMap: *arch.MemoryMap linksection(".multiboot.data") = undefined;
+var remainingPageSpace: usize linksection(".multiboot.data") = mmu.PAGE_TABLE_REGION_SIZE;
+var nextTableAddressSpace: usize linksection(".multiboot.data") = mmu.PAGE_TABLE_REGION_SIZE;
 
 extern const _kernel_start: anyopaque;
 extern const _kernel_end: anyopaque;
@@ -20,13 +23,20 @@ pub fn initialize() linksection(".multiboot.text") arch.EarlyAllocError!void {
         }
     }
 
-    try reserve(0, 1048576, arch.ReservedMapEntryType.PERSISTENT);
+    // Reserve legacy x86 regions.
+    try reserve(0, 0x9FC00, arch.ReservedMapEntryType.PERSISTENT);
+    try reserve(0xA0000, 0x50000, arch.ReservedMapEntryType.PERSISTENT);
+
     try reserve(kernel_start_address, kernel_end_address - kernel_start_address, arch.ReservedMapEntryType.PERSISTENT);
 }
 
 pub fn allocate(neededSize: usize, alignment: usize, entryType: arch.ReservedMapEntryType) linksection(".multiboot.text") arch.EarlyAllocError!*anyopaque {
     if (neededSize == 0) {
         return arch.EarlyAllocError.InvalidSize;
+    }
+
+    if (alignment == 0) {
+        return arch.EarlyAllocError.InvalidAlignment;
     }
 
     for (memoryMap.entries[0..memoryMap.length]) |region| {
@@ -78,4 +88,29 @@ fn reserve(address: usize, size: usize, entry_type: arch.ReservedMapEntryType) l
     reservedMap.entries[reservedMap.length].entry_type = entry_type;
 
     reservedMap.length += 1;
+
+    // // Ensure there's always room left for a new page table.
+    // if ((remainingPageSpace -| size) < mmu.PAGE_SIZE) {
+    //     try expandPageTables(1);
+    // }
+
+    if (size > remainingPageSpace) {
+        const page_table_count: usize = @truncate((size / mmu.PAGE_TABLE_REGION_SIZE) +| 1);
+        try expandPageTables(page_table_count);
+    }
+
+    remainingPageSpace -= size;
+}
+
+fn expandPageTables(pageTables: usize) arch.EarlyAllocError!void {
+    if (pageTables == 0) {
+        return arch.EarlyAllocError.InvalidSize;
+    }
+
+    const start_address = @intFromPtr(try allocate(pageTables, mmu.PAGE_SIZE, arch.ReservedMapEntryType.PERSISTENT));
+
+    for (0..pageTables) |page_table| {
+        nextTableAddressSpace += page_table * mmu.PAGE_TABLE_REGION_SIZE;
+        mmu.mapEarlyPageTable(start_address, nextTableAddressSpace);
+    }
 }

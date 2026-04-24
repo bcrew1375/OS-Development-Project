@@ -132,6 +132,5 @@ export fn higherHalfEntry() noreturn {
 pub fn finishBoot() void {
     gdt.initialize();
     idt.initialize();
-    //mmu.initializeMemoryMap();
     mmu.removeIdentityMapping();
 }
