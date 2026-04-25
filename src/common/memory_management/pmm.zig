@@ -13,11 +13,11 @@ pub const PmmError = error{
     InvalidIndex,
 };
 
-var kernelBaseStartFrame: usize = undefined;
-var kernelBaseEndFrame: usize = undefined;
-var totalFrames: usize = undefined;
-var totalSystemFrames: usize = undefined;
-var totalAvailableFrames: usize = undefined;
+var kernelBaseStartFrame: usize = 0;
+var kernelBaseEndFrame: usize = 0;
+var totalFrames: usize = 0;
+var totalSystemFrames: usize = 0;
+var totalAvailableFrames: usize = 0;
 
 const FrameInfo = extern struct {
     used: bool = undefined,
@@ -43,7 +43,9 @@ pub fn initialize() !void {
     var max_address: u64 = 0;
 
     for (memoryMap.entries[0..memoryMap.length]) |region| {
-        if (region.region_type != arch.MemoryMapEntryType.AVAILABLE) {
+        // Only consider regions we actually want to manage/allocate from.
+        // High-memory reserved regions (like 0xFFFFFFFF) are ignored here.
+        if (region.region_type != arch.MemoryMapEntryType.AVAILABLE and region.region_type != arch.MemoryMapEntryType.RECLAIMABLE) {
             continue;
         }
 
@@ -59,10 +61,6 @@ pub fn initialize() !void {
     for (memoryMap.entries[0..memoryMap.length]) |region| {
         const region_start_frame: usize = @truncate(try std.math.divCeil(u64, region.address, FRAME_SIZE));
         const region_end_frame: usize = @truncate(try std.math.divTrunc(u64, region.address + region.size, FRAME_SIZE));
-
-        if (region_end_frame > totalFrames) {
-            continue;
-        }
 
         var used = true;
         var reserved = true;
@@ -81,7 +79,11 @@ pub fn initialize() !void {
         }
 
         for (region_start_frame..region_end_frame) |frame| {
-            //try arch.platform.writer.print("frame: {d}\n", .{frame});
+            // Ignore regions that exist beyond the end of usable RAM (like high BIOS reserved regions)
+            if (frame >= totalFrames) {
+                break;
+            }
+
             frameMap[frame].used = used;
             frameMap[frame].reserved = reserved;
         }
