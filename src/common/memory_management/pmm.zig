@@ -26,8 +26,8 @@ const FrameInfo = extern struct {
 
 var frameMap: []FrameInfo = undefined;
 
-extern const _kernel_start: anyopaque;
-extern const _kernel_end: anyopaque;
+extern const _kernel_start: usize;
+extern const _kernel_end: usize;
 
 pub fn initialize() !void {
     if (builtin.is_test) {
@@ -38,27 +38,26 @@ pub fn initialize() !void {
         kernelBaseEndFrame = (@intFromPtr(&_kernel_end) + (FRAME_SIZE - 1)) / FRAME_SIZE;
     }
 
-    const memoryMap = arch.mmu.getMemoryMap();
+    const memory_map = arch.mmu.getMemoryMap();
 
     var max_address: u64 = 0;
 
-    for (memoryMap.entries[0..memoryMap.length]) |region| {
-        // Only consider regions we actually want to manage/allocate from.
-        // High-memory reserved regions (like 0xFFFFFFFF) are ignored here.
+    for (memory_map.entries[0..memory_map.length]) |region| {
         if (region.region_type != arch.MemoryMapEntryType.AVAILABLE and region.region_type != arch.MemoryMapEntryType.RECLAIMABLE) {
             continue;
         }
 
         if (region.address + region.size > max_address) {
-            max_address = region.address + region.size;
+            max_address = region.address +| region.size;
         }
     }
 
     totalFrames = @truncate(try std.math.divFloor(u64, max_address, FRAME_SIZE));
 
-    frameMap = @as([*]FrameInfo, @ptrCast(@alignCast(try arch.boot.allocate(totalFrames * @sizeOf(FrameInfo), FRAME_SIZE, arch.ReservedMapEntryType.PERSISTENT))))[0..totalFrames];
+    const frameMapPtr = try arch.boot.allocate(totalFrames * @sizeOf(FrameInfo), FRAME_SIZE, arch.ReservedMapEntryType.PERSISTENT);
+    frameMap = @as([*]FrameInfo, @ptrCast(@alignCast(frameMapPtr)))[0..totalFrames];
 
-    for (memoryMap.entries[0..memoryMap.length]) |region| {
+    for (memory_map.entries[0..memory_map.length]) |region| {
         const region_start_frame: usize = @truncate(try std.math.divCeil(u64, region.address, FRAME_SIZE));
         const region_end_frame: usize = @truncate(try std.math.divTrunc(u64, region.address + region.size, FRAME_SIZE));
 
@@ -79,7 +78,6 @@ pub fn initialize() !void {
         }
 
         for (region_start_frame..region_end_frame) |frame| {
-            // Ignore regions that exist beyond the end of usable RAM (like high BIOS reserved regions)
             if (frame >= totalFrames) {
                 break;
             }

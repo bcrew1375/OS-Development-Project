@@ -89,11 +89,6 @@ fn reserve(address: usize, size: usize, entry_type: arch.ReservedMapEntryType) l
 
     reservedMap.length += 1;
 
-    // // Ensure there's always room left for a new page table.
-    // if ((remainingPageSpace -| size) < mmu.PAGE_SIZE) {
-    //     try expandPageTables(1);
-    // }
-
     if (size > remainingPageSpace) {
         const page_table_count: usize = @truncate((size / mmu.PAGE_TABLE_REGION_SIZE) +| 1);
         try expandPageTables(page_table_count);

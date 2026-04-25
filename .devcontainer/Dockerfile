@@ -31,5 +31,9 @@ RUN set -eux; \
     ln -s /opt/zig/zig /usr/local/bin/zig; \
     rm zig.tar.xz
 
+RUN curl -fsSL \
+      "https://raw.githubusercontent.com/ziglang/zig/master/tools/lldb_pretty_printers.py" \
+      -o /opt/zig/lldb_pretty_printers.py
+
 ENV ZIG_GLOBAL_CACHE_DIR=/tmp/zig-global-cache
 ENV ZIG_LOCAL_CACHE_DIR=/tmp/zig-local-cache
