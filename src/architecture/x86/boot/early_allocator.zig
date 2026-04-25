@@ -97,9 +97,10 @@ fn reserve(address: usize, size: usize, entry_type: arch.ReservedMapEntryType) l
     if (size > remainingPageSpace) {
         const page_table_count: usize = @truncate((size / mmu.PAGE_TABLE_REGION_SIZE) +| 1);
         try expandPageTables(page_table_count);
+        remainingPageSpace +|= mmu.PAGE_TABLE_REGION_SIZE * page_table_count;
     }
 
-    remainingPageSpace -= size;
+    remainingPageSpace -|= size;
 }
 
 fn expandPageTables(pageTables: usize) arch.EarlyAllocError!void {
@@ -109,8 +110,8 @@ fn expandPageTables(pageTables: usize) arch.EarlyAllocError!void {
 
     const start_address = @intFromPtr(try allocate(pageTables, mmu.PAGE_SIZE, arch.ReservedMapEntryType.PERSISTENT));
 
-    for (0..pageTables) |page_table| {
-        nextTableAddressSpace += page_table * mmu.PAGE_TABLE_REGION_SIZE;
+    for (0..pageTables) |_| {
         mmu.mapEarlyPageTable(start_address, nextTableAddressSpace);
+        nextTableAddressSpace += mmu.PAGE_TABLE_REGION_SIZE;
     }
 }

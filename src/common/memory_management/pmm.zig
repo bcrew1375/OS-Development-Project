@@ -81,6 +81,7 @@ pub fn initialize() !void {
         }
 
         for (region_start_frame..region_end_frame) |frame| {
+            //try arch.platform.writer.print("frame: {d}\n", .{frame});
             frameMap[frame].used = used;
             frameMap[frame].reserved = reserved;
         }

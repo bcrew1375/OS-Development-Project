@@ -231,7 +231,7 @@ pub fn mapEarlyPageTable(allocation_start_address: usize, mapping_start_address:
     const page_table: PageTable = @ptrFromInt(allocation_start_address);
 
     for (0..ENTRIES_PER_TABLE) |table_index| {
-        page_table[table_index].address = @truncate(mapping_start_address + ((table_index * PAGE_SIZE) >> 12));
+        page_table[table_index].address = @truncate((mapping_start_address + (table_index * PAGE_SIZE)) >> 12);
         page_table[table_index].present = true;
         page_table[table_index].writeable = true;
     }
@@ -239,7 +239,7 @@ pub fn mapEarlyPageTable(allocation_start_address: usize, mapping_start_address:
     asm volatile (
         \\mov %cr3, %eax
         \\mov %eax, %cr3
-    );
+        ::: .{ .eax = true });
 
     pageTableCounter += 1;
 }
