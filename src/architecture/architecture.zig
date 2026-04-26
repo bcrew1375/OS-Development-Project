@@ -39,6 +39,10 @@ pub const TextColor = enum(u8) {
 pub const MAX_MEMORY_MAP_ENTRIES = 128;
 pub const MAX_EARLY_RESERVATIONS = 128;
 
+pub const MmuError = error{
+    MemoryMapReadError,
+};
+
 pub const MemoryMap = struct {
     entries: *[MAX_MEMORY_MAP_ENTRIES]MemoryMapEntry = undefined,
     length: usize = 0,
@@ -79,6 +83,7 @@ pub const EarlyAllocError = error{
     OutOfSpace,
     InvalidSize,
     InvalidAlignment,
+    InvalidMemoryMap,
 };
 
 pub fn validateImpl(comptime T: type) void {
@@ -93,7 +98,7 @@ pub fn validateImpl(comptime T: type) void {
         // mmu
         assertFn(T.mmu, "removeIdentityMapping", fn () void);
         assertFn(T.mmu, "getPhysicalAddress", fn (virtualAddress: usize) ?usize);
-        assertFn(T.mmu, "getMemoryMap", fn () *MemoryMap);
+        assertFn(T.mmu, "getMemoryMap", fn () MmuError!*MemoryMap);
         assertFn(T.mmu, "mapPage", fn (virtualAddress: usize, physicalAddress: usize) void);
         assertFn(T.mmu, "unmapPage", fn (virtualAddress: usize) void);
 

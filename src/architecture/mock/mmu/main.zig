@@ -1,19 +1,43 @@
+const std = @import("std");
 const arch = @import("arch");
 
-pub fn initialize() callconv(.c) void {}
+var memoryMap: *arch.MemoryMap = undefined;
+
+var regionsMap: [arch.MAX_MEMORY_MAP_ENTRIES]arch.MemoryMapEntry = [_]arch.MemoryMapEntry{.{}} ** arch.MAX_MEMORY_MAP_ENTRIES;
+
+var testRegion: arch.MemoryMapEntry = undefined;
+var testRegionHeap: []u8 = undefined;
+
 pub fn getPhysicalAddress(virtualAddress: usize) ?usize {
     _ = virtualAddress;
 }
 pub fn removeIdentityMapping() void {}
-pub fn initializeMemoryMap() void {}
-pub fn getMemoryMap() *arch.MemoryMap {
-    var memoryMap = arch.MemoryMap{};
+pub fn getMemoryMap() arch.MmuError!*arch.MemoryMap {
+    testRegionHeap = std.heap.page_allocator.alloc(u8, 64 * 1024 * 1024) catch {
+        return arch.MmuError.MemoryMapReadError;
+    };
 
-    memoryMap.entries[0].address = 0;
-    memoryMap.entries[0].length = 64 * 1024 * 1024;
-    memoryMap.entries[0].available = true;
+    testRegion.address = @intFromPtr(testRegionHeap.ptr);
+    testRegion.region_type = arch.MemoryMapEntryType.AVAILABLE;
+    testRegion.size = 64 * 1024 * 1024;
 
+    regionsMap[0] = testRegion;
+
+    memoryMap = std.heap.page_allocator.create(arch.MemoryMap) catch {
+        return arch.MmuError.MemoryMapReadError;
+    };
+
+    memoryMap.entries = &regionsMap;
     memoryMap.length = 1;
 
-    return &memoryMap;
+    return memoryMap;
+}
+
+pub fn mapPage(virtual_address: usize, physical_address: usize) void {
+    _ = virtual_address;
+    _ = physical_address;
+}
+
+pub fn unmapPage(virtual_address: usize) void {
+    _ = virtual_address;
 }

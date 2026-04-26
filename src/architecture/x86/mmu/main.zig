@@ -274,7 +274,7 @@ pub fn readMultibootMemoryMap() linksection(".multiboot.text") void {
     }
 }
 
-pub fn getMemoryMap() linksection(".multiboot.text") *arch.MemoryMap {
+pub fn getMemoryMap() linksection(".multiboot.text") arch.MmuError!*arch.MemoryMap {
     if (memoryMap.length == 0) {
         readMultibootMemoryMap();
     }

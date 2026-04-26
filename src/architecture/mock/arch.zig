@@ -1,3 +1,5 @@
+const arch = @import("arch");
+
 const boot_impl = @import("boot/main.zig");
 const cpu_impl = @import("cpu/main.zig");
 const interrupts_impl = @import("interrupts/main.zig");
@@ -11,6 +13,7 @@ comptime {
 }
 
 pub const boot = struct {
+    pub const allocate = boot_impl.allocate;
     pub const finishBoot = boot_impl.finishBoot;
 };
 
@@ -27,11 +30,11 @@ pub const interrupts = struct {
 };
 
 pub const mmu = struct {
-    pub const initialize = mmu_impl.initialize;
     pub const removeIdentityMapping = mmu_impl.removeIdentityMapping;
     pub const getPhysicalAddress = mmu_impl.getPhysicalAddress;
-    pub const initializeMemoryMap = mmu_impl.initializeMemoryMap;
     pub const getMemoryMap = mmu_impl.getMemoryMap;
+    pub const mapPage = mmu_impl.mapPage;
+    pub const unmapPage = mmu_impl.unmapPage;
 };
 
 pub const platform = struct {
