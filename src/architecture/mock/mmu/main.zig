@@ -23,10 +23,6 @@ pub fn getMemoryMap() *arch.MemoryMap {
 
     heapBase = @intFromPtr(testRegionHeap.ptr);
 
-    memoryMap = std.heap.page_allocator.create(arch.MemoryMap) catch {
-        @panic("Mock MMU map creation failed");
-    };
-
     memoryMap.entries[0] = testRegion;
     memoryMap.length = 1;
 

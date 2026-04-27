@@ -95,45 +95,59 @@ pub const EarlyAllocError = error{
 
 pub fn validateImpl(comptime T: type) void {
     comptime {
-        //early_allocator
-        assertFn(T.early_allocator, "initialize", fn () EarlyAllocError!void);
-        assertFn(T.early_allocator, "allocate", fn (needed_size: usize, alignment: usize, region_type: ReservedMapRegionType) EarlyAllocError!*allowzero anyopaque);
-        assertFn(T.early_allocator, "reserve", fn (address: usize, size: usize, region_type: ReservedMapRegionType) EarlyAllocError!void);
-        assertFn(T.early_allocator, "getReservedMap", fn () *ReservedMap);
+        validateInterface(T.early_allocator, struct {
+            initialize: fn () EarlyAllocError!void,
+            allocate: fn (needed_size: usize, alignment: usize, region_type: ReservedMapRegionType) EarlyAllocError!*allowzero anyopaque,
+            reserve: fn (address: usize, size: usize, region_type: ReservedMapRegionType) EarlyAllocError!void,
+            getReservedMap: fn () *ReservedMap,
+        });
 
-        // boot
-        assertFn(T.boot, "finishBoot", fn () void);
+        validateInterface(T.boot, struct {
+            finishBoot: fn () void,
+        });
 
-        // cpu
-        assertFn(T.cpu, "unrecoverableHalt", fn () noreturn);
+        validateInterface(T.cpu, struct {
+            unrecoverableHalt: fn () noreturn,
+        });
 
-        // mmu
-        assertFn(T.mmu, "removeIdentityMapping", fn () void);
-        assertFn(T.mmu, "getPhysicalAddress", fn (virtualAddress: usize) ?usize);
-        assertFn(T.mmu, "getMemoryMap", fn () *MemoryMap);
-        assertFn(T.mmu, "mapPage", fn (virtualAddress: usize, physicalAddress: usize) void);
-        assertFn(T.mmu, "unmapPage", fn (virtualAddress: usize) void);
-        assertFn(T.mmu, "getMaxAvailableAddress", fn () u64);
+        validateInterface(T.mmu, struct {
+            removeIdentityMapping: fn () void,
+            getPhysicalAddress: fn (virtualAddress: usize) ?usize,
+            getMemoryMap: fn () *MemoryMap,
+            mapPage: fn (virtualAddress: usize, physicalAddress: usize) void,
+            unmapPage: fn (virtualAddress: usize) void,
+            getMaxAvailableAddress: fn () u64,
+        });
 
-        // interrupts
-        assertFn(T.interrupts, "initialize", fn () void);
-        assertFn(T.interrupts, "set", fn (interruptVector: usize, address: usize, typeAttribute: usize) void);
-        assertFn(T.interrupts, "enableInterrupts", fn () void);
-        assertFn(T.interrupts, "disableInterrupts", fn () void);
-        assertFn(T.interrupts, "acknowledgeInterrupt", fn (vector: usize) void);
+        validateInterface(T.interrupts, struct {
+            initialize: fn () void,
+            set: fn (interruptVector: usize, address: usize, typeAttribute: usize) void,
+            enableInterrupts: fn () void,
+            disableInterrupts: fn () void,
+            acknowledgeInterrupt: fn (vector: usize) void,
+        });
 
-        // platform
-        assertFn(T.platform, "initializeTimer", fn (frequency: usize) void);
-        assertFn(T.platform, "initializeConsole", fn () void);
-        assertFn(T.platform, "setColor", fn (color: TextColor) void);
-        if (!@hasDecl(T.platform, "writer"))
+        validateInterface(T.platform, struct {
+            initializeTimer: fn (frequency: usize) void,
+            initializeConsole: fn () void,
+            setColor: fn (color: TextColor) void,
+        });
+
+        if (!@hasDecl(T.platform, "writer")) {
             @compileError(@typeName(T.platform) ++ " is missing 'writer' instance");
+        }
     }
 }
 
-fn assertFn(comptime T: type, comptime functionName: []const u8, comptime signature: type) void {
-    if (!@hasDecl(T, functionName))
-        @compileError(@typeName(T) ++ " is missing '" ++ functionName ++ "'");
-    if (@TypeOf(@field(T, functionName)) != signature)
-        @compileError(@typeName(T) ++ "." ++ functionName ++ " has type: " ++ @typeName(@TypeOf(@field(T, functionName))) ++ ", expected type: " ++ @typeName(signature));
+fn validateInterface(comptime Impl: type, comptime Interface: type) void {
+    const info = @typeInfo(Interface).@"struct";
+    inline for (info.fields) |field| {
+        if (!@hasDecl(Impl, field.name)) {
+            @compileError(@typeName(Impl) ++ " is missing declaration '" ++ field.name ++ "'");
+        }
+        const ActualType = @TypeOf(@field(Impl, field.name));
+        if (ActualType != field.type) {
+            @compileError(@typeName(Impl) ++ "." ++ field.name ++ " has type: " ++ @typeName(ActualType) ++ ", expected: " ++ @typeName(field.type));
+        }
+    }
 }
