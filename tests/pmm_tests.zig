@@ -10,14 +10,14 @@ test "PMM allocation - InvalidSize" {
 
     try kernel.pmm.initialize();
 
-    const total_frames = kernel.pmm.getTotalFrames();
-    const kernel_frames = kernel.pmm.getKernelBaseFrames();
+    const total_frames = kernel.pmm.getTotalAvailableFrames();
 
-    if (total_frames < kernel_frames)
+    if (total_frames == 0) {
         return PmmTestError.InvalidMemoryMap;
+    }
 
     try std.testing.expectError(err, kernel.pmm.allocate(0));
-    try std.testing.expectError(err, kernel.pmm.allocate(total_frames - kernel_frames + 1));
+    try std.testing.expectError(err, kernel.pmm.allocate(total_frames + 1));
 }
 
 test "PMM allocation - OutOfMemory" {
@@ -26,12 +26,12 @@ test "PMM allocation - OutOfMemory" {
     try kernel.pmm.initialize();
 
     const total_frames = kernel.pmm.getTotalFrames();
-    const kernel_frames = kernel.pmm.getKernelBaseFrames();
 
-    if (total_frames < kernel_frames)
+    if (total_frames == 0) {
         return PmmTestError.InvalidMemoryMap;
+    }
 
-    _ = try kernel.pmm.allocate(kernel.pmm.getTotalFrames() - kernel.pmm.getKernelBaseFrames());
+    _ = try kernel.pmm.allocate(kernel.pmm.getTotalAvailableFrames());
     try std.testing.expectError(err, kernel.pmm.allocate(1));
 }
 
@@ -40,12 +40,11 @@ test "PMM allocation - InvalidIndex" {
 
     try kernel.pmm.initialize();
 
-    const total_frames = kernel.pmm.getTotalFrames();
-    const kernel_frames = kernel.pmm.getKernelBaseFrames();
+    const total_frames = kernel.pmm.getTotalAvailableFrames();
 
-    if (total_frames < kernel_frames)
+    if (total_frames == 0) {
         return PmmTestError.InvalidMemoryMap;
+    }
 
-    try std.testing.expectError(err, kernel.pmm.free(0, kernel.pmm.getKernelBaseFrames()));
-    try std.testing.expectError(err, kernel.pmm.free(kernel.pmm.getTotalFrames(), 1));
+    try std.testing.expectError(err, kernel.pmm.free(kernel.pmm.getTotalAvailableFrames(), 1));
 }

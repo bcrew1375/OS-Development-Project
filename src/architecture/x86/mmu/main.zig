@@ -58,9 +58,11 @@ var pageTableCounter: usize linksection(".multiboot.data") = 0;
 // var pageTable0Entries: *[ENTRIES_PER_TABLE]PageEntry = undefined; // align(PAGE_SIZE) linksection(".multiboot.data") = [_]PageEntry{.{}} ** ENTRIES_PER_TABLE;
 
 var memoryMapEntries: [arch.MAX_MEMORY_MAP_ENTRIES]arch.MemoryMapEntry linksection(".multiboot.data") = [_]arch.MemoryMapEntry{.{}} ** arch.MAX_MEMORY_MAP_ENTRIES;
-var memoryMap: arch.MemoryMap linksection(".multiboot.data") = undefined;
+var memoryMap: arch.MemoryMap linksection(".multiboot.data") = arch.MemoryMap{};
 
-pub fn initialize() linksection(".multiboot.text") arch.EarlyAllocError!void {
+var maxAvailableAddress: u64 = 0;
+
+pub fn initializePaging() linksection(".multiboot.text") arch.EarlyAllocError!void {
     var pageDirectoryEntries: PageDirectory = @ptrCast(@alignCast(try earlyAllocator.allocate(@sizeOf(PageEntry) * ENTRIES_PER_DIRECTORY, PAGE_SIZE, arch.ReservedMapEntryType.PERSISTENT)));
     var pageTable0Entries: *[ENTRIES_PER_TABLE]PageEntry = @ptrCast(@alignCast(try earlyAllocator.allocate(@sizeOf(PageEntry) * ENTRIES_PER_TABLE, PAGE_SIZE, arch.ReservedMapEntryType.PERSISTENT)));
 
@@ -274,10 +276,22 @@ pub fn readMultibootMemoryMap() linksection(".multiboot.text") void {
     }
 }
 
-pub fn getMemoryMap() linksection(".multiboot.text") arch.MmuError!*arch.MemoryMap {
+pub fn getMemoryMap() linksection(".multiboot.text") *arch.MemoryMap {
     if (memoryMap.length == 0) {
         readMultibootMemoryMap();
     }
 
     return &memoryMap;
+}
+
+pub fn getMaxAvailableAddress() linksection(".multiboot.text") u64 {
+    if (maxAvailableAddress == 0) {
+        for (memoryMap.entries[0..memoryMap.length]) |entry| {
+            if (entry.region_type == arch.MemoryMapEntryType.AVAILABLE) {
+                maxAvailableAddress = entry.address + entry.size;
+            }
+        }
+    }
+
+    return maxAvailableAddress;
 }

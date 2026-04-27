@@ -52,7 +52,7 @@ pub const MemoryMap = struct {
 pub const MemoryMapEntry = struct {
     address: u64 = undefined,
     size: u64 = undefined,
-    region_type: MemoryMapEntryType = undefined,
+    region_type: MemoryMapEntryType = MemoryMapEntryType.RESERVED,
 };
 
 pub const MemoryMapEntryType = enum(u8) {
@@ -89,7 +89,7 @@ pub const EarlyAllocError = error{
 pub fn validateImpl(comptime T: type) void {
     comptime {
         // boot
-        assertFn(T.boot, "allocate", fn (neededSize: usize, alignment: usize, entryType: ReservedMapEntryType) EarlyAllocError!*anyopaque);
+        assertFn(T.boot, "allocate", fn (neededSize: usize, alignment: usize, entryType: ReservedMapEntryType) EarlyAllocError!*allowzero anyopaque);
         assertFn(T.boot, "finishBoot", fn () void);
 
         // cpu
@@ -98,9 +98,10 @@ pub fn validateImpl(comptime T: type) void {
         // mmu
         assertFn(T.mmu, "removeIdentityMapping", fn () void);
         assertFn(T.mmu, "getPhysicalAddress", fn (virtualAddress: usize) ?usize);
-        assertFn(T.mmu, "getMemoryMap", fn () MmuError!*MemoryMap);
+        assertFn(T.mmu, "getMemoryMap", fn () *MemoryMap);
         assertFn(T.mmu, "mapPage", fn (virtualAddress: usize, physicalAddress: usize) void);
         assertFn(T.mmu, "unmapPage", fn (virtualAddress: usize) void);
+        assertFn(T.mmu, "getMaxAvailableAddress", fn () u64);
 
         // interrupts
         assertFn(T.interrupts, "initialize", fn () void);

@@ -84,9 +84,12 @@ pub fn build(b: *std.Build) void {
     const qemu_cmd = b.addSystemCommand(&[_][]const u8{
         // zig fmt: off
         "qemu-system-i386",
-        //"-chardev", "stdio,id=char0,mux=on,logfile=serial.log,signal=off",
-        //"-serial", "chardev:char0", "-mon", "chardev=char0",
-        //"-debugcon", "stdio",
+        // "-serial", "serial.log",
+        // "-chardev", "stdio,id=char0,mux=on,logfile=serial.log,signal=off",
+        // "-serial", "chardev:char0", "-mon", "chardev=char0",
+        // "-debugcon", "stdio",
+        "-chardev","file,id=serial0,path=serial.log",
+        "-serial","chardev:serial0",
         "-S",
         "-s",
         "-m", "4G",

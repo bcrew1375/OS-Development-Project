@@ -6,9 +6,7 @@ const mmu = @import("../mmu/main.zig");
 var reservedMap linksection(".multiboot.data") = arch.ReservedMap{};
 var memoryMap: *arch.MemoryMap linksection(".multiboot.data") = undefined;
 
-pub fn initialize() !void {}
-
-pub fn allocate(neededSize: usize, alignment: usize, entryType: arch.ReservedMapEntryType) arch.EarlyAllocError!*anyopaque {
+pub fn allocate(neededSize: usize, alignment: usize, entryType: arch.ReservedMapEntryType) arch.EarlyAllocError!*allowzero anyopaque {
     if (neededSize == 0) {
         return arch.EarlyAllocError.InvalidSize;
     }
@@ -17,9 +15,7 @@ pub fn allocate(neededSize: usize, alignment: usize, entryType: arch.ReservedMap
         return arch.EarlyAllocError.InvalidAlignment;
     }
 
-    memoryMap = mmu.getMemoryMap() catch {
-        return arch.EarlyAllocError.InvalidMemoryMap;
-    };
+    memoryMap = mmu.getMemoryMap();
 
     for (memoryMap.entries[0..memoryMap.length]) |region| {
         if (region.region_type != arch.MemoryMapEntryType.AVAILABLE) {

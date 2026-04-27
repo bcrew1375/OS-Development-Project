@@ -103,8 +103,13 @@ export fn kernelSetup() linksection(".multiboot.text") noreturn {
             .memory = true,
         });
 
-    earlyAllocator.initialize() catch {};
-    mmu.initialize() catch {};
+    earlyAllocator.initialize() catch |err| {
+        @panic(@errorName(err));
+    };
+
+    mmu.initializePaging() catch |err| {
+        @panic(@errorName(err));
+    };
 
     asm volatile (
         \\jmp higherHalfEntry

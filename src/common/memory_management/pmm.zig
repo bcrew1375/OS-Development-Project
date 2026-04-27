@@ -24,7 +24,7 @@ const FrameInfo = extern struct {
     reserved: bool = undefined,
 };
 
-var frameMap: []FrameInfo = undefined;
+var frameMap: []allowzero FrameInfo = undefined;
 
 extern const _kernel_start: usize;
 extern const _kernel_end: usize;
@@ -38,24 +38,16 @@ pub fn initialize() !void {
         kernelBaseEndFrame = (@intFromPtr(&_kernel_end) + (FRAME_SIZE - 1)) / FRAME_SIZE;
     }
 
-    const memory_map = try arch.mmu.getMemoryMap();
+    totalFrames = 0;
+    totalAvailableFrames = 0;
+    totalSystemFrames = 0;
 
-    var max_address: u64 = 0;
+    const memory_map = arch.mmu.getMemoryMap();
 
-    for (memory_map.entries[0..memory_map.length]) |region| {
-        if (region.region_type != arch.MemoryMapEntryType.AVAILABLE and region.region_type != arch.MemoryMapEntryType.RECLAIMABLE) {
-            continue;
-        }
+    totalFrames = @truncate(try std.math.divFloor(u64, arch.mmu.getMaxAvailableAddress(), FRAME_SIZE));
 
-        if (region.address + region.size > max_address) {
-            max_address = region.address +| region.size;
-        }
-    }
-
-    totalFrames = @truncate(try std.math.divFloor(u64, max_address, FRAME_SIZE));
-
-    const frameMapPtr = try arch.boot.allocate(totalFrames * @sizeOf(FrameInfo), FRAME_SIZE, arch.ReservedMapEntryType.PERSISTENT);
-    frameMap = @as([*]FrameInfo, @ptrCast(@alignCast(frameMapPtr)))[0..totalFrames];
+    const frameMapPtr: *allowzero anyopaque = try arch.boot.allocate(totalFrames * @sizeOf(FrameInfo), FRAME_SIZE, arch.ReservedMapEntryType.PERSISTENT);
+    frameMap = @as([*]allowzero FrameInfo, @ptrCast(@alignCast(frameMapPtr)))[0..totalFrames];
 
     for (memory_map.entries[0..memory_map.length]) |region| {
         const region_start_frame: usize = @truncate(try std.math.divCeil(u64, region.address, FRAME_SIZE));
@@ -87,7 +79,7 @@ pub fn initialize() !void {
         }
     }
 
-    //markFrames(kernelBaseStartFrame, kernelBaseEndFrame - kernelBaseStartFrame, arch.MemoryMapEntryType.RESERVED);
+    // markFrames(kernelBaseStartFrame, kernelBaseEndFrame - kernelBaseStartFrame, arch.MemoryMapEntryType.RESERVED);
 
     // Also reserve the first 1MB for BIOS/Real Mode structures usually found on x86
     //mark_frames(0, 0x100000 / FRAME_SIZE);
@@ -117,20 +109,16 @@ pub fn initialize() !void {
 
 pub fn allocate(needed_frames: usize) !usize {
     if ((needed_frames < 1) or
-        (needed_frames > (totalAvailableFrames - getKernelBaseFrames())))
+        (needed_frames > (totalAvailableFrames)))
     {
         return PmmError.InvalidSize;
     }
-
-    std.debug.print("Needed Frames: {d}\n", .{needed_frames});
-    std.debug.print("Total Frames: {d}\n", .{totalAvailableFrames});
-    std.debug.print("Kernel Frames: {d}\n", .{getKernelBaseFrames()});
 
     const start_frame = try get_start_frame(needed_frames);
     const end_frame: usize = start_frame + needed_frames;
 
     for (start_frame..end_frame) |frame| {
-        frameMap[frame].used = false;
+        frameMap[frame].used = true;
     }
 
     return start_frame * FRAME_SIZE;
@@ -147,11 +135,11 @@ pub fn allocate(needed_frames: usize) !usize {
 // }
 
 pub fn free(start_frame: usize, total_frames: usize) !void {
-    if (start_frame > totalAvailableFrames) {
+    const end_frame: usize = start_frame +| total_frames;
+
+    if (end_frame > totalAvailableFrames) {
         return PmmError.InvalidIndex;
     }
-
-    const end_frame: usize = start_frame + total_frames;
 
     for (start_frame..end_frame) |frame| {
         frameMap[frame].used = false;
@@ -202,6 +190,10 @@ fn markFrames(start_frame: usize, total_frames: usize, region_type: arch.MemoryM
 }
 
 pub fn getTotalFrames() usize {
+    return totalFrames;
+}
+
+pub fn getTotalAvailableFrames() usize {
     return totalAvailableFrames;
 }
 
@@ -209,6 +201,6 @@ pub fn getTotalAvailableRAM() u64 {
     return totalAvailableFrames * FRAME_SIZE;
 }
 
-pub fn getKernelBaseFrames() usize {
+pub fn getReservedFrames() usize {
     return kernelBaseEndFrame - kernelBaseStartFrame;
 }

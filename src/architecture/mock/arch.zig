@@ -35,6 +35,7 @@ pub const mmu = struct {
     pub const getMemoryMap = mmu_impl.getMemoryMap;
     pub const mapPage = mmu_impl.mapPage;
     pub const unmapPage = mmu_impl.unmapPage;
+    pub const getMaxAvailableAddress = mmu_impl.getMaxAvailableAddress;
 };
 
 pub const platform = struct {

@@ -4,7 +4,6 @@ const mmu = @import("../mmu/main.zig");
 const std = @import("std");
 
 var reservedMap linksection(".multiboot.data") = arch.ReservedMap{};
-var memoryMap: *arch.MemoryMap linksection(".multiboot.data") = undefined;
 var remainingPageSpace: usize linksection(".multiboot.data") = mmu.PAGE_TABLE_REGION_SIZE;
 var nextTableAddressSpace: usize linksection(".multiboot.data") = mmu.PAGE_TABLE_REGION_SIZE;
 
@@ -12,10 +11,7 @@ extern const _kernel_start: anyopaque;
 extern const _kernel_end: anyopaque;
 
 pub fn initialize() linksection(".multiboot.text") arch.EarlyAllocError!void {
-    memoryMap = arch.mmu.getMemoryMap();
-
-    const kernel_start_address = @intFromPtr(&_kernel_start);
-    const kernel_end_address = @intFromPtr(&_kernel_end);
+    const memoryMap = arch.mmu.getMemoryMap();
 
     for (memoryMap.entries[0..memoryMap.length]) |entry| {
         if (entry.region_type != arch.MemoryMapEntryType.AVAILABLE) {
@@ -27,10 +23,13 @@ pub fn initialize() linksection(".multiboot.text") arch.EarlyAllocError!void {
     try reserve(0, 0x9FC00, arch.ReservedMapEntryType.PERSISTENT);
     try reserve(0xA0000, 0x50000, arch.ReservedMapEntryType.PERSISTENT);
 
+    const kernel_start_address = @intFromPtr(&_kernel_start);
+    const kernel_end_address = @intFromPtr(&_kernel_end);
+
     try reserve(kernel_start_address, kernel_end_address - kernel_start_address, arch.ReservedMapEntryType.PERSISTENT);
 }
 
-pub fn allocate(neededSize: usize, alignment: usize, entryType: arch.ReservedMapEntryType) linksection(".multiboot.text") arch.EarlyAllocError!*anyopaque {
+pub fn allocate(neededSize: usize, alignment: usize, entryType: arch.ReservedMapEntryType) linksection(".multiboot.text") arch.EarlyAllocError!*allowzero anyopaque {
     if (neededSize == 0) {
         return arch.EarlyAllocError.InvalidSize;
     }
@@ -38,6 +37,8 @@ pub fn allocate(neededSize: usize, alignment: usize, entryType: arch.ReservedMap
     if (alignment == 0) {
         return arch.EarlyAllocError.InvalidAlignment;
     }
+
+    const memoryMap = arch.mmu.getMemoryMap();
 
     for (memoryMap.entries[0..memoryMap.length]) |region| {
         if (region.region_type != arch.MemoryMapEntryType.AVAILABLE) {
