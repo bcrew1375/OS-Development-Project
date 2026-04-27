@@ -1,6 +1,5 @@
 const arch = @import("arch");
 const multiboot = @import("../boot/main.zig");
-const earlyAllocator = @import("../boot/early_allocator.zig");
 
 const std = @import("std");
 
@@ -62,9 +61,9 @@ var memoryMap: arch.MemoryMap linksection(".multiboot.data") = arch.MemoryMap{};
 
 var maxAvailableAddress: u64 = 0;
 
-pub fn initializePaging() linksection(".multiboot.text") arch.EarlyAllocError!void {
-    var pageDirectoryEntries: PageDirectory = @ptrCast(@alignCast(try earlyAllocator.allocate(@sizeOf(PageEntry) * ENTRIES_PER_DIRECTORY, PAGE_SIZE, arch.ReservedMapEntryType.PERSISTENT)));
-    var pageTable0Entries: *[ENTRIES_PER_TABLE]PageEntry = @ptrCast(@alignCast(try earlyAllocator.allocate(@sizeOf(PageEntry) * ENTRIES_PER_TABLE, PAGE_SIZE, arch.ReservedMapEntryType.PERSISTENT)));
+pub fn initializePaging() linksection(".multiboot.text") !void {
+    var pageDirectoryEntries: PageDirectory = @ptrCast(@alignCast(try arch.early_allocator.allocate(@sizeOf(PageEntry) * ENTRIES_PER_DIRECTORY, PAGE_SIZE, arch.ReservedMapEntryType.PERSISTENT)));
+    var pageTable0Entries: *[ENTRIES_PER_TABLE]PageEntry = @ptrCast(@alignCast(try arch.early_allocator.allocate(@sizeOf(PageEntry) * ENTRIES_PER_TABLE, PAGE_SIZE, arch.ReservedMapEntryType.PERSISTENT)));
 
     pageDirectoryEntries[0].address = @truncate(@intFromPtr(pageTable0Entries) >> 12);
     pageDirectoryEntries[0].present = true;

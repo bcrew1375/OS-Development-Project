@@ -1,35 +1,18 @@
 const arch = @import("arch");
-const mmu = @import("../mmu/main.zig");
 
 const std = @import("std");
 
-var reservedMap linksection(".multiboot.data") = arch.ReservedMap{};
-var remainingPageSpace: usize linksection(".multiboot.data") = mmu.PAGE_TABLE_REGION_SIZE;
-var nextTableAddressSpace: usize linksection(".multiboot.data") = mmu.PAGE_TABLE_REGION_SIZE;
-
-extern const _kernel_start: anyopaque;
-extern const _kernel_end: anyopaque;
-
-pub fn initialize() linksection(".multiboot.text") arch.EarlyAllocError!void {
+pub inline fn initialize() arch.EarlyAllocError!void {
     const memoryMap = arch.mmu.getMemoryMap();
 
     for (memoryMap.entries[0..memoryMap.length]) |entry| {
         if (entry.region_type != arch.MemoryMapEntryType.AVAILABLE) {
-            try reserve(@truncate(entry.address), @truncate(entry.size), arch.ReservedMapEntryType.PERSISTENT);
+            try arch.early_allocator.reserve(@truncate(entry.address), @truncate(entry.size), arch.ReservedMapEntryType.PERSISTENT);
         }
     }
-
-    // Reserve legacy x86 regions.
-    try reserve(0, 0x9FC00, arch.ReservedMapEntryType.PERSISTENT);
-    try reserve(0xA0000, 0x50000, arch.ReservedMapEntryType.PERSISTENT);
-
-    const kernel_start_address = @intFromPtr(&_kernel_start);
-    const kernel_end_address = @intFromPtr(&_kernel_end);
-
-    try reserve(kernel_start_address, kernel_end_address - kernel_start_address, arch.ReservedMapEntryType.PERSISTENT);
 }
 
-pub fn allocate(neededSize: usize, alignment: usize, entryType: arch.ReservedMapEntryType) linksection(".multiboot.text") arch.EarlyAllocError!*allowzero anyopaque {
+pub inline fn allocate(neededSize: usize, alignment: usize, entryType: arch.ReservedMapEntryType) arch.EarlyAllocError!*allowzero anyopaque {
     if (neededSize == 0) {
         return arch.EarlyAllocError.InvalidSize;
     }
@@ -39,6 +22,7 @@ pub fn allocate(neededSize: usize, alignment: usize, entryType: arch.ReservedMap
     }
 
     const memoryMap = arch.mmu.getMemoryMap();
+    const reservedMap = arch.early_allocator.getReservedMap();
 
     for (memoryMap.entries[0..memoryMap.length]) |region| {
         if (region.region_type != arch.MemoryMapEntryType.AVAILABLE) {
@@ -71,7 +55,7 @@ pub fn allocate(neededSize: usize, alignment: usize, entryType: arch.ReservedMap
             }
 
             // If we reached here, no overlaps were found for this candidate
-            try reserve(candidate_start, neededSize, entryType);
+            try arch.early_allocator.reserve(candidate_start, neededSize, entryType);
             return @ptrFromInt(candidate_start);
         }
     }
@@ -79,7 +63,9 @@ pub fn allocate(neededSize: usize, alignment: usize, entryType: arch.ReservedMap
     return arch.EarlyAllocError.OutOfSpace;
 }
 
-fn reserve(address: usize, size: usize, entry_type: arch.ReservedMapEntryType) linksection(".multiboot.text") arch.EarlyAllocError!void {
+pub inline fn reserve(address: usize, size: usize, entry_type: arch.ReservedMapEntryType) arch.EarlyAllocError!void {
+    const reservedMap = arch.early_allocator.getReservedMap();
+
     if (reservedMap.length >= arch.MAX_EARLY_RESERVATIONS) {
         return arch.EarlyAllocError.OutOfReservations;
     }
@@ -89,25 +75,4 @@ fn reserve(address: usize, size: usize, entry_type: arch.ReservedMapEntryType) l
     reservedMap.entries[reservedMap.length].entry_type = entry_type;
 
     reservedMap.length += 1;
-
-    if (size > remainingPageSpace) {
-        const page_table_count: usize = @truncate((size / mmu.PAGE_TABLE_REGION_SIZE) +| 1);
-        try expandPageTables(page_table_count);
-        remainingPageSpace +|= mmu.PAGE_TABLE_REGION_SIZE * page_table_count;
-    }
-
-    remainingPageSpace -|= size;
-}
-
-fn expandPageTables(pageTables: usize) arch.EarlyAllocError!void {
-    if (pageTables == 0) {
-        return arch.EarlyAllocError.InvalidSize;
-    }
-
-    const start_address = @intFromPtr(try allocate(pageTables, mmu.PAGE_SIZE, arch.ReservedMapEntryType.PERSISTENT));
-
-    for (0..pageTables) |_| {
-        mmu.mapEarlyPageTable(start_address, nextTableAddressSpace);
-        nextTableAddressSpace += mmu.PAGE_TABLE_REGION_SIZE;
-    }
 }

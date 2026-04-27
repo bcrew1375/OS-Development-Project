@@ -4,8 +4,6 @@ const gdt = @import("../interrupts/global_descriptor_table.zig");
 const idt = @import("../interrupts/interrupt_descriptor_table.zig");
 const mmu = @import("../mmu/main.zig");
 
-pub const earlyAllocator = @import("early_allocator.zig");
-
 const std = @import("std");
 
 // OS Dev: https://wiki.osdev.org/Zig_Bare_Bones
@@ -103,7 +101,7 @@ export fn kernelSetup() linksection(".multiboot.text") noreturn {
             .memory = true,
         });
 
-    earlyAllocator.initialize() catch |err| {
+    arch.early_allocator.initialize() catch |err| {
         @panic(@errorName(err));
     };
 

@@ -1,3 +1,4 @@
+const early_allocator_impl = @import("early_allocator/main.zig");
 const boot_impl = @import("boot/main.zig");
 const cpu_impl = @import("cpu/main.zig");
 const interrupts_impl = @import("interrupts/main.zig");
@@ -10,8 +11,14 @@ comptime {
     validateImpl(@This());
 }
 
+pub const early_allocator = struct {
+    pub const initialize = early_allocator_impl.initialize;
+    pub const allocate = early_allocator_impl.allocate;
+    pub const reserve = early_allocator_impl.reserve;
+    pub const getReservedMap = early_allocator_impl.getReservedMap;
+};
+
 pub const boot = struct {
-    pub const allocate = boot_impl.earlyAllocator.allocate;
     pub const finishBoot = boot_impl.finishBoot;
 };
 

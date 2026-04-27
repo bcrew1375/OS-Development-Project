@@ -46,7 +46,7 @@ pub fn initialize() !void {
 
     totalFrames = @truncate(try std.math.divFloor(u64, arch.mmu.getMaxAvailableAddress(), FRAME_SIZE));
 
-    const frameMapPtr: *allowzero anyopaque = try arch.boot.allocate(totalFrames * @sizeOf(FrameInfo), FRAME_SIZE, arch.ReservedMapEntryType.PERSISTENT);
+    const frameMapPtr: *allowzero anyopaque = try arch.early_allocator.allocate(totalFrames * @sizeOf(FrameInfo), FRAME_SIZE, arch.ReservedMapEntryType.PERSISTENT);
     frameMap = @as([*]allowzero FrameInfo, @ptrCast(@alignCast(frameMapPtr)))[0..totalFrames];
 
     for (memory_map.entries[0..memory_map.length]) |region| {

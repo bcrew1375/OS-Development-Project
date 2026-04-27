@@ -11,6 +11,7 @@ else switch (builtin.cpu.arch) {
         @tagName(builtin.cpu.arch)),
 };
 
+pub const early_allocator = impl.early_allocator;
 pub const boot = impl.boot;
 pub const cpu = impl.cpu;
 pub const interrupts = impl.interrupts;
@@ -88,8 +89,13 @@ pub const EarlyAllocError = error{
 
 pub fn validateImpl(comptime T: type) void {
     comptime {
+        //early_allocator
+        assertFn(T.early_allocator, "initialize", fn () EarlyAllocError!void);
+        assertFn(T.early_allocator, "allocate", fn (neededSize: usize, alignment: usize, entryType: ReservedMapEntryType) EarlyAllocError!*allowzero anyopaque);
+        assertFn(T.early_allocator, "reserve", fn (address: usize, size: usize, entry_type: ReservedMapEntryType) EarlyAllocError!void);
+        assertFn(T.early_allocator, "getReservedMap", fn () *ReservedMap);
+
         // boot
-        assertFn(T.boot, "allocate", fn (neededSize: usize, alignment: usize, entryType: ReservedMapEntryType) EarlyAllocError!*allowzero anyopaque);
         assertFn(T.boot, "finishBoot", fn () void);
 
         // cpu
