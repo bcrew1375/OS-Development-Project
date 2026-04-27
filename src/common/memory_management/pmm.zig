@@ -46,7 +46,7 @@ pub fn initialize() !void {
 
     totalFrames = @truncate(try std.math.divFloor(u64, arch.mmu.getMaxAvailableAddress(), FRAME_SIZE));
 
-    const frameMapPtr: *allowzero anyopaque = try arch.early_allocator.allocate(totalFrames * @sizeOf(FrameInfo), FRAME_SIZE, arch.ReservedMapEntryType.PERSISTENT);
+    const frameMapPtr: *allowzero anyopaque = try arch.early_allocator.allocate(totalFrames * @sizeOf(FrameInfo), FRAME_SIZE, arch.ReservedMapRegionType.PERSISTENT);
     frameMap = @as([*]allowzero FrameInfo, @ptrCast(@alignCast(frameMapPtr)))[0..totalFrames];
 
     for (memory_map.entries[0..memory_map.length]) |region| {
@@ -57,7 +57,7 @@ pub fn initialize() !void {
         var reserved = true;
 
         switch (region.region_type) {
-            arch.MemoryMapEntryType.AVAILABLE => {
+            arch.MemoryMapRegionType.AVAILABLE => {
                 used = false;
                 reserved = false;
 
@@ -174,12 +174,12 @@ fn get_start_frame(needed_frames: usize) !usize {
     return PmmError.OutOfMemory;
 }
 
-fn markFrames(start_frame: usize, total_frames: usize, region_type: arch.MemoryMapEntryType) void {
+fn markFrames(start_frame: usize, total_frames: usize, region_type: arch.MemoryMapRegionType) void {
     const end_frame: usize = start_frame + total_frames;
 
     for (start_frame..end_frame) |frame| {
         switch (region_type) {
-            arch.MemoryMapEntryType.AVAILABLE => {
+            arch.MemoryMapRegionType.AVAILABLE => {
                 frameMap[frame].used = false;
             },
             else => {

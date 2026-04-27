@@ -36,10 +36,10 @@ const MultibootMemoryMapEntry = extern struct {
     size: u32,
     address: u64,
     length: u64,
-    region_type: MultibootMemoryMapEntryTypes,
+    region_type: MultibootMemoryMapRegionTypes,
 };
 
-const MultibootMemoryMapEntryTypes = enum(u32) {
+const MultibootMemoryMapRegionTypes = enum(u32) {
     AVAILABLE = 1,
     RESERVED = 2,
     ACPI_RECLAIMABLE = 3,
@@ -53,17 +53,13 @@ var pageTables: *[PAGE_TABLES_COUNT]PageTable linksection(".multiboot.data") = u
 
 var pageTableCounter: usize linksection(".multiboot.data") = 0;
 
-// var pageDirectoryEntries: *[ENTRIES_PER_DIRECTORY]PageEntry = undefined; // align(PAGE_SIZE) = [_]PageEntry{.{}} ** ENTRIES_PER_DIRECTORY;
-// var pageTable0Entries: *[ENTRIES_PER_TABLE]PageEntry = undefined; // align(PAGE_SIZE) linksection(".multiboot.data") = [_]PageEntry{.{}} ** ENTRIES_PER_TABLE;
-
-var memoryMapEntries: [arch.MAX_MEMORY_MAP_ENTRIES]arch.MemoryMapEntry linksection(".multiboot.data") = [_]arch.MemoryMapEntry{.{}} ** arch.MAX_MEMORY_MAP_ENTRIES;
 var memoryMap: arch.MemoryMap linksection(".multiboot.data") = arch.MemoryMap{};
 
 var maxAvailableAddress: u64 = 0;
 
 pub fn initializePaging() linksection(".multiboot.text") !void {
-    var pageDirectoryEntries: PageDirectory = @ptrCast(@alignCast(try arch.early_allocator.allocate(@sizeOf(PageEntry) * ENTRIES_PER_DIRECTORY, PAGE_SIZE, arch.ReservedMapEntryType.PERSISTENT)));
-    var pageTable0Entries: *[ENTRIES_PER_TABLE]PageEntry = @ptrCast(@alignCast(try arch.early_allocator.allocate(@sizeOf(PageEntry) * ENTRIES_PER_TABLE, PAGE_SIZE, arch.ReservedMapEntryType.PERSISTENT)));
+    var pageDirectoryEntries: PageDirectory = @ptrCast(@alignCast(try arch.early_allocator.allocate(@sizeOf(PageEntry) * ENTRIES_PER_DIRECTORY, PAGE_SIZE, arch.ReservedMapRegionType.PERSISTENT)));
+    var pageTable0Entries: *[ENTRIES_PER_TABLE]PageEntry = @ptrCast(@alignCast(try arch.early_allocator.allocate(@sizeOf(PageEntry) * ENTRIES_PER_TABLE, PAGE_SIZE, arch.ReservedMapRegionType.PERSISTENT)));
 
     pageDirectoryEntries[0].address = @truncate(@intFromPtr(pageTable0Entries) >> 12);
     pageDirectoryEntries[0].present = true;
@@ -250,8 +246,6 @@ pub fn unmapPage(virtualAddress: usize) void {
 }
 
 pub fn readMultibootMemoryMap() linksection(".multiboot.text") void {
-    memoryMap.entries = &memoryMapEntries;
-
     var offset: usize = 0;
 
     for (0..arch.MAX_MEMORY_MAP_ENTRIES) |entry| {
@@ -265,9 +259,9 @@ pub fn readMultibootMemoryMap() linksection(".multiboot.text") void {
         memoryMap.entries[entry].size = map_entry.length;
 
         switch (map_entry.region_type) {
-            MultibootMemoryMapEntryTypes.AVAILABLE => memoryMap.entries[entry].region_type = arch.MemoryMapEntryType.AVAILABLE,
-            MultibootMemoryMapEntryTypes.ACPI_RECLAIMABLE => memoryMap.entries[entry].region_type = arch.MemoryMapEntryType.RECLAIMABLE,
-            else => memoryMap.entries[entry].region_type = arch.MemoryMapEntryType.RESERVED,
+            MultibootMemoryMapRegionTypes.AVAILABLE => memoryMap.entries[entry].region_type = arch.MemoryMapRegionType.AVAILABLE,
+            MultibootMemoryMapRegionTypes.ACPI_RECLAIMABLE => memoryMap.entries[entry].region_type = arch.MemoryMapRegionType.RECLAIMABLE,
+            else => memoryMap.entries[entry].region_type = arch.MemoryMapRegionType.RESERVED,
         }
 
         memoryMap.length += 1;
@@ -286,7 +280,7 @@ pub fn getMemoryMap() linksection(".multiboot.text") *arch.MemoryMap {
 pub fn getMaxAvailableAddress() linksection(".multiboot.text") u64 {
     if (maxAvailableAddress == 0) {
         for (memoryMap.entries[0..memoryMap.length]) |entry| {
-            if (entry.region_type == arch.MemoryMapEntryType.AVAILABLE) {
+            if (entry.region_type == arch.MemoryMapRegionType.AVAILABLE) {
                 maxAvailableAddress = entry.address + entry.size;
             }
         }

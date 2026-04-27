@@ -1,9 +1,7 @@
 const std = @import("std");
 const arch = @import("arch");
 
-var memoryMap: *arch.MemoryMap = undefined;
-
-var regionsMap: [arch.MAX_MEMORY_MAP_ENTRIES]arch.MemoryMapEntry = [_]arch.MemoryMapEntry{.{}} ** arch.MAX_MEMORY_MAP_ENTRIES;
+var memoryMap: arch.MemoryMap = arch.MemoryMap{};
 
 var testRegion: arch.MemoryMapEntry = undefined;
 var testRegionHeap: []u8 = undefined;
@@ -20,21 +18,19 @@ pub fn getMemoryMap() *arch.MemoryMap {
         @panic("Mock MMU allocation failed");
     };
     testRegion.address = @intFromPtr(testRegionHeap.ptr);
-    testRegion.region_type = arch.MemoryMapEntryType.AVAILABLE;
+    testRegion.region_type = arch.MemoryMapRegionType.AVAILABLE;
     testRegion.size = 64 * 1024 * 1024;
 
     heapBase = @intFromPtr(testRegionHeap.ptr);
-
-    regionsMap[0] = testRegion;
 
     memoryMap = std.heap.page_allocator.create(arch.MemoryMap) catch {
         @panic("Mock MMU map creation failed");
     };
 
-    memoryMap.entries = &regionsMap;
+    memoryMap.entries[0] = testRegion;
     memoryMap.length = 1;
 
-    return memoryMap;
+    return &memoryMap;
 }
 
 pub fn mapPage(virtual_address: usize, physical_address: usize) void {

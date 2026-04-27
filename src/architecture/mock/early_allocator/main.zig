@@ -9,11 +9,11 @@ pub fn initialize() arch.EarlyAllocError!void {
     try common_early_allocator.initialize();
 }
 
-pub fn allocate(neededSize: usize, alignment: usize, entryType: arch.ReservedMapEntryType) arch.EarlyAllocError!*allowzero anyopaque {
+pub fn allocate(neededSize: usize, alignment: usize, entryType: arch.ReservedMapRegionType) arch.EarlyAllocError!*allowzero anyopaque {
     return try common_early_allocator.allocate(neededSize, alignment, entryType);
 }
 
-pub fn reserve(address: usize, size: usize, entry_type: arch.ReservedMapEntryType) arch.EarlyAllocError!void {
+pub fn reserve(address: usize, size: usize, entry_type: arch.ReservedMapRegionType) arch.EarlyAllocError!void {
     try common_early_allocator.reserve(address, size, entry_type);
 }
 

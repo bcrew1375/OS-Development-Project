@@ -11,6 +11,10 @@ else switch (builtin.cpu.arch) {
         @tagName(builtin.cpu.arch)),
 };
 
+comptime {
+    validateImpl(impl);
+}
+
 pub const early_allocator = impl.early_allocator;
 pub const boot = impl.boot;
 pub const cpu = impl.cpu;
@@ -45,7 +49,7 @@ pub const MmuError = error{
 };
 
 pub const MemoryMap = struct {
-    entries: *[MAX_MEMORY_MAP_ENTRIES]MemoryMapEntry = undefined,
+    entries: [MAX_MEMORY_MAP_ENTRIES]MemoryMapEntry = undefined,
     length: usize = 0,
     available_regions: usize = 0,
 };
@@ -53,25 +57,27 @@ pub const MemoryMap = struct {
 pub const MemoryMapEntry = struct {
     address: u64 = undefined,
     size: u64 = undefined,
-    region_type: MemoryMapEntryType = MemoryMapEntryType.RESERVED,
+    region_type: MemoryMapRegionType = MemoryMapRegionType.RESERVED,
 };
 
-pub const MemoryMapEntryType = enum(u8) {
+pub const MemoryMapRegionType = enum(u8) {
     AVAILABLE,
     RESERVED,
     RECLAIMABLE,
     BAD,
 };
 
-pub const ReservedMapEntryType = enum {
-    TEMPORARY,
-    PERSISTENT,
+pub const ReservedMapRegionType = enum {
+    TEMPORARY, // Can be reclaimed once the full VM/Slab allocator is up
+    PERSISTENT, // Kernel structures that live for the lifetime of the OS
+    KERNEL_CODE,
+    BOOTLOADER_DATA,
 };
 
 pub const ReservedMapEntry = struct {
     address: usize,
     size: usize,
-    entry_type: ReservedMapEntryType,
+    region_type: ReservedMapRegionType,
 };
 
 pub const ReservedMap = struct {
@@ -91,8 +97,8 @@ pub fn validateImpl(comptime T: type) void {
     comptime {
         //early_allocator
         assertFn(T.early_allocator, "initialize", fn () EarlyAllocError!void);
-        assertFn(T.early_allocator, "allocate", fn (neededSize: usize, alignment: usize, entryType: ReservedMapEntryType) EarlyAllocError!*allowzero anyopaque);
-        assertFn(T.early_allocator, "reserve", fn (address: usize, size: usize, entry_type: ReservedMapEntryType) EarlyAllocError!void);
+        assertFn(T.early_allocator, "allocate", fn (needed_size: usize, alignment: usize, region_type: ReservedMapRegionType) EarlyAllocError!*allowzero anyopaque);
+        assertFn(T.early_allocator, "reserve", fn (address: usize, size: usize, region_type: ReservedMapRegionType) EarlyAllocError!void);
         assertFn(T.early_allocator, "getReservedMap", fn () *ReservedMap);
 
         // boot

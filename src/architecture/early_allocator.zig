@@ -6,13 +6,13 @@ pub inline fn initialize() arch.EarlyAllocError!void {
     const memoryMap = arch.mmu.getMemoryMap();
 
     for (memoryMap.entries[0..memoryMap.length]) |entry| {
-        if (entry.region_type != arch.MemoryMapEntryType.AVAILABLE) {
-            try arch.early_allocator.reserve(@truncate(entry.address), @truncate(entry.size), arch.ReservedMapEntryType.PERSISTENT);
+        if (entry.region_type != arch.MemoryMapRegionType.AVAILABLE) {
+            try arch.early_allocator.reserve(@truncate(entry.address), @truncate(entry.size), arch.ReservedMapRegionType.PERSISTENT);
         }
     }
 }
 
-pub inline fn allocate(neededSize: usize, alignment: usize, entryType: arch.ReservedMapEntryType) arch.EarlyAllocError!*allowzero anyopaque {
+pub inline fn allocate(neededSize: usize, alignment: usize, regionType: arch.ReservedMapRegionType) arch.EarlyAllocError!*allowzero anyopaque {
     if (neededSize == 0) {
         return arch.EarlyAllocError.InvalidSize;
     }
@@ -25,7 +25,7 @@ pub inline fn allocate(neededSize: usize, alignment: usize, entryType: arch.Rese
     const reservedMap = arch.early_allocator.getReservedMap();
 
     for (memoryMap.entries[0..memoryMap.length]) |region| {
-        if (region.region_type != arch.MemoryMapEntryType.AVAILABLE) {
+        if (region.region_type != arch.MemoryMapRegionType.AVAILABLE) {
             continue;
         }
 
@@ -55,7 +55,7 @@ pub inline fn allocate(neededSize: usize, alignment: usize, entryType: arch.Rese
             }
 
             // If we reached here, no overlaps were found for this candidate
-            try arch.early_allocator.reserve(candidate_start, neededSize, entryType);
+            try arch.early_allocator.reserve(candidate_start, neededSize, regionType);
             return @ptrFromInt(candidate_start);
         }
     }
@@ -63,7 +63,7 @@ pub inline fn allocate(neededSize: usize, alignment: usize, entryType: arch.Rese
     return arch.EarlyAllocError.OutOfSpace;
 }
 
-pub inline fn reserve(address: usize, size: usize, entry_type: arch.ReservedMapEntryType) arch.EarlyAllocError!void {
+pub inline fn reserve(address: usize, size: usize, region_type: arch.ReservedMapRegionType) arch.EarlyAllocError!void {
     const reservedMap = arch.early_allocator.getReservedMap();
 
     if (reservedMap.length >= arch.MAX_EARLY_RESERVATIONS) {
@@ -72,7 +72,7 @@ pub inline fn reserve(address: usize, size: usize, entry_type: arch.ReservedMapE
 
     reservedMap.entries[reservedMap.length].address = address;
     reservedMap.entries[reservedMap.length].size = size;
-    reservedMap.entries[reservedMap.length].entry_type = entry_type;
+    reservedMap.entries[reservedMap.length].region_type = region_type;
 
     reservedMap.length += 1;
 }
