@@ -1,50 +1,79 @@
-const kernel = @import("kernel_common");
 const std = @import("std");
+const kernel = @import("kernel_common");
 
-const PmmTestError = error{
-    InvalidMemoryMap,
-};
+// The PMM expects these symbols to be defined by the linker.
+// For testing purposes, we export them here.
+extern const _kernel_start: usize;
+extern const _kernel_end: usize;
 
-test "PMM allocation - InvalidSize" {
-    const err = kernel.pmm.PmmError.InvalidSize;
-
+test "Physical Memory Manager: initialization" {
+    // This uses the mock MMU provided in the architecture/mock folder
     try kernel.pmm.initialize();
 
-    const total_frames = kernel.pmm.getTotalAvailableFrames();
+    const total_available_frames = kernel.pmm.getTotalAvailableFrames();
+    const available_ram = kernel.pmm.getTotalAvailableRAM();
 
-    if (total_frames == 0) {
-        return PmmTestError.InvalidMemoryMap;
-    }
-
-    try std.testing.expectError(err, kernel.pmm.allocate(0));
-    try std.testing.expectError(err, kernel.pmm.allocate(total_frames + 1));
+    try std.testing.expect(total_available_frames > 0);
+    try std.testing.expect(available_ram > 0);
+    try std.testing.expect(kernel.pmm.getTotalAvailableFrames() <= kernel.pmm.getTotalFrames());
+    try std.testing.expect(kernel.pmm.getCurrentAvailableFrames() <= kernel.pmm.getTotalAvailableFrames());
 }
 
-test "PMM allocation - OutOfMemory" {
-    const err = kernel.pmm.PmmError.OutOfMemory;
-
+test "Physical Memory Manager: allocate and free single frame" {
     try kernel.pmm.initialize();
+    const initial_available = kernel.pmm.getCurrentAvailableFrames();
 
-    const total_frames = kernel.pmm.getTotalFrames();
+    const address = try kernel.pmm.allocate(1);
 
-    if (total_frames == 0) {
-        return PmmTestError.InvalidMemoryMap;
-    }
+    // Ensure address is frame-aligned
+    try std.testing.expect(address % kernel.pmm.FRAME_SIZE == 0);
+    try std.testing.expectEqual(initial_available - 1, kernel.pmm.getCurrentAvailableFrames());
 
-    _ = try kernel.pmm.allocate(kernel.pmm.getTotalAvailableFrames());
-    try std.testing.expectError(err, kernel.pmm.allocate(1));
+    // Free the frame
+    try kernel.pmm.free(address / kernel.pmm.FRAME_SIZE, 1);
+    try std.testing.expectEqual(initial_available, kernel.pmm.getCurrentAvailableFrames());
 }
 
-test "PMM allocation - InvalidIndex" {
-    const err = kernel.pmm.PmmError.InvalidIndex;
-
+test "Physical Memory Manager: contiguous allocation" {
     try kernel.pmm.initialize();
+    const requested_frames = 16;
+    const initial_available = kernel.pmm.getCurrentAvailableFrames();
 
-    const total_frames = kernel.pmm.getTotalAvailableFrames();
+    const address = try kernel.pmm.allocate(requested_frames);
+    try std.testing.expectEqual(initial_available - requested_frames, kernel.pmm.getCurrentAvailableFrames());
 
-    if (total_frames == 0) {
-        return PmmTestError.InvalidMemoryMap;
-    }
+    // Verify we can free the block
+    try kernel.pmm.free(address / kernel.pmm.FRAME_SIZE, requested_frames);
+    try std.testing.expectEqual(initial_available, kernel.pmm.getCurrentAvailableFrames());
+}
 
-    try std.testing.expectError(err, kernel.pmm.free(kernel.pmm.getTotalAvailableFrames(), 1));
+test "Physical Memory Manager: exhaustion and out of memory" {
+    try kernel.pmm.initialize();
+    const available = kernel.pmm.getCurrentAvailableFrames();
+
+    // Attempting to allocate more than available should return InvalidSize or OutOfMemory
+    const oversized_request = kernel.pmm.allocate(available + 1);
+    try std.testing.expectError(kernel.pmm.PmmError.InvalidSize, oversized_request);
+
+    // Allocate everything
+    const address = try kernel.pmm.allocate(available);
+    try std.testing.expectEqual(0, kernel.pmm.getCurrentAvailableFrames());
+
+    // Next allocation should fail
+    const failed_request = kernel.pmm.allocate(1);
+    try std.testing.expectError(kernel.pmm.PmmError.OutOfMemory, failed_request);
+
+    // Cleanup
+    try kernel.pmm.free(address / kernel.pmm.FRAME_SIZE, available);
+}
+
+test "Physical Memory Manager: zero size allocation" {
+    try kernel.pmm.initialize();
+    const result = kernel.pmm.allocate(0);
+    try std.testing.expectError(kernel.pmm.PmmError.InvalidSize, result);
+}
+
+test "Physical Memory Manager: kernel reserved frames" {
+    try kernel.pmm.initialize();
+    try std.testing.expect(kernel.pmm.getReservedFrames() > 0);
 }

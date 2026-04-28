@@ -8,3 +8,6 @@
 ## Coding style
 - Use typical Zig or C++ naming conventions.
 - Prefer abstraction and generic interfaces whenever possible.
+
+## Testing
+- Tests should be categorized under the 'tests' subfolder. Do not inject tests into source files.

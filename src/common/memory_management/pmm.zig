@@ -18,6 +18,7 @@ var kernelBaseEndFrame: usize = 0;
 var totalFrames: usize = 0;
 var totalSystemFrames: usize = 0;
 var totalAvailableFrames: usize = 0;
+var currentAvailableFrames: usize = 0;
 
 const FrameInfo = extern struct {
     used: bool = undefined,
@@ -40,6 +41,7 @@ pub fn initialize() !void {
 
     totalFrames = 0;
     totalAvailableFrames = 0;
+    currentAvailableFrames = 0;
     totalSystemFrames = 0;
 
     const memory_map = arch.mmu.getMemoryMap();
@@ -79,6 +81,8 @@ pub fn initialize() !void {
         }
     }
 
+    currentAvailableFrames = totalAvailableFrames;
+
     // markFrames(kernelBaseStartFrame, kernelBaseEndFrame - kernelBaseStartFrame, arch.MemoryMapEntryType.RESERVED);
 
     // Also reserve the first 1MB for BIOS/Real Mode structures usually found on x86
@@ -109,9 +113,13 @@ pub fn initialize() !void {
 
 pub fn allocate(needed_frames: usize) !usize {
     if ((needed_frames < 1) or
-        (needed_frames > (totalAvailableFrames)))
+        (needed_frames > totalAvailableFrames))
     {
         return PmmError.InvalidSize;
+    }
+
+    if (needed_frames > currentAvailableFrames) {
+        return PmmError.OutOfMemory;
     }
 
     const start_frame = try get_start_frame(needed_frames);
@@ -120,6 +128,8 @@ pub fn allocate(needed_frames: usize) !usize {
     for (start_frame..end_frame) |frame| {
         frameMap[frame].used = true;
     }
+
+    currentAvailableFrames -= needed_frames;
 
     return start_frame * FRAME_SIZE;
 }
@@ -137,13 +147,19 @@ pub fn allocate(needed_frames: usize) !usize {
 pub fn free(start_frame: usize, total_frames: usize) !void {
     const end_frame: usize = start_frame +| total_frames;
 
-    if (end_frame > totalAvailableFrames) {
+    if (end_frame > totalFrames) {
         return PmmError.InvalidIndex;
+    }
+
+    if (total_frames > currentAvailableFrames) {
+        return PmmError.InvalidSize;
     }
 
     for (start_frame..end_frame) |frame| {
         frameMap[frame].used = false;
     }
+
+    currentAvailableFrames += total_frames;
 }
 
 fn get_start_frame(needed_frames: usize) !usize {
@@ -151,7 +167,7 @@ fn get_start_frame(needed_frames: usize) !usize {
     var start_frame: usize = 0;
     var is_first: bool = true;
 
-    for (0..totalAvailableFrames) |frame| {
+    for (0..totalFrames) |frame| {
         if (frameMap[frame].used == true) {
             frame_count = 0;
             start_frame = 0;
@@ -195,6 +211,10 @@ pub fn getTotalFrames() usize {
 
 pub fn getTotalAvailableFrames() usize {
     return totalAvailableFrames;
+}
+
+pub fn getCurrentAvailableFrames() usize {
+    return currentAvailableFrames;
 }
 
 pub fn getTotalAvailableRAM() u64 {
