@@ -29,9 +29,10 @@ pub fn getMemoryMap() *arch.MemoryMap {
     return &memoryMap;
 }
 
-pub fn mapPage(virtual_address: usize, physical_address: usize) void {
+pub fn mapPage(virtual_address: usize, physical_address: usize, flags: arch.PageProtection) arch.MmuError!void {
     _ = virtual_address;
     _ = physical_address;
+    _ = flags;
 }
 
 pub fn unmapPage(virtual_address: usize) void {

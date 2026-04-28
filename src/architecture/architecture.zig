@@ -46,6 +46,7 @@ pub const MAX_EARLY_RESERVATIONS = 128;
 
 pub const MmuError = error{
     MemoryMapReadError,
+    MappingError,
 };
 
 pub const MemoryMap = struct {
@@ -93,6 +94,13 @@ pub const EarlyAllocError = error{
     InvalidMemoryMap,
 };
 
+pub const PageProtection = struct {
+    write: bool = false,
+    user: bool = false,
+    execute: bool = true,
+    global: bool = false,
+};
+
 pub fn validateImpl(comptime T: type) void {
     comptime {
         validateInterface(T.early_allocator, struct {
@@ -114,7 +122,7 @@ pub fn validateImpl(comptime T: type) void {
             removeIdentityMapping: fn () void,
             getPhysicalAddress: fn (virtualAddress: usize) ?usize,
             getMemoryMap: fn () *MemoryMap,
-            mapPage: fn (virtualAddress: usize, physicalAddress: usize) void,
+            mapPage: fn (virtualAddress: usize, physicalAddress: usize, flags: PageProtection) MmuError!void,
             unmapPage: fn (virtualAddress: usize) void,
             getMaxAvailableAddress: fn () u64,
         });

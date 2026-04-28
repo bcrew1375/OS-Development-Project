@@ -59,7 +59,7 @@ var maxAvailableAddress: u64 = 0;
 
 pub fn initializePaging() linksection(".multiboot.text") !void {
     var pageDirectoryEntries: PageDirectory = @ptrCast(@alignCast(try arch.early_allocator.allocate(@sizeOf(PageEntry) * ENTRIES_PER_DIRECTORY, PAGE_SIZE, arch.ReservedMapRegionType.PERSISTENT)));
-    var pageTable0Entries: *[ENTRIES_PER_TABLE]PageEntry = @ptrCast(@alignCast(try arch.early_allocator.allocate(@sizeOf(PageEntry) * ENTRIES_PER_TABLE, PAGE_SIZE, arch.ReservedMapRegionType.PERSISTENT)));
+    var pageTable0Entries: PageTable = @ptrCast(@alignCast(try arch.early_allocator.allocate(@sizeOf(PageEntry) * ENTRIES_PER_TABLE, PAGE_SIZE, arch.ReservedMapRegionType.PERSISTENT)));
 
     pageDirectoryEntries[0].address = @truncate(@intFromPtr(pageTable0Entries) >> 12);
     pageDirectoryEntries[0].present = true;
@@ -115,16 +115,16 @@ pub fn removeIdentityMapping() void {
 }
 
 pub fn getPhysicalAddress(virtualAddress: usize) ?usize {
-    const page_directory_index = virtualAddress >> 22;
-    const page_table_index = (virtualAddress & 0x003FF000) >> 12;
+    const page_directory_index: usize = virtualAddress >> 22;
+    const page_table_index: usize = (virtualAddress >> 12) & 0x3FF;
     const offset = virtualAddress & 0xFFF;
 
-    const page_table_address = @as(usize, @truncate(@as(usize, pageDirectory.*[page_directory_index].address << 12)));
-    const page_table: *PageTable = @ptrFromInt(page_table_address);
-    const page_table_entry = page_table.*[page_table_index];
+    if (!pageDirectory[page_directory_index].present) return null;
 
-    const physical_address = page_table_entry.address + offset;
+    const page_table_entry = pageTables[page_directory_index][page_table_index];
+    if (!page_table_entry.present) return null;
 
+    const physical_address = (@as(usize, page_table_entry.address) << 12) + offset;
     return physical_address;
 }
 
@@ -210,14 +210,33 @@ fn tableExists(virtualAddress: usize) bool {
 //     }
 // }
 
-pub fn mapPage(virtualAddress: usize, physicalAddress: usize) void {
-    const page_directory_index = virtualAddress >> 22;
+pub fn mapPage(virtualAddress: usize, physicalAddress: usize, flags: arch.PageProtection) arch.MmuError!void {
+    const page_directory_index: usize = virtualAddress >> 22;
+    const page_table_index: usize = (virtualAddress >> 12) & 0x3FF;
 
-    if (pageDirectory[page_directory_index].present == false) {
+    if (!pageDirectory[page_directory_index].present) {
+        // Allocate a new physical frame for the page table
+        const page_table_physical_address = try arch.pmm.allocate(1);
+
+        pageDirectory[page_directory_index].address = @truncate(page_table_physical_address >> 12);
         pageDirectory[page_directory_index].present = true;
-        pageDirectory[page_directory_index].writeable = true;
+        pageDirectory[page_directory_index].writeable = true; // Directory entries usually allow full access, controlled by PT
+
+        // Zero out the new page table using the recursive mapping
+        const page_table_virtual_pointer: [*]u8 = @ptrCast(pageTables[page_directory_index]);
+        @memset(page_table_virtual_pointer[0..PAGE_SIZE], 0);
     }
-    _ = physicalAddress;
+
+    pageTables[page_directory_index][page_table_index].address = @truncate(physicalAddress >> 12);
+    pageTables[page_directory_index][page_table_index].present = true;
+    pageTables[page_directory_index][page_table_index].writeable = flags.writeable;
+    pageTables[page_directory_index][page_table_index].user_accessible = flags.user_accessible;
+
+    // Invalidate the TLB entry for this virtual address
+    asm volatile ("invlpg (%[address])"
+        :
+        : [address] "r" (virtualAddress),
+        : .{ .memory = true });
 }
 
 pub fn mapEarlyPageTable(allocation_start_address: usize, mapping_start_address: usize) linksection(".multiboot.text") void {
@@ -242,7 +261,18 @@ pub fn mapEarlyPageTable(allocation_start_address: usize, mapping_start_address:
 }
 
 pub fn unmapPage(virtualAddress: usize) void {
-    _ = virtualAddress;
+    const page_directory_index: usize = virtualAddress >> 22;
+    const page_table_index: usize = (virtualAddress >> 12) & 0x3FF;
+
+    if (pageDirectory[page_directory_index].present) {
+        pageTables[page_directory_index][page_table_index].present = false;
+
+        // Invalidate the TLB entry
+        asm volatile ("invlpg (%[address])"
+            :
+            : [address] "r" (virtualAddress),
+            : .{ .memory = true });
+    }
 }
 
 pub fn readMultibootMemoryMap() linksection(".multiboot.text") void {
