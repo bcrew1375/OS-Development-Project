@@ -101,6 +101,13 @@ pub const PageProtection = struct {
     global: bool = false,
 };
 
+pub const FaultReason = struct {
+    address: u64,
+    write: bool,
+    supervisor: bool,
+    instruction_fetch: bool, // instruction fetch vs data access
+};
+
 pub fn validateImpl(comptime T: type) void {
     comptime {
         validateInterface(T.early_allocator, struct {

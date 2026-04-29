@@ -1,4 +1,5 @@
 const arch = @import("arch");
+const kernel_common = @import("kernel_common");
 const console = arch.platform;
 
 pub const idt = @import("interrupt_descriptor_table.zig");
@@ -58,12 +59,19 @@ pub export fn interruptHandler(vector: usize, stack_pointer: usize) callconv(.c)
             console.writer.print(" Stack Index: 0x{x}\n", .{stack_pointer}) catch {};
         },
         0x0E => {
+            const cr2 = asm volatile ("mov %%cr2, %[out]"
+                : [out] "=r" (-> u64),
+            );
+            _ = cr2;
             const stack_array: *[4]usize = @ptrFromInt(stack_pointer);
             const error_code: usize = stack_array[0];
-            const virtual_address: usize = stack_array[1];
-            console.writer.writeAll("Page fault.\n") catch {};
-            console.writer.print("Error code: 0x{x}\n", .{error_code}) catch {};
-            console.writer.print("Virtual address: 0x{x}\n", .{virtual_address}) catch {};
+            const reason = arch.FaultReason{
+                .address = stack_array[1],
+                .write = (error_code & 0x1) != 0,
+                .supervisor = (error_code & 0x2) != 0,
+                .instruction_fetch = (error_code & 0x4) != 0, // instruction fetch vs data access
+            };
+            kernel_common.vmm.faultHandler(reason);
             //printFormat("Physical address: 0x{x}\n", .{arch.paging.getPhysicalAddress(virtual_address)});
         },
         0x0F => {},

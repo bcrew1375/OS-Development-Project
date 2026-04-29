@@ -24,6 +24,7 @@ pub export fn kernelMain() void {
 
     arch.platform.initializeTimer(100);
     try arch.platform.writer.print("Total Available RAM: {d} KB\n", .{pmm.getTotalAvailableRAM() / 1024});
+    try arch.platform.writer.print("Total System Reserved RAM: {d} KB\n", .{pmm.getTotalSystemReservedRAM() / 1024});
     arch.cpu.unrecoverableHalt();
 
     // kernel_heap.initialize() catch |err| {

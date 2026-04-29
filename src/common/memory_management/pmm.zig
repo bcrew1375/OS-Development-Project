@@ -11,10 +11,12 @@ pub const PmmError = error{
     OutOfMemory,
     InvalidSize,
     InvalidIndex,
+    ReservedFree,
 };
 
 var kernelBaseStartFrame: usize = 0;
 var kernelBaseEndFrame: usize = 0;
+
 var totalFrames: usize = 0;
 var totalSystemFrames: usize = 0;
 var totalAvailableFrames: usize = 0;
@@ -83,6 +85,15 @@ pub fn initialize() !void {
 
     currentAvailableFrames = totalAvailableFrames;
 
+    const reservedMap = arch.early_allocator.getReservedMap();
+
+    for (reservedMap.entries[0..reservedMap.length]) |region| {
+        const region_start_frame: usize = @truncate(try std.math.divFloor(u64, region.address, FRAME_SIZE));
+        const region_total_frames: usize = @truncate((try std.math.divCeil(u64, region.address +| region.size, FRAME_SIZE)) - region_start_frame);
+
+        try reserve(region_start_frame, region_total_frames);
+    }
+
     // markFrames(kernelBaseStartFrame, kernelBaseEndFrame - kernelBaseStartFrame, arch.MemoryMapEntryType.RESERVED);
 
     // Also reserve the first 1MB for BIOS/Real Mode structures usually found on x86
@@ -134,15 +145,15 @@ pub fn allocate(needed_frames: usize) !usize {
     return start_frame * FRAME_SIZE;
 }
 
-// pub fn reserve(start_frame: usize, total_frames: usize) !void {
-//     if (start_frame + total_frames > totalAvailableFrames) {
-//         return PmmError.InvalidIndex;
-//     }
+pub fn reserve(start_frame: usize, total_frames: usize) !void {
+    for (start_frame..start_frame + total_frames) |frame| {
+        frameMap[frame].used = true;
+        frameMap[frame].reserved = true;
+    }
 
-//     for (start_frame..start_frame + total_frames) |frame| {
-//         frameMap[frame].reserved = true;
-//     }
-// }
+    totalSystemFrames +|= total_frames;
+    currentAvailableFrames -|= total_frames;
+}
 
 pub fn free(start_frame: usize, total_frames: usize) !void {
     const end_frame: usize = start_frame +| total_frames;
@@ -151,11 +162,15 @@ pub fn free(start_frame: usize, total_frames: usize) !void {
         return PmmError.InvalidIndex;
     }
 
-    if (total_frames > currentAvailableFrames) {
+    if (total_frames > totalAvailableFrames) {
         return PmmError.InvalidSize;
     }
 
     for (start_frame..end_frame) |frame| {
+        if (frameMap[frame].reserved == true) {
+            return PmmError.ReservedFree;
+        }
+
         frameMap[frame].used = false;
     }
 
@@ -221,6 +236,10 @@ pub fn getTotalAvailableRAM() u64 {
     return totalAvailableFrames * FRAME_SIZE;
 }
 
-pub fn getReservedFrames() usize {
-    return kernelBaseEndFrame - kernelBaseStartFrame;
+pub fn getTotalSystemFrames() usize {
+    return totalSystemFrames;
+}
+
+pub fn getTotalSystemReservedRAM() u64 {
+    return totalSystemFrames * FRAME_SIZE;
 }
