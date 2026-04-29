@@ -101,11 +101,12 @@ pub const PageProtection = struct {
     global: bool = false,
 };
 
-pub const FaultReason = struct {
+pub const FaultInfo = struct {
     address: u64,
+    present: bool,
     write: bool,
-    supervisor: bool,
-    instruction_fetch: bool, // instruction fetch vs data access
+    user: bool,
+    instruction_fetch: bool,
 };
 
 pub fn validateImpl(comptime T: type) void {

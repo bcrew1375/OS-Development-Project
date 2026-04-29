@@ -59,17 +59,20 @@ pub export fn interruptHandler(vector: usize, stack_pointer: usize) callconv(.c)
             console.writer.print(" Stack Index: 0x{x}\n", .{stack_pointer}) catch {};
         },
         0x0E => {
-            const cr2 = asm volatile ("mov %%cr2, %[out]"
-                : [out] "=r" (-> u64),
+            const virtual_address = asm volatile ("mov %%cr2, %[out]"
+                : [out] "=r" (-> u32),
             );
-            _ = cr2;
-            const stack_array: *[4]usize = @ptrFromInt(stack_pointer);
+            const stack_array: *[1]usize = @ptrFromInt(stack_pointer);
             const error_code: usize = stack_array[0];
-            const reason = arch.FaultReason{
-                .address = stack_array[1],
-                .write = (error_code & 0x1) != 0,
-                .supervisor = (error_code & 0x2) != 0,
-                .instruction_fetch = (error_code & 0x4) != 0, // instruction fetch vs data access
+            const reason = arch.FaultInfo{
+                .address = virtual_address,
+                .present = (error_code & 0x1) != 0,
+                .write = (error_code & 0x2) != 0,
+                .user = (error_code & 0x4) != 0,
+                // .reserved       = (error_code & 0x8)  != 0,
+                .instruction_fetch = (error_code & 0x10) != 0,
+                // .protection_key = (error_code & 0x20) != 0,
+                // .shadow_stack   = (error_code & 0x40) != 0,
             };
             kernel_common.vmm.faultHandler(reason);
             //printFormat("Physical address: 0x{x}\n", .{arch.paging.getPhysicalAddress(virtual_address)});

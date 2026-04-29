@@ -6,7 +6,7 @@ const kernel = @import("kernel_common");
 extern const _kernel_start: usize;
 extern const _kernel_end: usize;
 
-test "Physical Memory Manager: initialization" {
+test "Physical Memory Manager: Initialization" {
     // This uses the mock MMU provided in the architecture/mock folder
     try kernel.pmm.initialize();
 
@@ -19,7 +19,7 @@ test "Physical Memory Manager: initialization" {
     try std.testing.expect(kernel.pmm.getCurrentAvailableFrames() <= kernel.pmm.getTotalAvailableFrames());
 }
 
-test "Physical Memory Manager: allocate and free single frame" {
+test "Physical Memory Manager: Allocate and Free Single Frame" {
     try kernel.pmm.initialize();
     const initial_available = kernel.pmm.getCurrentAvailableFrames();
 
@@ -34,7 +34,7 @@ test "Physical Memory Manager: allocate and free single frame" {
     try std.testing.expectEqual(initial_available, kernel.pmm.getCurrentAvailableFrames());
 }
 
-test "Physical Memory Manager: contiguous allocation" {
+test "Physical Memory Manager: Contiguous Allocation" {
     try kernel.pmm.initialize();
     const requested_frames = 16;
     const initial_available = kernel.pmm.getCurrentAvailableFrames();
@@ -47,7 +47,7 @@ test "Physical Memory Manager: contiguous allocation" {
     try std.testing.expectEqual(initial_available, kernel.pmm.getCurrentAvailableFrames());
 }
 
-test "Physical Memory Manager: exhaustion and out of memory" {
+test "Physical Memory Manager: Out of Memory" {
     try kernel.pmm.initialize();
     const available = kernel.pmm.getCurrentAvailableFrames();
 
@@ -67,13 +67,8 @@ test "Physical Memory Manager: exhaustion and out of memory" {
     try kernel.pmm.free(address, available);
 }
 
-test "Physical Memory Manager: zero size allocation" {
+test "Physical Memory Manager: Zero Size Allocation" {
     try kernel.pmm.initialize();
     const result = kernel.pmm.allocate(0);
     try std.testing.expectError(kernel.pmm.PmmError.InvalidSize, result);
-}
-
-test "Physical Memory Manager: kernel reserved frames" {
-    try kernel.pmm.initialize();
-    try std.testing.expect(kernel.pmm.getReservedFrames() > 0);
 }

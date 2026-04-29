@@ -146,6 +146,12 @@ pub fn allocate(needed_frames: usize) !usize {
 }
 
 pub fn reserve(start_frame: usize, total_frames: usize) !void {
+    const end_frame = start_frame + total_frames;
+
+    if (end_frame > totalFrames) {
+        return;
+    }
+
     for (start_frame..start_frame + total_frames) |frame| {
         frameMap[frame].used = true;
         frameMap[frame].reserved = true;
