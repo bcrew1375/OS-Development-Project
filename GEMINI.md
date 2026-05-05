@@ -6,7 +6,7 @@
 - If a compromise must absolutely be made between efficiency and clarity, prefer clarity.
 
 ## Coding style
-- Use typical Zig or C++ naming conventions.
+- Use typical Zig or C++ identifier casing. Do not abbreviate identifiers.
 - Prefer abstraction and generic interfaces whenever possible.
 
 ## Testing
