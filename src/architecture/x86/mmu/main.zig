@@ -3,17 +3,19 @@ const multiboot = @import("../boot/main.zig");
 
 const std = @import("std");
 
-const ENTRIES_PER_DIRECTORY: usize = 1024;
-const ENTRIES_PER_TABLE: usize = 1024;
-
 pub const PAGE_SIZE = 4096;
 pub const PAGE_TABLE_REGION_SIZE = PAGE_SIZE * ENTRIES_PER_TABLE;
+
+const KERNEL_CORE_VIRTUAL_ADDRESS = 0xC0000000;
+const KERNEL_HEAP_VIRTUAL_ADDRESS = 0xD0000000;
+
+const ENTRIES_PER_DIRECTORY: usize = 1024;
+const ENTRIES_PER_TABLE: usize = 1024;
 
 const PAGE_TABLES_COUNT: usize = 1024;
 const PAGE_TABLES_BASE = 0xFFC00000;
 
-pub const HIGHER_HALF_ADDRESS = 0xC0000000;
-const HIGHER_HALF_INDEX = HIGHER_HALF_ADDRESS / (PAGE_SIZE * ENTRIES_PER_TABLE);
+const HIGHER_HALF_INDEX = KERNEL_CORE_VIRTUAL_ADDRESS / (PAGE_SIZE * ENTRIES_PER_TABLE);
 
 pub const PageEntry = packed struct {
     present: bool = false,
@@ -317,4 +319,12 @@ pub fn getMaxAvailableAddress() linksection(".multiboot.text") u64 {
     }
 
     return maxAvailableAddress;
+}
+
+pub fn getKernelCoreAddress() u64 {
+    return KERNEL_CORE_VIRTUAL_ADDRESS;
+}
+
+pub fn getKernelHeapAddress() u64 {
+    return KERNEL_HEAP_VIRTUAL_ADDRESS;
 }
