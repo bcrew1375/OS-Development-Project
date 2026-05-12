@@ -102,7 +102,7 @@ pub const PageProtection = struct {
 };
 
 pub const FaultInfo = struct {
-    address: u64,
+    address: usize,
     present: bool,
     write: bool,
     user: bool,
@@ -133,6 +133,8 @@ pub fn validateImpl(comptime T: type) void {
             mapPage: fn (virtualAddress: usize, physicalAddress: usize, flags: PageProtection) MmuError!void,
             unmapPage: fn (virtualAddress: usize) void,
             getMaxAvailableAddress: fn () u64,
+            getKernelCoreAddress: fn () u64,
+            getKernelHeapAddress: fn () u64,
         });
 
         validateInterface(T.interrupts, struct {

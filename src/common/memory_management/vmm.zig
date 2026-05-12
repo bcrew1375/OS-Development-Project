@@ -1,31 +1,77 @@
 const arch = @import("arch");
 
-const KERNEL_CORE_START_ADDRESS: u64 = arch.mmu.getKernelCoreAddress();
-const KERNEL_CORE_END_ADDRESS: u64 = arch.mmu.getKernelCoreAddress();
-const KERNEL_HEAP_START_ADDRESS: u64 = arch.mmu.getKernelHeapAddress();
-const KERNEL_HEAP_END_ADDRESS: u64 = arch.mmu.getKernelHeapAddress();
+const pmm = @import("kernel_common").pmm;
+
+const VMMError = error{
+    UndefinedAddressSpace,
+    OverlappingVirtualMemoryArea,
+    UndefinedVirtualMemoryArea,
+};
 
 /// Defines the access rights for a specific virtual memory mapping.
-pub const MemoryPermissions = enum {
-    readable,
-    writeable,
-    executable,
-    user_accessible,
+pub const MemoryPermissions = struct {
+    readable: bool,
+    writeable: bool,
+    executable: bool,
+    user_accessible: bool,
 };
 
 pub const VirtualMemoryArea = struct {
-    start_address: u64,
-    end_address: u64,
-    permissions: MemoryPermissions,
+    start_address: u64 = undefined,
+    end_address: u64 = undefined,
+    permissions: MemoryPermissions = undefined,
 };
 
 pub const AddressSpace = struct {
     VMAList: []VirtualMemoryArea = undefined,
-    length: usize = undefined,
+    length: usize = 0,
 };
 
-pub fn initialize() void {}
+var currentAddressSpace: *AddressSpace = undefined;
+
+pub fn initialize(kernelAddressSpace: *AddressSpace) void {
+    currentAddressSpace = kernelAddressSpace;
+}
+
+pub fn map(addressSpace: *AddressSpace, startAddress: u64, endAddress: u64, memoryPermissions: MemoryPermissions) !void {
+    if (addressSpace.VMAList.len == 0) {
+        return VMMError.UndefinedAddressSpace;
+    }
+
+    for (addressSpace.VMAList[0..addressSpace.length]) |vma| {
+        if ((startAddress < vma.end_address) and (endAddress > vma.start_address)) {
+            return VMMError.OverlappingVirtualMemoryArea;
+        }
+    }
+
+    addressSpace.VMAList[addressSpace.length].start_address = startAddress;
+    addressSpace.VMAList[addressSpace.length].end_address = endAddress;
+    addressSpace.VMAList[addressSpace.length].permissions = memoryPermissions;
+
+    addressSpace.length += 1;
+}
 
 pub fn faultHandler(faultInfo: arch.FaultInfo) void {
-    if (faultInfo.present == false) {}
+    if (faultInfo.present == false) {
+        for (currentAddressSpace.VMAList[0..currentAddressSpace.length]) |vma| {
+            if ((faultInfo.address >= vma.start_address) and (faultInfo.address < vma.end_address)) {
+                const physical_address = (pmm.allocate(1) catch |err| {
+                    @panic(@errorName(err));
+                } * pmm.FRAME_SIZE);
+
+                const page_protection = arch.PageProtection{
+                    .write = vma.permissions.writeable,
+                    .user = vma.permissions.user_accessible,
+                    .execute = vma.permissions.executable,
+                };
+
+                arch.mmu.mapPage(faultInfo.address, physical_address, page_protection) catch |err| {
+                    @panic(@errorName(err));
+                };
+
+                return;
+            }
+        }
+        @panic("Segmentation fault.");
+    }
 }

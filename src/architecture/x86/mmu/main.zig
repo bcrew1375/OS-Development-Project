@@ -216,23 +216,10 @@ pub fn mapPage(virtualAddress: usize, physicalAddress: usize, flags: arch.PagePr
     const page_directory_index: usize = virtualAddress >> 22;
     const page_table_index: usize = (virtualAddress >> 12) & 0x3FF;
 
-    if (!pageDirectory[page_directory_index].present) {
-        // Allocate a new physical frame for the page table
-        const page_table_physical_address = try arch.pmm.allocate(1);
-
-        pageDirectory[page_directory_index].address = @truncate(page_table_physical_address >> 12);
-        pageDirectory[page_directory_index].present = true;
-        pageDirectory[page_directory_index].writeable = true; // Directory entries usually allow full access, controlled by PT
-
-        // Zero out the new page table using the recursive mapping
-        const page_table_virtual_pointer: [*]u8 = @ptrCast(pageTables[page_directory_index]);
-        @memset(page_table_virtual_pointer[0..PAGE_SIZE], 0);
-    }
-
     pageTables[page_directory_index][page_table_index].address = @truncate(physicalAddress >> 12);
     pageTables[page_directory_index][page_table_index].present = true;
-    pageTables[page_directory_index][page_table_index].writeable = flags.writeable;
-    pageTables[page_directory_index][page_table_index].user_accessible = flags.user_accessible;
+    pageTables[page_directory_index][page_table_index].writeable = flags.write;
+    pageTables[page_directory_index][page_table_index].user_accessible = flags.user;
 
     // Invalidate the TLB entry for this virtual address
     asm volatile ("invlpg (%[address])"

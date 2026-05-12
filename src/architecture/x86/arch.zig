@@ -41,6 +41,8 @@ pub const mmu = struct {
     pub const mapPage = mmu_impl.mapPage;
     pub const unmapPage = mmu_impl.unmapPage;
     pub const getMaxAvailableAddress = mmu_impl.getMaxAvailableAddress;
+    pub const getKernelCoreAddress = mmu_impl.getKernelCoreAddress;
+    pub const getKernelHeapAddress = mmu_impl.getKernelHeapAddress;
 };
 
 pub const platform = struct {

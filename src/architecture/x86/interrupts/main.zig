@@ -64,7 +64,7 @@ pub export fn interruptHandler(vector: usize, stack_pointer: usize) callconv(.c)
             );
             const stack_array: *[1]usize = @ptrFromInt(stack_pointer);
             const error_code: usize = stack_array[0];
-            const reason = arch.FaultInfo{
+            const fault_info = arch.FaultInfo{
                 .address = virtual_address,
                 .present = (error_code & 0x1) != 0,
                 .write = (error_code & 0x2) != 0,
@@ -74,7 +74,7 @@ pub export fn interruptHandler(vector: usize, stack_pointer: usize) callconv(.c)
                 // .protection_key = (error_code & 0x20) != 0,
                 // .shadow_stack   = (error_code & 0x40) != 0,
             };
-            kernel_common.vmm.faultHandler(reason);
+            kernel_common.vmm.faultHandler(fault_info);
             //printFormat("Physical address: 0x{x}\n", .{arch.paging.getPhysicalAddress(virtual_address)});
         },
         0x0F => {},
