@@ -35,10 +35,10 @@ pub const interrupts = struct {
 };
 
 pub const mmu = struct {
-    pub const removeIdentityMapping = mmu_impl.removeIdentityMapping;
     pub const getPhysicalAddress = mmu_impl.getPhysicalAddress;
     pub const getMemoryMap = mmu_impl.getMemoryMap;
     pub const mapPage = mmu_impl.mapPage;
+    pub const mapTable = mmu_impl.mapTable;
     pub const unmapPage = mmu_impl.unmapPage;
     pub const getMaxAvailableAddress = mmu_impl.getMaxAvailableAddress;
     pub const getKernelCoreAddress = mmu_impl.getKernelCoreAddress;

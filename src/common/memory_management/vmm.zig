@@ -29,8 +29,8 @@ pub const AddressSpace = struct {
 
 var currentAddressSpace: *AddressSpace = undefined;
 
-pub fn initialize(kernelAddressSpace: *AddressSpace) void {
-    currentAddressSpace = kernelAddressSpace;
+pub fn setAddressSpace(addressSpace: *AddressSpace) void {
+    currentAddressSpace = addressSpace;
 }
 
 pub fn map(addressSpace: *AddressSpace, startAddress: u64, endAddress: u64, memoryPermissions: MemoryPermissions) !void {
@@ -52,12 +52,16 @@ pub fn map(addressSpace: *AddressSpace, startAddress: u64, endAddress: u64, memo
 }
 
 pub fn faultHandler(faultInfo: arch.FaultInfo) void {
+    if (arch.earlyAllocatorActive == true) {
+        @panic("Page fault before memory handling initialization!");
+    }
+
     if (faultInfo.present == false) {
         for (currentAddressSpace.VMAList[0..currentAddressSpace.length]) |vma| {
             if ((faultInfo.address >= vma.start_address) and (faultInfo.address < vma.end_address)) {
-                const physical_address = (pmm.allocate(1) catch |err| {
+                const physical_address = pmm.allocate(1) catch |err| {
                     @panic(@errorName(err));
-                } * pmm.FRAME_SIZE);
+                };
 
                 const page_protection = arch.PageProtection{
                     .write = vma.permissions.writeable,
@@ -65,11 +69,24 @@ pub fn faultHandler(faultInfo: arch.FaultInfo) void {
                     .execute = vma.permissions.executable,
                 };
 
-                arch.mmu.mapPage(faultInfo.address, physical_address, page_protection) catch |err| {
-                    @panic(@errorName(err));
-                };
+                mapping_retry: while (true) {
+                    arch.mmu.mapPage(faultInfo.address, physical_address, page_protection) catch |err| {
+                        if (err == arch.MmuError.PageTableNotPresent) {
+                            const table_physical_address = pmm.allocate(1) catch |alloc_err| {
+                                @panic(@errorName(alloc_err));
+                            };
 
-                return;
+                            arch.mmu.mapTable(faultInfo.address, table_physical_address) catch |table_err| {
+                                @panic(@errorName(table_err));
+                            };
+
+                            continue :mapping_retry;
+                        }
+                        @panic(@errorName(err));
+                    };
+
+                    return;
+                }
             }
         }
         @panic("Segmentation fault.");

@@ -35,6 +35,11 @@ pub fn mapPage(virtual_address: usize, physical_address: usize, flags: arch.Page
     _ = flags;
 }
 
+pub fn mapTable(virtualAddress: usize, physicalAddress: usize) arch.MmuError!void {
+    _ = virtualAddress;
+    _ = physicalAddress;
+}
+
 pub fn unmapPage(virtual_address: usize) void {
     _ = virtual_address;
 }

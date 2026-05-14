@@ -47,6 +47,7 @@ pub const MAX_EARLY_RESERVATIONS = 128;
 pub const MmuError = error{
     MemoryMapReadError,
     MappingError,
+    PageTableNotPresent,
 };
 
 pub const MemoryMap = struct {
@@ -109,6 +110,8 @@ pub const FaultInfo = struct {
     instruction_fetch: bool,
 };
 
+pub var earlyAllocatorActive = true;
+
 pub fn validateImpl(comptime T: type) void {
     comptime {
         validateInterface(T.early_allocator, struct {
@@ -127,10 +130,10 @@ pub fn validateImpl(comptime T: type) void {
         });
 
         validateInterface(T.mmu, struct {
-            removeIdentityMapping: fn () void,
             getPhysicalAddress: fn (virtualAddress: usize) ?usize,
             getMemoryMap: fn () *MemoryMap,
             mapPage: fn (virtualAddress: usize, physicalAddress: usize, flags: PageProtection) MmuError!void,
+            mapTable: fn (virtualAddress: usize, physicalAddress: usize) MmuError!void,
             unmapPage: fn (virtualAddress: usize) void,
             getMaxAvailableAddress: fn () u64,
             getKernelCoreAddress: fn () u64,

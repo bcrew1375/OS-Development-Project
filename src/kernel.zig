@@ -18,19 +18,11 @@ var kernelAddressSpace: vmm.AddressSpace = vmm.AddressSpace{
 pub export fn kernelMain() void {
     terminal.initialize();
 
-    terminal.print.printString("Initializing PMM...");
-    pmm.initialize() catch |err| {
-        arch.platform.setColor(TextColor.RED);
-        arch.platform.writer.print("PMM init failed with error: {s}\n", .{@errorName(err)}) catch {};
-        arch.cpu.unrecoverableHalt();
-    };
-    terminal.print.printStringColor("done!\n", TextColor.GREEN);
     arch.boot.finishBoot();
 
     terminal.print.printString("Initializing interrupts...");
     arch.interrupts.initialize();
     terminal.print.printStringColor("done!\n", TextColor.GREEN);
-    arch.interrupts.enableInterrupts();
 
     arch.platform.initializeTimer(100);
 
@@ -48,7 +40,7 @@ pub export fn kernelMain() void {
         .user_accessible = false,
     };
 
-    vmm.initialize(&kernelAddressSpace);
+    vmm.setAddressSpace(&kernelAddressSpace);
 
     vmm.map(&kernelAddressSpace, arch.mmu.getKernelCoreAddress(), arch.mmu.getKernelCoreAddress() + 0x10000000, core_memory_permissions) catch |err| {
         arch.platform.setColor(TextColor.RED);
@@ -62,29 +54,22 @@ pub export fn kernelMain() void {
         arch.cpu.unrecoverableHalt();
     };
 
-    // vmm.map(&kernelAddressSpace, 0xF0000000, 0xFFFFFFFF, heap_memory_permissions) catch |err| {
-    //     arch.platform.setColor(TextColor.RED);
-    //     arch.platform.writer.print("Kernel heap address space init failed with error: {s}\n", .{@errorName(err)}) catch {};
-    //     arch.cpu.unrecoverableHalt();
-    // };
+    terminal.print.printString("Initializing PMM...");
+    // Initialize heap here.
+    terminal.print.printStringColor("done!\n", TextColor.GREEN);
+
+    terminal.print.printString("Initializing PMM...");
+    pmm.initialize() catch |err| {
+        arch.platform.setColor(TextColor.RED);
+        arch.platform.writer.print("PMM init failed with error: {s}\n", .{@errorName(err)}) catch {};
+        arch.cpu.unrecoverableHalt();
+    };
+    terminal.print.printStringColor("done!\n", TextColor.GREEN);
 
     try arch.platform.writer.print("Total Available RAM: {d} KB\n", .{pmm.getTotalAvailableRAM() / 1024});
     try arch.platform.writer.print("Total System Reserved RAM: {d} KB\n", .{pmm.getTotalSystemReservedRAM() / 1024});
 
-    const page_fault: *usize = @ptrFromInt(0xD0000000);
-    page_fault.* = 5;
-
-    arch.cpu.unrecoverableHalt();
-
-    // kernel_heap.initialize() catch |err| {
-    //     printString(@errorName(err));
-    //     unrecoverableHalt();
-    // };
-    // disableInterrupts();
-    // paging.makePageDirectory(0x03) catch |err| {
-    //     printString(@errorName(err));
-    //     unrecoverableHalt();
-    // };
+    arch.interrupts.enableInterrupts();
 }
 
 pub fn panic(message: []const u8, stack_trace: ?*std.builtin.StackTrace, number: ?usize) noreturn {
