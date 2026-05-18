@@ -19,40 +19,40 @@ const MultibootMemoryMapRegionTypes = enum(u32) {
     _,
 };
 
-var kernelPageTables: *[common.PAGE_TABLES_COUNT][common.ENTRIES_PER_TABLE]common.PageEntry linksection(".multiboot.data") = undefined;
-var kernelPageDirectory: common.PageDirectory linksection(".multiboot.data") = undefined;
-
 var EarlyPageTableCounter: usize linksection(".multiboot.data") = 0;
 
 var memoryMap: arch.MemoryMap linksection(".multiboot.data") = arch.MemoryMap{};
 
-var maxAvailableAddress: u64 = 0;
+var maxAvailableAddress: u64 linksection(".multiboot.data") = 0;
 
 pub fn initializePaging() linksection(".multiboot.text") !void {
-    var kernelPageDirectoryEntries: common.PageDirectory = @ptrCast(@alignCast(try arch.early_allocator.allocate(@sizeOf(common.PageEntry) * common.ENTRIES_PER_DIRECTORY, common.PAGE_SIZE, arch.ReservedMapRegionType.PERSISTENT)));
-    var kernelPageTable0Entries: common.PageTable = @ptrCast(@alignCast(try arch.early_allocator.allocate(@sizeOf(common.PageEntry) * common.ENTRIES_PER_TABLE, common.PAGE_SIZE, arch.ReservedMapRegionType.PERSISTENT)));
+    const available_ram = getMaxAvailableAddress();
+    const direct_map_size = @min(getDirectMapMaxSize(), available_ram);
 
-    kernelPageDirectoryEntries[0].address = @truncate(@intFromPtr(kernelPageTable0Entries) >> 12);
-    kernelPageDirectoryEntries[0].present = true;
-    kernelPageDirectoryEntries[0].writeable = true;
+    const needed_page_tables = @as(usize, @truncate((direct_map_size +| common.PAGE_TABLE_REGION_SIZE -| 1) / common.PAGE_TABLE_REGION_SIZE));
 
-    kernelPageDirectoryEntries[common.HIGHER_HALF_INDEX].address = @truncate(@intFromPtr(kernelPageTable0Entries) >> 12);
-    kernelPageDirectoryEntries[common.HIGHER_HALF_INDEX].present = true;
-    kernelPageDirectoryEntries[common.HIGHER_HALF_INDEX].writeable = true;
+    const directory_entries_allocation_size = @sizeOf(common.PageEntry) * common.ENTRIES_PER_DIRECTORY;
+    var kernel_page_directory_entries: common.PageDirectory = @ptrCast(@alignCast(try arch.early_allocator.allocate(directory_entries_allocation_size, common.PAGE_SIZE, arch.ReservedMapRegionType.PERSISTENT)));
 
-    // Recursive mapping setup.
-    kernelPageDirectoryEntries[common.ENTRIES_PER_DIRECTORY - 1].address = @truncate(@intFromPtr(kernelPageDirectoryEntries) >> 12);
-    kernelPageDirectoryEntries[common.ENTRIES_PER_DIRECTORY - 1].present = true;
-    kernelPageDirectoryEntries[common.ENTRIES_PER_DIRECTORY - 1].writeable = true;
+    const page_tables_allocation_size = needed_page_tables * @sizeOf(common.PageEntry) * common.ENTRIES_PER_TABLE;
+    const direct_map_entries_ptr: *anyopaque = try arch.early_allocator.allocate(page_tables_allocation_size, common.PAGE_SIZE, arch.ReservedMapRegionType.PERSISTENT);
+    var direct_map_entries = @as([*][common.ENTRIES_PER_TABLE]common.PageEntry, @ptrCast(@alignCast(direct_map_entries_ptr)))[0..needed_page_tables];
 
-    // //Only map the first 4 MB.
-    for (0..common.ENTRIES_PER_TABLE) |table_index| {
-        kernelPageTable0Entries[table_index].address = @truncate((table_index * common.PAGE_SIZE) >> 12);
-        kernelPageTable0Entries[table_index].present = true;
-        kernelPageTable0Entries[table_index].writeable = true;
+    for (0..needed_page_tables) |directory_index| {
+        kernel_page_directory_entries[directory_index].address = @truncate(@intFromPtr(&direct_map_entries[directory_index]) >> 12);
+        kernel_page_directory_entries[directory_index].present = true;
+        kernel_page_directory_entries[directory_index].writeable = true;
+
+        kernel_page_directory_entries[common.HIGHER_HALF_INDEX + directory_index].address = @truncate(@intFromPtr(&direct_map_entries[directory_index]) >> 12);
+        kernel_page_directory_entries[common.HIGHER_HALF_INDEX + directory_index].present = true;
+        kernel_page_directory_entries[common.HIGHER_HALF_INDEX + directory_index].writeable = true;
+
+        for (0..common.ENTRIES_PER_TABLE) |table_index| {
+            direct_map_entries[directory_index][table_index].address = @truncate(directory_index * common.PAGE_TABLE_REGION_SIZE + (table_index * common.PAGE_SIZE) >> 12);
+            direct_map_entries[directory_index][table_index].present = true;
+            direct_map_entries[directory_index][table_index].writeable = true;
+        }
     }
-
-    EarlyPageTableCounter += 1;
 
     asm volatile (
         \\mov %[pageDirectoryAddress], %eax
@@ -61,32 +61,8 @@ pub fn initializePaging() linksection(".multiboot.text") !void {
         \\or $0x80010000, %eax
         \\mov %eax, %cr0
         :
-        : [pageDirectoryAddress] "{ecx}" (kernelPageDirectoryEntries),
+        : [pageDirectoryAddress] "{ecx}" (kernel_page_directory_entries),
         : .{ .ecx = true, .memory = true });
-
-    kernelPageTables = @as(*[common.PAGE_TABLES_COUNT][common.ENTRIES_PER_TABLE]common.PageEntry, @ptrFromInt(common.PAGE_TABLES_BASE));
-    kernelPageDirectory = kernelPageDirectoryEntries;
-}
-
-pub fn mapEarlyPageTable(allocation_start_address: usize, mapping_start_address: usize) linksection(".multiboot.text") void {
-    kernelPageDirectory[EarlyPageTableCounter].address = @truncate(allocation_start_address >> 12);
-    kernelPageDirectory[EarlyPageTableCounter].present = true;
-    kernelPageDirectory[EarlyPageTableCounter].writeable = true;
-
-    const page_table: common.PageTable = @ptrFromInt(allocation_start_address);
-
-    for (0..common.ENTRIES_PER_TABLE) |table_index| {
-        page_table[table_index].address = @truncate((mapping_start_address + (table_index * common.PAGE_SIZE)) >> 12);
-        page_table[table_index].present = true;
-        page_table[table_index].writeable = true;
-    }
-
-    asm volatile (
-        \\mov %cr3, %eax
-        \\mov %eax, %cr3
-        ::: .{ .eax = true });
-
-    EarlyPageTableCounter += 1;
 }
 
 pub fn readMultibootMemoryMap() linksection(".multiboot.text") void {
@@ -118,10 +94,18 @@ pub fn getMemoryMap() linksection(".multiboot.text") *arch.MemoryMap {
         readMultibootMemoryMap();
     }
 
+    if (memoryMap.length == 0) {
+        @panic("Couldn't parse memory map!");
+    }
+
     return &memoryMap;
 }
 
 pub fn getMaxAvailableAddress() linksection(".multiboot.text") u64 {
+    if (memoryMap.length == 0) {
+        _ = getMemoryMap();
+    }
+
     if (maxAvailableAddress == 0) {
         for (memoryMap.entries[0..memoryMap.length]) |entry| {
             if (entry.region_type == arch.MemoryMapRegionType.AVAILABLE) {
@@ -133,14 +117,10 @@ pub fn getMaxAvailableAddress() linksection(".multiboot.text") u64 {
     return maxAvailableAddress;
 }
 
-pub fn removeIdentityMapping() void {
-    kernelPageDirectory[0].address = 0;
-    kernelPageDirectory[0].present = false;
-    kernelPageDirectory[0].writeable = false;
-    kernelPageDirectory[0].accessed = false;
+pub fn getDirectMapVirtualAddress() linksection(".multiboot.text") u64 {
+    return common.DIRECT_MAP_VIRTUAL_ADDRESS;
+}
 
-    asm volatile (
-        \\mov %cr3, %eax
-        \\mov %eax, %cr3
-    );
+pub fn getDirectMapMaxSize() linksection(".multiboot.text") u64 {
+    return common.DIRECT_MAP_SIZE;
 }

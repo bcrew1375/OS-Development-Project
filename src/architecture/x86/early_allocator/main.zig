@@ -6,11 +6,7 @@ const mmu = @import("../mmu/early_boot.zig");
 const PAGE_SIZE = @import("../mmu/common.zig").PAGE_SIZE;
 const ENTRIES_PER_TABLE = @import("../mmu/common.zig").ENTRIES_PER_TABLE;
 
-const PAGE_TABLE_REGION_SIZE = PAGE_SIZE * ENTRIES_PER_TABLE;
-
 var reservedMap: arch.ReservedMap linksection(".multiboot.data") = arch.ReservedMap{};
-var remainingPageSpace: usize linksection(".multiboot.data") = PAGE_TABLE_REGION_SIZE;
-var nextTableAddressSpace: usize linksection(".multiboot.data") = PAGE_TABLE_REGION_SIZE;
 
 extern const _kernel_start: usize;
 extern const _kernel_end: usize;
@@ -40,29 +36,8 @@ pub fn allocate(neededSize: usize, alignment: usize, entryType: arch.ReservedMap
 
 pub fn reserve(address: usize, size: usize, entry_type: arch.ReservedMapRegionType) linksection(".multiboot.text") arch.EarlyAllocError!void {
     try common_early_allocator.reserve(address, size, entry_type);
-
-    if (size > remainingPageSpace) {
-        const page_table_count: usize = @truncate((size / PAGE_TABLE_REGION_SIZE) +| 1);
-        try expandPageTables(page_table_count);
-        remainingPageSpace +|= PAGE_TABLE_REGION_SIZE * page_table_count;
-    }
-
-    remainingPageSpace -|= size;
 }
 
 pub fn getReservedMap() linksection(".multiboot.text") *arch.ReservedMap {
     return &reservedMap;
-}
-
-fn expandPageTables(pageTables: usize) linksection(".multiboot.text") arch.EarlyAllocError!void {
-    if (pageTables == 0) {
-        return arch.EarlyAllocError.InvalidSize;
-    }
-
-    const start_address = @intFromPtr(try allocate(pageTables, PAGE_SIZE, arch.ReservedMapRegionType.PERSISTENT));
-
-    for (0..pageTables) |_| {
-        mmu.mapEarlyPageTable(start_address, nextTableAddressSpace);
-        nextTableAddressSpace += PAGE_TABLE_REGION_SIZE;
-    }
 }

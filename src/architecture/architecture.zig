@@ -136,8 +136,10 @@ pub fn validateImpl(comptime T: type) void {
             mapTable: fn (virtualAddress: usize, physicalAddress: usize) MmuError!void,
             unmapPage: fn (virtualAddress: usize) void,
             getMaxAvailableAddress: fn () u64,
-            getKernelCoreAddress: fn () u64,
-            getKernelHeapAddress: fn () u64,
+            getDirectMapVirtualAddress: fn () u64,
+            getDirectMapMaxSize: fn () u64,
+            getKernelHeapVirtualAddress: fn () u64,
+            getKernelHeapSize: fn () u64,
         });
 
         validateInterface(T.interrupts, struct {

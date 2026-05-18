@@ -6,6 +6,7 @@ const VMMError = error{
     UndefinedAddressSpace,
     OverlappingVirtualMemoryArea,
     UndefinedVirtualMemoryArea,
+    NoTransientMappingSlots,
 };
 
 /// Defines the access rights for a specific virtual memory mapping.
@@ -28,6 +29,33 @@ pub const AddressSpace = struct {
 };
 
 var currentAddressSpace: *AddressSpace = undefined;
+
+/// TransientMapping provides a way to temporarily access physical memory
+/// that is not covered by the Direct Physical Map.
+/// This avoids the "Linux highmem mess" by using a scoped lifecycle.
+pub const TransientMapping = struct {
+    virtual_address: usize,
+    size: usize,
+
+    pub fn init(physical_address: usize, size: usize, permissions: MemoryPermissions) !TransientMapping {
+        // In a real implementation, this would find a free slot in a reserved
+        // "Transient Window" of the virtual address space (e.g., 0xF0000000).
+        const vaddr = try arch.mmu.mapTransient(physical_address, size, permissions);
+        return TransientMapping{
+            .virtual_address = vaddr,
+            .size = size,
+        };
+    }
+
+    pub fn deinit(self: *TransientMapping) void {
+        arch.mmu.unmapTransient(self.virtual_address, self.size);
+    }
+
+    /// Returns a typed pointer to the mapped memory.
+    pub fn getPointer(self: TransientMapping, comptime T: type) *T {
+        return @ptrFromInt(self.virtual_address);
+    }
+};
 
 pub fn setAddressSpace(addressSpace: *AddressSpace) void {
     currentAddressSpace = addressSpace;
