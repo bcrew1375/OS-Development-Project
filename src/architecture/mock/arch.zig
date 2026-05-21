@@ -1,54 +1,6 @@
-const arch = @import("arch");
-
-const early_allocator_impl = @import("early_allocator/main.zig");
-const boot_impl = @import("boot/main.zig");
-const cpu_impl = @import("cpu/main.zig");
-const interrupts_impl = @import("interrupts/main.zig");
-const mmu_impl = @import("mmu/main.zig");
-const platform_impl = @import("platform/main.zig");
-
-const validateImpl = @import("arch").validateImpl;
-
-comptime {
-    validateImpl(@This());
-}
-
-pub const early_allocator = struct {
-    pub const initialize = early_allocator_impl.initialize;
-    pub const allocate = early_allocator_impl.allocate;
-    pub const reserve = early_allocator_impl.reserve;
-    pub const getReservedMap = early_allocator_impl.getReservedMap;
-};
-
-pub const boot = struct {
-    pub const allocate = boot_impl.allocate;
-    pub const finishBoot = boot_impl.finishBoot;
-};
-
-pub const cpu = struct {
-    pub const unrecoverableHalt = cpu_impl.unrecoverableHalt;
-};
-
-pub const interrupts = struct {
-    pub const initialize = interrupts_impl.initialize;
-    pub const set = interrupts_impl.set;
-    pub const enableInterrupts = interrupts_impl.enableInterrupts;
-    pub const disableInterrupts = interrupts_impl.disableInterrupts;
-    pub const acknowledgeInterrupt = interrupts_impl.acknowledgeInterrupt;
-};
-
-pub const mmu = struct {
-    pub const removeIdentityMapping = mmu_impl.removeIdentityMapping;
-    pub const getPhysicalAddress = mmu_impl.getPhysicalAddress;
-    pub const getMemoryMap = mmu_impl.getMemoryMap;
-    pub const mapPage = mmu_impl.mapPage;
-    pub const unmapPage = mmu_impl.unmapPage;
-    pub const getMaxAvailableAddress = mmu_impl.getMaxAvailableAddress;
-};
-
-pub const platform = struct {
-    pub const initializeConsole = platform_impl.initializeConsole;
-    pub const initializeTimer = platform_impl.initializeTimer;
-    pub const setColor = platform_impl.setColor;
-    pub const writer = platform_impl.writer;
-};
+pub const early_allocator = @import("early_allocator/main.zig");
+pub const boot = @import("boot/main.zig");
+pub const cpu = @import("cpu/main.zig");
+pub const interrupts = @import("interrupts/main.zig");
+pub const mmu = @import("mmu/main.zig");
+pub const platform = @import("platform/main.zig");

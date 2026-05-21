@@ -1,48 +1,60 @@
 const std = @import("std");
 
-const kernel_common = @import("kernel_common");
-
-const BLOCK_TAKEN: u8 = 0b0000_0001;
-const BLOCK_FREE: u8 = 0b0000_0000;
-
-const BLOCK_HAS_NEXT: u8 = 0b1000_0000;
-const BLOCK_IS_FIRST: u8 = 0b0100_0000;
-
-pub const BLOCK_SIZE: u32 = 4096;
-
 pub const HeapError = error{
-    NotAligned,
-    InvalidTableSize,
     OutOfMemory,
-    IntegrityError,
-};
-
-pub const Table = struct {
-    entries: []u8 = undefined,
-    total_entries: u32 = 0,
 };
 
 pub const Heap = struct {
-    table: Table = undefined,
-    start_address: *anyopaque = undefined,
+    start_address: usize,
+    end_address: usize,
+    next_address: usize,
+
+    /// Initializes the heap structure with a specific memory region.
+    pub fn initialize(start_address: usize, size_in_bytes: usize) Heap {
+        return .{
+            .start_address = start_address,
+            .end_address = start_address + size_in_bytes,
+            .next_address = start_address,
+        };
+    }
+
+    /// Allocates a block of memory from the heap using a bump allocation strategy.
+    pub fn allocate(self: *Heap, size_in_bytes: usize, alignment: usize) HeapError![*]u8 {
+        const aligned_address = std.mem.alignForward(usize, self.next_address, alignment);
+        const end_of_allocation = aligned_address + size_in_bytes;
+
+        if (end_of_allocation > self.end_address) {
+            return HeapError.OutOfMemory;
+        }
+
+        self.next_address = end_of_allocation;
+        return @ptrFromInt(aligned_address);
+    }
+
+    /// Returns a standard Zig Allocator interface for this heap.
+    pub fn allocator(self: *Heap) std.mem.Allocator {
+        return .{
+            .ptr = self,
+            .vtable = &.{
+                .alloc = allocate_vtable_entry,
+                .resize = resize_vtable_entry,
+                .free = free_vtable_entry,
+            },
+        };
+    }
+
+    fn allocate_vtable_entry(context: *anyopaque, length: usize, pointer_alignment: u8, _: usize) ?[*]u8 {
+        const self: *Heap = @ptrCast(@alignCast(context));
+        const alignment = @as(usize, 1) << @as(u6, @intCast(pointer_alignment));
+        return self.allocate(length, alignment) catch null;
+    }
+
+    fn resize_vtable_entry(_: *anyopaque, _: []u8, _: u8, _: usize, _: usize) bool {
+        // Bump allocators do not support resizing existing memory regions.
+        return false;
+    }
+
+    fn free_vtable_entry(_: *anyopaque, _: []u8, _: u8, _: usize) void {
+        // Bump allocators do not support freeing individual memory blocks.
+    }
 };
-
-pub fn initialize(heap_struct: *const Heap, start_pointer: *const u8, end_pointer: *const u8) !void {
-    try validate_alignment(start_pointer);
-    try validate_alignment(end_pointer);
-    try validate_table(heap_struct, start_pointer, end_pointer);
-
-    // Clear heap memory
-    // Clear table memory
-}
-
-fn validate_alignment(pointer: *const u8) !void {
-    if ((@intFromPtr(pointer) % BLOCK_SIZE) != 0) return HeapError.NotAligned;
-}
-
-fn validate_table(heap_struct: *const Heap, start_pointer: *const u8, end_pointer: *const u8) !void {
-    const table_size = @intFromPtr(end_pointer) - @intFromPtr(start_pointer);
-    const total_blocks = table_size / BLOCK_SIZE;
-
-    if (heap_struct.table.total_entries != total_blocks) return HeapError.InvalidTableSize;
-}

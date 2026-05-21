@@ -1,1 +1,3 @@
-pub fn unrecoverableHalt() noreturn {}
+pub fn unrecoverableHalt() noreturn {
+    while (true) {}
+}

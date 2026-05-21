@@ -10,6 +10,10 @@
 ## Coding style
 - Use typical Zig or C++ identifier casing. Do not abbreviate identifiers.
 - Prefer abstraction and generic interfaces whenever possible.
+- Prefer "self-commenting" code. Use explicit comments sparingly only when complexity necessitates it.
+- Architecture component code should be kept in a related folder managed by a main.zig file when possible.
 
 ## Testing
 - Tests should be categorized under the 'tests' subfolder. Do not inject tests into source files.
+- The mock architecture should be capable of testing any arch-independent and common code.
+- Mock architecture functions and code should always be kept in a related component folder managed by a main.zig file.

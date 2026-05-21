@@ -1,37 +1,19 @@
-const std = @import("std");
-const arch = @import("arch");
+const arch = @import("../../architecture.zig");
 
-var memoryMap: arch.MemoryMap = arch.MemoryMap{};
-
-var testRegion: arch.MemoryMapEntry = undefined;
-var testRegionHeap: []u8 = undefined;
-
-var heapBase: usize = 0;
+var mock_memory_map = arch.MemoryMap{};
 
 pub fn getPhysicalAddress(virtualAddress: usize) ?usize {
     _ = virtualAddress;
+    return null;
 }
-pub fn removeIdentityMapping() void {}
 
 pub fn getMemoryMap() *arch.MemoryMap {
-    testRegionHeap = std.heap.page_allocator.alloc(u8, 64 * 1024 * 1024) catch {
-        @panic("Mock MMU allocation failed");
-    };
-    testRegion.address = @intFromPtr(testRegionHeap.ptr);
-    testRegion.region_type = arch.MemoryMapRegionType.AVAILABLE;
-    testRegion.size = 64 * 1024 * 1024;
-
-    heapBase = @intFromPtr(testRegionHeap.ptr);
-
-    memoryMap.entries[0] = testRegion;
-    memoryMap.length = 1;
-
-    return &memoryMap;
+    return &mock_memory_map;
 }
 
-pub fn mapPage(virtual_address: usize, physical_address: usize, flags: arch.PageProtection) arch.MmuError!void {
-    _ = virtual_address;
-    _ = physical_address;
+pub fn mapPage(virtualAddress: usize, physicalAddress: usize, flags: arch.PageProtection) arch.MmuError!void {
+    _ = virtualAddress;
+    _ = physicalAddress;
     _ = flags;
 }
 
@@ -40,10 +22,26 @@ pub fn mapTable(virtualAddress: usize, physicalAddress: usize) arch.MmuError!voi
     _ = physicalAddress;
 }
 
-pub fn unmapPage(virtual_address: usize) void {
-    _ = virtual_address;
+pub fn unmapPage(virtualAddress: usize) void {
+    _ = virtualAddress;
 }
 
 pub fn getMaxAvailableAddress() u64 {
-    return testRegion.size;
+    return 0;
+}
+
+pub fn getDirectMapVirtualAddress() u64 {
+    return 0;
+}
+
+pub fn getDirectMapMaxSize() u64 {
+    return 0;
+}
+
+pub fn getKernelHeapVirtualAddress() u64 {
+    return 0;
+}
+
+pub fn getKernelHeapSize() u64 {
+    return 0;
 }

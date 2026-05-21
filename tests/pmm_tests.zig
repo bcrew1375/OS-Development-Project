@@ -64,7 +64,7 @@ test "Physical Memory Manager: Out of Memory" {
     try std.testing.expectError(kernel.pmm.PmmError.OutOfMemory, failed_request);
 
     // Cleanup
-    try kernel.pmm.free(address, available);
+    try kernel.pmm.free(address / kernel.pmm.FRAME_SIZE, available);
 }
 
 test "Physical Memory Manager: Zero Size Allocation" {
