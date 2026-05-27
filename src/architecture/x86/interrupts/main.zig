@@ -30,33 +30,33 @@ pub fn acknowledgeInterrupt(vector: usize) void {
 }
 
 pub export fn interruptHandler(vector: usize, stack_pointer: usize) callconv(.c) void {
-    console.writer.writeAll("Interrupt: ") catch {};
+    arch.platform.writer().writeAll("Interrupt: ") catch {};
     switch (vector) {
         0x00 => {
-            console.writer.writeAll("Divide by zero.\n") catch {};
+            arch.platform.writer().writeAll("Divide by zero.\n") catch {};
         },
         0x01 => {
-            console.writer.writeAll("Debug exception.\n") catch {};
+            arch.platform.writer().writeAll("Debug exception.\n") catch {};
         },
         0x02...0x05 => {},
         0x06 => {
-            console.writer.writeAll("Invalid opcode.\n") catch {};
+            arch.platform.writer().writeAll("Invalid opcode.\n") catch {};
         },
         0x07 => {},
         0x08 => {
-            console.writer.writeAll("Double fault.\n") catch {};
+            arch.platform.writer().writeAll("Double fault.\n") catch {};
         },
         0x09 => {},
         0x0A => {
-            console.writer.writeAll("Invalid TSS.\n") catch {};
+            arch.platform.writer().writeAll("Invalid TSS.\n") catch {};
         },
         0x0B => {},
         0x0C => {
-            console.writer.writeAll("Stack segment fault.\n") catch {};
+            arch.platform.writer().writeAll("Stack segment fault.\n") catch {};
         },
         0x0D => {
-            console.writer.writeAll("General protection fault.\n") catch {};
-            console.writer.print(" Stack Index: 0x{x}\n", .{stack_pointer}) catch {};
+            arch.platform.writer().writeAll("General protection fault.\n") catch {};
+            arch.platform.writer().print(" Stack Index: 0x{x}\n", .{stack_pointer}) catch {};
         },
         0x0E => {
             const virtual_address = asm volatile ("mov %%cr2, %[out]"
@@ -80,20 +80,20 @@ pub export fn interruptHandler(vector: usize, stack_pointer: usize) callconv(.c)
         0x0F => {},
         0x10 => {},
         0x11 => {
-            console.writer.writeAll("Alignment check.\n") catch {};
+            arch.platform.writer().writeAll("Alignment check.\n") catch {};
         },
         0x12...0x1F => {},
         0x20 => {
-            console.writer.writeAll("Timer.\n") catch {};
+            arch.platform.writer().writeAll("Timer.\n") catch {};
         },
         0x21 => {
-            console.writer.writeAll("Keyboard pressed.\n") catch {};
+            arch.platform.writer().writeAll("Keyboard pressed.\n") catch {};
             keyboard.clearKeyboard();
         },
         0x22...0xFFFFFFFF => {},
     }
 
-    console.writer.print(" --- Stack Index: {x}\n", .{stack_pointer}) catch {};
+    arch.platform.writer().print(" --- Stack Index: {x}\n", .{stack_pointer}) catch {};
 
     acknowledgeInterrupt(vector);
 }

@@ -1,0 +1,490 @@
+Initializing kernel heap...done!
+Initializing PMM...done!
+Initializing interrupts...done!
+Total Available RAM: 4193788 KB
+Total System Reserved RAM: 5292 KB
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: Timer.
+ --- Stack Index: c0288a9c
+Interrupt: T

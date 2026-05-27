@@ -90,6 +90,7 @@ pub fn build(b: *std.Build) void {
         // "-chardev", "stdio,id=char0,mux=on,logfile=serial.log,signal=off",
         // "-serial", "chardev:char0", "-mon", "chardev=char0",
         // "-debugcon", "stdio",
+        "-display", "none",
         "-chardev","file,id=serial0,path=serial.log",
         "-serial","chardev:serial0",
         "-S",

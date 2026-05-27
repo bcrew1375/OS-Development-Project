@@ -42,7 +42,7 @@ pub export fn kernelMain() void {
 
     vmm.map(&kernelAddressSpace, direct_map_start_address, direct_map_end_address, core_memory_permissions) catch |err| {
         arch.platform.setColor(TextColor.RED);
-        arch.platform.writer.print("Kernel core address space init failed with error: {s}\n", .{@errorName(err)}) catch {};
+        arch.platform.writer().print("Kernel core address space init failed with error: {s}\n", .{@errorName(err)}) catch {};
         arch.cpu.unrecoverableHalt();
     };
 
@@ -51,7 +51,7 @@ pub export fn kernelMain() void {
 
     vmm.map(&kernelAddressSpace, kernel_heap_start_address, kernel_heap_end_address, heap_memory_permissions) catch |err| {
         arch.platform.setColor(TextColor.RED);
-        arch.platform.writer.print("Kernel heap address space init failed with error: {s}\n", .{@errorName(err)}) catch {};
+        arch.platform.writer().print("Kernel heap address space init failed with error: {s}\n", .{@errorName(err)}) catch {};
         arch.cpu.unrecoverableHalt();
     };
 
@@ -62,7 +62,7 @@ pub export fn kernelMain() void {
     terminal.print.printString("Initializing PMM...");
     pmm.initialize() catch |err| {
         arch.platform.setColor(TextColor.RED);
-        arch.platform.writer.print("PMM init failed with error: {s}\n", .{@errorName(err)}) catch {};
+        arch.platform.writer().print("PMM init failed with error: {s}\n", .{@errorName(err)}) catch {};
         arch.cpu.unrecoverableHalt();
     };
     terminal.print.printStringColor("done!\n", TextColor.GREEN);
@@ -73,8 +73,8 @@ pub export fn kernelMain() void {
     arch.interrupts.initialize();
     terminal.print.printStringColor("done!\n", TextColor.GREEN);
 
-    try arch.platform.writer.print("Total Available RAM: {d} KB\n", .{pmm.getTotalAvailableRAM() / 1024});
-    try arch.platform.writer.print("Total System Reserved RAM: {d} KB\n", .{pmm.getTotalSystemReservedRAM() / 1024});
+    try arch.platform.writer().print("Total Available RAM: {d} KB\n", .{pmm.getTotalAvailableRAM() / 1024});
+    try arch.platform.writer().print("Total System Reserved RAM: {d} KB\n", .{pmm.getTotalSystemReservedRAM() / 1024});
 
     arch.platform.initializeTimer(100);
 
@@ -85,9 +85,9 @@ pub export fn kernelMain() void {
 pub fn panic(message: []const u8, stack_trace: ?*std.builtin.StackTrace, number: ?usize) noreturn {
     arch.interrupts.disableInterrupts();
     arch.platform.setColor(TextColor.RED);
-    arch.platform.writer.writeAll("\n!KERNEL PANIC!\n") catch {};
-    arch.platform.writer.writeAll(message) catch {};
-    arch.platform.writer.writeAll("\n") catch {};
+    arch.platform.writer().writeAll("\n!KERNEL PANIC!\n") catch {};
+    arch.platform.writer().writeAll(message) catch {};
+    arch.platform.writer().writeAll("\n") catch {};
     _ = stack_trace;
     _ = number;
     while (true) {}

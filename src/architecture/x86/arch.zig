@@ -49,7 +49,7 @@ pub const mmu = struct {
 
 pub const platform = struct {
     pub const initializeTimer = platform_impl.time.initializeTimer;
-    pub const initializeConsole = platform_impl.console.initialize;
+    pub const initializeConsole = platform_impl.io.serial.initialize;
     pub const setColor = platform_impl.console.setColor;
-    pub const writer = platform_impl.console.writer;
+    pub const writer = platform_impl.io.serial.writer;
 };
