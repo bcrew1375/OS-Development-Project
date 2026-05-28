@@ -82,25 +82,6 @@ pub export fn _start() linksection(".multiboot.text") callconv(.naked) noreturn 
 }
 
 export fn kernelSetup() linksection(".multiboot.text") noreturn {
-    asm volatile (
-    //ICW1: start init, edge triggered, ICW4 needed
-        \\mov $0x11, %al
-        \\out %al, $0x20
-        //ICW2: interrupt vector offset (0x20 = IRQ0 → INT 0x20)
-        \\mov $0x20, %al
-        \\out %al, $0x21
-        //ICW3: bitmask of connected slaves (bit 2 = IRQ2)
-        \\mov $0x04, %al
-        \\out %al, $0x21
-        //ICW4: 8086 mode
-        \\mov $0x01, %al
-        \\out %al, $0x21
-        //End remap of the master PIC.
-        ::: .{
-            .eax = true,
-            .memory = true,
-        });
-
     arch.early_allocator.initialize() catch |err| {
         @panic(@errorName(err));
     };

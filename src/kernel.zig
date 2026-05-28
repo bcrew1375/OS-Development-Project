@@ -76,7 +76,7 @@ pub export fn kernelMain() void {
     try arch.platform.writer().print("Total Available RAM: {d} KB\n", .{pmm.getTotalAvailableRAM() / 1024});
     try arch.platform.writer().print("Total System Reserved RAM: {d} KB\n", .{pmm.getTotalSystemReservedRAM() / 1024});
 
-    arch.platform.initializeTimer(10);
+    //arch.platform.initializeTimer(10);
 
     arch.interrupts.enableInterrupts();
     //arch.cpu.unrecoverableHalt();

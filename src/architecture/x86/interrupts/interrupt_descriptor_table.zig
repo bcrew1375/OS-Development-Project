@@ -1,5 +1,6 @@
 const gdt = @import("global_descriptor_table.zig");
 const interruptHandler = @import("main.zig").interruptHandler;
+const port_io = @import("../platform/io/port_io.zig");
 
 const std = @import("std");
 
@@ -43,6 +44,12 @@ pub fn initialize() void {
     interrupt_descriptor_table_register.base = @intFromPtr(&interrupt_descriptor_table);
 
     idtLoad();
+
+    port_io.out8(0x20, 0x11); // ICW1: start init, edge triggered, ICW4 needed
+    port_io.out8(0x21, 0x20); // ICW2: IRQ0 → INT 0x20
+    port_io.out8(0x21, 0x04); // ICW3: slave on IRQ2
+    port_io.out8(0x21, 0x01); // ICW4: 8086 mode
+    port_io.out8(0x21, 0x01); // ICW4: 8086 mode
 }
 
 pub fn set(interruptVector: usize, address: usize, typeAttribute: usize) void {
