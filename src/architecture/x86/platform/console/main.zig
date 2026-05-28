@@ -42,17 +42,17 @@ pub fn initialize() void {
     @memset(buffer_pointer[0..TEXT_MODE_BUFFER_SIZE], clear_char);
 }
 
-/// A standard Zig Writer that maps to our VGA print logic.
-/// This allows the kernel to use std.fmt.format and arch.platform.writer.print(...)
-pub const Writer = std.io.GenericWriter(void, error{}, struct {
-    fn write(_: void, bytes: []const u8) error{}!usize {
-        print(bytes);
-        return bytes.len;
+const Writer = std.io.GenericWriter(void, error{}, struct {
+    fn write(_: void, data: []const u8) error{}!usize {
+        print(data);
+        return data.len;
     }
 }.write);
 
-/// Publicly accessible writer instance
-pub const writer = Writer{ .context = {} };
+/// Returns a Zig std.io.Writer instance for serial output.
+pub fn writer() Writer {
+    return .{ .context = {} };
+}
 
 pub fn print(string: []const u8) void {
     for (string) |char| {

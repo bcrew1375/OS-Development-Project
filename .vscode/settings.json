@@ -1,5 +1,4 @@
 {
-    "memory-view.showMemoryPanel": true,
     "lldb.displayFormat": "hex",
     "lldb.showDisassembly": "auto",
     "lldb.dereferencePointers": true,

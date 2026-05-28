@@ -6,14 +6,12 @@
   },
   "runArgs": [
     "--cap-add=SYS_PTRACE",
-    "--security-opt=seccomp=unconfined",
+    "--security-opt=seccomp=unconfined"
   ],
+  "postCreateCommand": "find .devcontainer/extensions -name '*.vsix' | xargs -I{} code --install-extension {}",
   "customizations": {
     "vscode": {
       "extensions": [
-        "ziglang.vscode-zig",
-        "vadimcn.vscode-lldb",
-        "13xforever.language-x86-64-assembly",
         "google.geminicodeassist"
       ],
       "settings": {
@@ -23,7 +21,12 @@
             "type category enable zig.std",
             "type category enable zig.lang",
             "type category enable zig.stage2"
-        ]
+        ],
+        "files.watcherExclude": {
+          "**/.zig-cache/**": true,
+          "**/zig-out/**": true,
+          "**/.git/**": true
+        }
       }
     }
   }

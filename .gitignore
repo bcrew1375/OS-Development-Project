@@ -2,3 +2,4 @@
 zig-out
 qemu.log
 .qemu.pid
+serial.log

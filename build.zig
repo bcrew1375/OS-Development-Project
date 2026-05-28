@@ -91,8 +91,9 @@ pub fn build(b: *std.Build) void {
         // "-serial", "chardev:char0", "-mon", "chardev=char0",
         // "-debugcon", "stdio",
         "-display", "none",
-        "-chardev","file,id=serial0,path=serial.log",
-        "-serial","chardev:serial0",
+        "-vnc", "127.0.0.1:0",
+        "-chardev", "file,id=serial0,path=serial.log",
+        "-serial", "chardev:serial0",
         "-S",
         "-s",
         "-m", "4G",
@@ -105,7 +106,7 @@ pub fn build(b: *std.Build) void {
         "-no-reboot",
         "-no-shutdown",
     });
-    // zig fmt: on
+
     qemu_cmd.addArg("-kernel");
     const kernel_path = kernel.getEmittedBin();
     qemu_cmd.addFileArg(kernel_path);
