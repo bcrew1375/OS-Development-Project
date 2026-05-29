@@ -49,6 +49,8 @@ pub fn initialize() void {
     port_io.out8(0x21, 0x20); // ICW2: IRQ0 → INT 0x20
     port_io.out8(0x21, 0x04); // ICW3: slave on IRQ2
     port_io.out8(0x21, 0x01); // ICW4: 8086 mode
+
+    // Disable timer for now.
     port_io.out8(0x21, 0x01); // ICW4: 8086 mode
 }
 
