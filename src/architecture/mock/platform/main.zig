@@ -11,14 +11,16 @@ pub fn setColor(color: arch.TextColor) void {
     _ = color;
 }
 
-/// Provides a no-op writer that satisfies the Zig Allocator/Logger requirements.
-pub const writer = std.io.GenericWriter(
+pub const Writer = std.io.GenericWriter(
     void,
     error{},
     struct {
-        fn write(context: void, bytes: []const u8) !usize {
-            _ = context;
+        fn write(_: void, bytes: []const u8) !usize {
             return bytes.len;
         }
     }.write,
-){ .context = {} };
+);
+
+pub fn writer() Writer {
+    return .{ .context = {} };
+}
