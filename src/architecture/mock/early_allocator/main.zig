@@ -1,22 +1,22 @@
-const arch = @import("../../architecture.zig");
+const arch = @import("arch");
+const common_early_allocator = @import("../../early_allocator.zig");
 
-var mock_reserved_map = arch.ReservedMap{};
+const mmu = @import("../mmu/main.zig");
 
-pub fn initialize() arch.EarlyAllocError!void {}
+var reservedMap: arch.ReservedMap linksection(".multiboot.data") = arch.ReservedMap{};
 
-pub fn allocate(needed_size: usize, alignment: usize, region_type: arch.ReservedMapRegionType) arch.EarlyAllocError!*allowzero anyopaque {
-    _ = needed_size;
-    _ = alignment;
-    _ = region_type;
-    return @ptrFromInt(0);
+pub fn initialize() arch.EarlyAllocError!void {
+    try common_early_allocator.initialize();
 }
 
-pub fn reserve(address: usize, size: usize, region_type: arch.ReservedMapRegionType) arch.EarlyAllocError!void {
-    _ = address;
-    _ = size;
-    _ = region_type;
+pub fn allocate(neededSize: usize, alignment: usize, entryType: arch.ReservedMapRegionType) arch.EarlyAllocError!*allowzero anyopaque {
+    return try common_early_allocator.allocate(neededSize, alignment, entryType);
 }
 
-pub fn getReservedMap() *arch.ReservedMap {
-    return &mock_reserved_map;
+pub fn reserve(address: usize, size: usize, entry_type: arch.ReservedMapRegionType) arch.EarlyAllocError!void {
+    try common_early_allocator.reserve(address, size, entry_type);
+}
+
+pub fn getReservedMap() linksection(".multiboot.text") *arch.ReservedMap {
+    return &reservedMap;
 }

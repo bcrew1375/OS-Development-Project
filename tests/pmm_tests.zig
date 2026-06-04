@@ -1,13 +1,20 @@
 const std = @import("std");
+const arch = @import("arch");
 const kernel = @import("kernel_common");
 
 // The PMM expects these symbols to be defined by the linker.
 // For testing purposes, we export them here.
-extern const _kernel_start: usize;
-extern const _kernel_end: usize;
+export const _kernel_start: usize = 0;
+export const _kernel_end: usize = 1024 * 1024;
+
+fn testSetup() void {
+    arch.early_allocator.initialize() catch {
+        std.debug.print("Test initialization failed.", .{});
+    };
+}
 
 test "Physical Memory Manager: Initialization" {
-    // This uses the mock MMU provided in the architecture/mock folder
+    testSetup();
     try kernel.pmm.initialize();
 
     const total_available_frames = kernel.pmm.getTotalAvailableFrames();
