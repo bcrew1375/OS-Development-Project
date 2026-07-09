@@ -1,6 +1,6 @@
 const std = @import("std");
-const arch = @import("arch");
-const kernel = @import("kernel_common");
+const arch = @import("architecture/architecture.zig");
+const kernel = @import("kernel_common.zig");
 
 // The PMM expects these symbols to be defined by the linker.
 // For testing purposes, we export them here.
