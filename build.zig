@@ -59,7 +59,7 @@ pub fn build(b: *std.Build) void {
     });
 
     const tests = b.addTest(.{
-        .root_module = b.createModule(.{ .root_source_file = b.path("tests/tests.zig"), .target = b.graph.host, .optimize = optimize, .code_model = .normal }),
+        .root_module = b.createModule(.{ .root_source_file = b.path("src/tests/tests.zig"), .target = b.graph.host, .optimize = optimize, .code_model = .normal }),
     });
 
     arch_test.addImport("arch", arch_test);
