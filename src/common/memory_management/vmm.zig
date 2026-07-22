@@ -6,7 +6,6 @@ const VMMError = error{
     UndefinedAddressSpace,
     OverlappingVirtualMemoryArea,
     UndefinedVirtualMemoryArea,
-    NoTransientMappingSlots,
 };
 
 /// Defines the access rights for a specific virtual memory mapping.
@@ -30,33 +29,6 @@ pub const AddressSpace = struct {
 
 var currentAddressSpace: *AddressSpace = undefined;
 
-/// TransientMapping provides a way to temporarily access physical memory
-/// that is not covered by the Direct Physical Map.
-/// This avoids the "Linux highmem mess" by using a scoped lifecycle.
-pub const TransientMapping = struct {
-    virtual_address: usize,
-    size: usize,
-
-    pub fn init(physical_address: usize, size: usize, permissions: MemoryPermissions) !TransientMapping {
-        // In a real implementation, this would find a free slot in a reserved
-        // "Transient Window" of the virtual address space (e.g., 0xF0000000).
-        const vaddr = try arch.mmu.mapTransient(physical_address, size, permissions);
-        return TransientMapping{
-            .virtual_address = vaddr,
-            .size = size,
-        };
-    }
-
-    pub fn deinit(self: *TransientMapping) void {
-        arch.mmu.unmapTransient(self.virtual_address, self.size);
-    }
-
-    /// Returns a typed pointer to the mapped memory.
-    pub fn getPointer(self: TransientMapping, comptime T: type) *T {
-        return @ptrFromInt(self.virtual_address);
-    }
-};
-
 pub fn setAddressSpace(addressSpace: *AddressSpace) void {
     currentAddressSpace = addressSpace;
 }
@@ -79,6 +51,25 @@ pub fn map(addressSpace: *AddressSpace, startAddress: u64, endAddress: u64, memo
     addressSpace.length += 1;
 }
 
+pub fn unmap(addressSpace: *AddressSpace, startAddress: u64, endAddress: u64) void {
+    for (addressSpace.VMAList[0..addressSpace.length], 0..) |vma, vmaIndex| {
+        if (vma.start_address == startAddress and vma.end_address == endAddress) {
+            const pageSize = @as(u64, @intCast(arch.mmu.getPageSize()));
+            var pageAddress = startAddress;
+            while (pageAddress < endAddress) : (pageAddress += pageSize) {
+                arch.mmu.unmapPage(@intCast(pageAddress));
+            }
+
+            var shiftIndex = vmaIndex;
+            while (shiftIndex < addressSpace.length - 1) : (shiftIndex += 1) {
+                addressSpace.VMAList[shiftIndex] = addressSpace.VMAList[shiftIndex + 1];
+            }
+            addressSpace.length -= 1;
+            return;
+        }
+    }
+}
+
 pub fn faultHandler(faultInfo: arch.FaultInfo) void {
     if (arch.earlyAllocatorActive == true) {
         @panic("Page fault before memory handling initialization!");
@@ -87,34 +78,38 @@ pub fn faultHandler(faultInfo: arch.FaultInfo) void {
     if (faultInfo.present == false) {
         for (currentAddressSpace.VMAList[0..currentAddressSpace.length]) |vma| {
             if ((faultInfo.address >= vma.start_address) and (faultInfo.address < vma.end_address)) {
-                const physical_address = pmm.allocate(1) catch |err| {
-                    @panic(@errorName(err));
-                };
-
-                const page_protection = arch.PageProtection{
+                const pageProtection = arch.PageProtection{
                     .write = vma.permissions.writeable,
                     .user = vma.permissions.user_accessible,
                     .execute = vma.permissions.executable,
                 };
 
-                mapping_retry: while (true) {
-                    arch.mmu.mapPage(faultInfo.address, physical_address, page_protection) catch |err| {
-                        if (err == arch.MmuError.PageTableNotPresent) {
-                            const table_physical_address = pmm.allocate(1) catch |alloc_err| {
-                                @panic(@errorName(alloc_err));
-                            };
+                // Page tables are lazily allocated on the first fault to a region.
+                // isTablePresent() checks only the page directory entry, so it
+                // correctly distinguishes "table missing" from "page not yet mapped".
+                const tableAlignedAddress: usize = faultInfo.address & ~(arch.mmu.getPageSize() - 1);
 
-                            arch.mmu.mapTable(faultInfo.address, table_physical_address) catch |table_err| {
-                                @panic(@errorName(table_err));
-                            };
-
-                            continue :mapping_retry;
-                        }
+                if (!arch.mmu.isTablePresent(tableAlignedAddress)) {
+                    const tablePhysicalAddress = pmm.allocate(1) catch |err| {
                         @panic(@errorName(err));
                     };
-
-                    return;
+                    arch.mmu.mapTable(tableAlignedAddress, tablePhysicalAddress) catch |err| {
+                        @panic(@errorName(err));
+                    };
                 }
+
+                // Allocate a separate physical page for the actual data.
+                const dataPhysicalAddress = pmm.allocate(1) catch |err| {
+                    @panic(@errorName(err));
+                };
+                arch.mmu.mapPage(faultInfo.address, dataPhysicalAddress, pageProtection) catch |err| {
+                    @panic(@errorName(err));
+                };
+
+                // Zero the newly mapped page to prevent stale data from
+                // previous allocations from corrupting heap metadata.
+                @memset(@as([*]u8, @ptrFromInt(faultInfo.address & ~(arch.mmu.getPageSize() - 1)))[0..arch.mmu.getPageSize()], 0);
+                return;
             }
         }
         @panic("Segmentation fault.");

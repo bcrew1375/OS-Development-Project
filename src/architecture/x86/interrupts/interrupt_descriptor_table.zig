@@ -1,8 +1,9 @@
 const gdt = @import("global_descriptor_table.zig");
-const interruptHandler = @import("main.zig").interruptHandler;
 const port_io = @import("../platform/io/port_io.zig");
 
 const std = @import("std");
+
+const interruptHandler = @import("main.zig").interruptHandler;
 
 const TOTAL_INTERRUPTS: usize = 256;
 
@@ -64,20 +65,31 @@ pub fn set(interruptVector: usize, address: usize, typeAttribute: usize) void {
     return;
 }
 
+fn hasErrorCode(comptime vector: u32) bool {
+    return switch (vector) {
+        8, 10, 11, 12, 13, 14, 17, 21 => true,
+        else => false,
+    };
+}
+
 // Generate a trampoline that calls the interrupt handler with the interrupt number.
 fn makeTrampoline(comptime vector: u32) Trampoline {
     return struct {
         fn trampoline() align(16) callconv(.naked) noreturn {
-            asm volatile (
-                \\push %esp
-                \\push %[vector]
-                \\call interruptHandler
-                \\add $8, %esp
-                \\iret
+            asm volatile ((if (hasErrorCode(vector)) "" else "push $0\n") ++
+                    \\pusha
+                    \\push %esp
+                    \\push %[vector]
+                    \\mov %[interruptHandler], %eax
+                    \\call *%eax
+                    \\add $8, %esp
+                    \\popa
+                    \\add $4, %esp
+                    \\iret
                 :
                 : [vector] "i" (vector),
                   [interruptHandler] "i" (&interruptHandler),
-            );
+                : .{ .eax = true, .memory = true });
         }
     }.trampoline;
 }
@@ -87,6 +99,6 @@ fn idtLoad() void {
         \\cli
         \\lidt (%[interrupt_descriptor_table_register])
         :
-        : [interrupt_descriptor_table_register] "{ecx}" (&interrupt_descriptor_table_register),
-        : .{ .ecx = true, .memory = true });
+        : [interrupt_descriptor_table_register] "r" (&interrupt_descriptor_table_register),
+        : .{ .memory = true });
 }

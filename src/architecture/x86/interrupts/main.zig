@@ -29,7 +29,7 @@ pub fn acknowledgeInterrupt(vector: usize) void {
     }
 }
 
-pub export fn interruptHandler(vector: usize, stack_pointer: usize) callconv(.c) void {
+pub fn interruptHandler(vector: usize, stack_pointer: usize) callconv(.c) void {
     arch.platform.writer().writeAll("Interrupt: ") catch {};
     switch (vector) {
         0x00 => {
@@ -55,6 +55,9 @@ pub export fn interruptHandler(vector: usize, stack_pointer: usize) callconv(.c)
             arch.platform.writer().writeAll("Stack segment fault.\n") catch {};
         },
         0x0D => {
+            // const stack_array: *[1]usize = @ptrFromInt(stack_pointer);
+            // const error_code: usize = stack_array[0];
+            // _ = error_code; // Suppress unused variable warning
             arch.platform.writer().writeAll("General protection fault.\n") catch {};
             arch.platform.writer().print(" Stack Index: 0x{x}\n", .{stack_pointer}) catch {};
         },
@@ -75,6 +78,7 @@ pub export fn interruptHandler(vector: usize, stack_pointer: usize) callconv(.c)
                 // .shadow_stack   = (error_code & 0x40) != 0,
             };
             kernel_common.vmm.faultHandler(fault_info);
+            arch.platform.writer().writeAll("Page fault.\n") catch {};
             //printFormat("Physical address: 0x{x}\n", .{arch.paging.getPhysicalAddress(virtual_address)});
         },
         0x0F => {},
