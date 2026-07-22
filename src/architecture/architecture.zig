@@ -131,6 +131,7 @@ pub fn validateImpl(comptime T: type) void {
 
         validateInterface(T.mmu, struct {
             getPhysicalAddress: fn (virtualAddress: usize) ?usize,
+            isTablePresent: fn (virtualAddress: usize) bool,
             getMemoryMap: fn () *MemoryMap,
             mapPage: fn (virtualAddress: usize, physicalAddress: usize, flags: PageProtection) MmuError!void,
             mapTable: fn (virtualAddress: usize, physicalAddress: usize) MmuError!void,
@@ -140,6 +141,8 @@ pub fn validateImpl(comptime T: type) void {
             getDirectMapMaxSize: fn () u64,
             getKernelHeapVirtualAddress: fn () u64,
             getKernelHeapSize: fn () u64,
+            getPageSize: fn () usize,
+            getPageTableRegionSize: fn () usize,
         });
 
         validateInterface(T.interrupts, struct {

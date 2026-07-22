@@ -48,21 +48,23 @@ pub fn initializePaging() linksection(".multiboot.text") !void {
         kernel_page_directory_entries[common.HIGHER_HALF_INDEX + directory_index].writeable = true;
 
         for (0..common.ENTRIES_PER_TABLE) |table_index| {
-            direct_map_entries[directory_index][table_index].address = @truncate(directory_index * common.PAGE_TABLE_REGION_SIZE + (table_index * common.PAGE_SIZE) >> 12);
+            direct_map_entries[directory_index][table_index].address = @truncate(((directory_index * common.PAGE_TABLE_REGION_SIZE) + (table_index * common.PAGE_SIZE)) >> 12);
             direct_map_entries[directory_index][table_index].present = true;
             direct_map_entries[directory_index][table_index].writeable = true;
         }
     }
 
     asm volatile (
+        \\pusha
         \\mov %[pageDirectoryAddress], %eax
         \\mov %eax, %cr3
         \\mov %cr0, %eax
         \\or $0x80010000, %eax
         \\mov %eax, %cr0
+        \\popa
         :
-        : [pageDirectoryAddress] "{ecx}" (kernel_page_directory_entries),
-        : .{ .ecx = true, .memory = true });
+        : [pageDirectoryAddress] "r" (kernel_page_directory_entries),
+        : .{ .eax = true, .memory = true });
 }
 
 pub fn readMultibootMemoryMap() linksection(".multiboot.text") void {

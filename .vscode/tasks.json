@@ -16,7 +16,7 @@
     {
       "label": "Run QEMU",
       "type": "shell",
-      "command": "zig build run --cache-dir /tmp/zig-local-cache --global-cache-dir /tmp/zig-global-cache",
+      "command": "zig build run",
       "presentation": {
         "panel": "dedicated",
         "reveal": "always",

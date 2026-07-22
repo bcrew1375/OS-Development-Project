@@ -12,16 +12,25 @@ pub const getDirectMapMaxSize = @import("early_boot.zig").getDirectMapMaxSize;
 
 const std = @import("std");
 
-var currentPageDirectory: common.PageDirectory = undefined;
+/// Reads the current page directory base from CR3 and returns it as a
+/// higher-half virtual address so it can be indexed directly.
+inline fn getCurrentPageDirectory() common.PageDirectory {
+    var cr3: usize = undefined;
+    asm volatile ("mov %cr3, %[cr3]"
+        : [cr3] "=r" (cr3),
+    );
+    return @ptrFromInt(cr3 + common.DIRECT_MAP_VIRTUAL_ADDRESS);
+}
 
 pub fn getPhysicalAddress(virtualAddress: usize) ?usize {
     const page_directory_index = getPageDirectoryIndex(virtualAddress);
     const page_table_index = getPageTableIndex(virtualAddress);
     const page_offset = virtualAddress & 0xFFF;
 
-    if (!currentPageDirectory[page_directory_index].present) return null;
+    const page_dir = getCurrentPageDirectory();
+    if (!page_dir[page_directory_index].present) return null;
 
-    const page_table = getPageTableFromDirectory(page_directory_index);
+    const page_table = getPageTableFromDirectory(page_dir, page_directory_index);
     const page_table_entry = page_table[page_table_index];
     if (!page_table_entry.present) return null;
 
@@ -29,15 +38,22 @@ pub fn getPhysicalAddress(virtualAddress: usize) ?usize {
     return physical_address;
 }
 
+pub fn isTablePresent(virtualAddress: usize) bool {
+    const page_directory_index = getPageDirectoryIndex(virtualAddress);
+    const page_dir = getCurrentPageDirectory();
+    return page_dir[page_directory_index].present;
+}
+
 pub fn mapPage(virtualAddress: usize, physicalAddress: usize, flags: arch.PageProtection) arch.MmuError!void {
     const page_directory_index = getPageDirectoryIndex(virtualAddress);
     const page_table_index = getPageTableIndex(virtualAddress);
 
-    if (!currentPageDirectory[page_directory_index].present) {
+    const page_dir = getCurrentPageDirectory();
+    if (!page_dir[page_directory_index].present) {
         return arch.MmuError.PageTableNotPresent;
     }
 
-    const page_table = getPageTableFromDirectory(page_directory_index);
+    const page_table = getPageTableFromDirectory(page_dir, page_directory_index);
     page_table[page_table_index].address = @truncate(physicalAddress >> 12);
     page_table[page_table_index].present = true;
     page_table[page_table_index].writeable = flags.write;
@@ -49,12 +65,13 @@ pub fn mapPage(virtualAddress: usize, physicalAddress: usize, flags: arch.PagePr
 pub fn mapTable(virtualAddress: usize, physicalAddress: usize) arch.MmuError!void {
     const page_directory_index = getPageDirectoryIndex(virtualAddress);
 
-    if (currentPageDirectory[page_directory_index].present) return;
+    const page_dir = getCurrentPageDirectory();
+    if (page_dir[page_directory_index].present) return;
 
-    currentPageDirectory[page_directory_index].address = @truncate(physicalAddress >> 12);
-    currentPageDirectory[page_directory_index].present = true;
-    currentPageDirectory[page_directory_index].writeable = true;
-    currentPageDirectory[page_directory_index].user_accessible = false;
+    page_dir[page_directory_index].address = @truncate(physicalAddress >> 12);
+    page_dir[page_directory_index].present = true;
+    page_dir[page_directory_index].writeable = true;
+    page_dir[page_directory_index].user_accessible = false;
 
     const table_virtual_address = physicalAddress + common.DIRECT_MAP_VIRTUAL_ADDRESS;
     @memset(@as([*]u8, @ptrFromInt(table_virtual_address))[0..common.PAGE_SIZE], 0);
@@ -66,7 +83,8 @@ pub fn unmapPage(virtualAddress: usize) void {
     const page_directory_index = getPageDirectoryIndex(virtualAddress);
     const page_table_index = getPageTableIndex(virtualAddress);
 
-    const page_table = getPageTableFromDirectory(page_directory_index);
+    const page_dir = getCurrentPageDirectory();
+    const page_table = getPageTableFromDirectory(page_dir, page_directory_index);
     page_table[page_table_index].present = false;
 
     flushTLB(virtualAddress);
@@ -80,19 +98,23 @@ pub fn getKernelHeapSize() u64 {
     return common.KERNEL_HEAP_SIZE;
 }
 
-pub fn removeIdentityMapping() void {
-    asm volatile ("mov %cr3, %[currentPageDirectory]"
-        : [currentPageDirectory] "=r" (currentPageDirectory),
-    );
+pub fn getPageSize() usize {
+    return common.PAGE_SIZE;
+}
 
-    currentPageDirectory = @ptrFromInt(@intFromPtr(currentPageDirectory) + common.DIRECT_MAP_VIRTUAL_ADDRESS);
+pub fn getPageTableRegionSize() usize {
+    return common.PAGE_TABLE_REGION_SIZE;
+}
+
+pub fn removeIdentityMapping() void {
+    const page_dir = getCurrentPageDirectory();
 
     const available_ram = getMaxAvailableAddress();
     const direct_map_size = @min(getDirectMapMaxSize(), available_ram);
     const needed_page_tables = @as(usize, @truncate((direct_map_size +| common.PAGE_TABLE_REGION_SIZE -| 1) / common.PAGE_TABLE_REGION_SIZE));
 
     for (0..needed_page_tables) |table_index| {
-        currentPageDirectory[table_index].present = false;
+        page_dir[table_index].present = false;
         flushTLB(table_index * common.PAGE_TABLE_REGION_SIZE);
     }
 }
@@ -105,8 +127,8 @@ inline fn flushTLB(virtualAddress: usize) void {
         : .{ .memory = true });
 }
 
-inline fn getPageTableFromDirectory(directoryIndex: usize) common.PageTable {
-    const physical_address = @as(usize, currentPageDirectory[directoryIndex].address) << 12;
+inline fn getPageTableFromDirectory(page_dir: common.PageDirectory, directoryIndex: usize) common.PageTable {
+    const physical_address = @as(usize, page_dir[directoryIndex].address) << 12;
     return @ptrFromInt(physical_address + common.DIRECT_MAP_VIRTUAL_ADDRESS);
 }
 

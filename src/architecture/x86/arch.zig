@@ -36,6 +36,7 @@ pub const interrupts = struct {
 
 pub const mmu = struct {
     pub const getPhysicalAddress = mmu_impl.getPhysicalAddress;
+    pub const isTablePresent = mmu_impl.isTablePresent;
     pub const getMemoryMap = mmu_impl.getMemoryMap;
     pub const mapPage = mmu_impl.mapPage;
     pub const mapTable = mmu_impl.mapTable;
@@ -45,6 +46,8 @@ pub const mmu = struct {
     pub const getDirectMapMaxSize = mmu_impl.getDirectMapMaxSize;
     pub const getKernelHeapVirtualAddress = mmu_impl.getKernelHeapVirtualAddress;
     pub const getKernelHeapSize = mmu_impl.getKernelHeapSize;
+    pub const getPageSize = mmu_impl.getPageSize;
+    pub const getPageTableRegionSize = mmu_impl.getPageTableRegionSize;
 };
 
 pub const platform = struct {

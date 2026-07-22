@@ -3,7 +3,7 @@ const arch = @import("arch");
 const builtin = @import("builtin");
 const std = @import("std");
 
-pub const FRAME_SIZE: usize = 4096;
+pub const FRAME_SIZE: usize = @as(usize, @intCast(arch.mmu.getPageSize()));
 // Max 64 GBs for now.
 pub const MAX_FRAMES: usize = 2097152;
 
@@ -234,6 +234,10 @@ pub fn getTotalAvailableFrames() usize {
     return totalAvailableFrames;
 }
 
+pub fn getTotalSystemFrames() usize {
+    return totalSystemFrames;
+}
+
 pub fn getCurrentAvailableFrames() usize {
     return currentAvailableFrames;
 }
@@ -242,8 +246,8 @@ pub fn getTotalAvailableRAM() u64 {
     return totalAvailableFrames * FRAME_SIZE;
 }
 
-pub fn getTotalSystemFrames() usize {
-    return totalSystemFrames;
+pub fn getCurrentAvailableRAM() u64 {
+    return currentAvailableFrames * FRAME_SIZE;
 }
 
 pub fn getTotalSystemReservedRAM() u64 {

@@ -9,9 +9,30 @@ var testRegionHeap: []u8 = undefined;
 
 var heapBase: usize = 0;
 
+// Track mapped page tables so getPhysicalAddress can distinguish
+// "table not present" from "page not present".
+const MAX_MOCK_TABLES = 32;
+const MockTableMapping = struct {
+    virtual_address: usize,
+    physical_address: usize,
+};
+var tableMappings: [MAX_MOCK_TABLES]MockTableMapping = undefined;
+var tableMappingCount: usize = 0;
+
 pub fn getPhysicalAddress(virtualAddress: usize) ?usize {
     _ = virtualAddress;
     return null;
+}
+
+pub fn isTablePresent(virtualAddress: usize) bool {
+    const pageTableRegionSize = getPageTableRegionSize();
+    const tableAlignedAddress = virtualAddress & ~(pageTableRegionSize - 1);
+    for (tableMappings[0..tableMappingCount]) |mapping| {
+        if (mapping.virtual_address == tableAlignedAddress) {
+            return true;
+        }
+    }
+    return false;
 }
 
 pub fn getMemoryMap() *arch.MemoryMap {
@@ -37,8 +58,22 @@ pub fn mapPage(virtualAddress: usize, physicalAddress: usize, flags: arch.PagePr
 }
 
 pub fn mapTable(virtualAddress: usize, physicalAddress: usize) arch.MmuError!void {
-    _ = virtualAddress;
-    _ = physicalAddress;
+    // Check if this table is already mapped.
+    for (tableMappings[0..tableMappingCount]) |*mapping| {
+        if (mapping.virtual_address == virtualAddress) {
+            return;
+        }
+    }
+
+    if (tableMappingCount >= MAX_MOCK_TABLES) {
+        @panic("Mock MMU: too many page tables");
+    }
+
+    tableMappings[tableMappingCount] = .{
+        .virtual_address = virtualAddress,
+        .physical_address = physicalAddress,
+    };
+    tableMappingCount += 1;
 }
 
 pub fn unmapPage(virtualAddress: usize) void {
@@ -63,4 +98,12 @@ pub fn getKernelHeapVirtualAddress() u64 {
 
 pub fn getKernelHeapSize() u64 {
     return 0;
+}
+
+pub fn getPageSize() usize {
+    return 4096;
+}
+
+pub fn getPageTableRegionSize() usize {
+    return 4096 * 1024;
 }
