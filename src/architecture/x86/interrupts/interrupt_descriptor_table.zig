@@ -1,5 +1,5 @@
 const gdt = @import("global_descriptor_table.zig");
-const port_io = @import("../platform/io/port_io.zig");
+const pic = @import("pic.zig");
 
 const std = @import("std");
 
@@ -46,13 +46,9 @@ pub fn initialize() void {
 
     idtLoad();
 
-    port_io.out8(0x20, 0x11); // ICW1: start init, edge triggered, ICW4 needed
-    port_io.out8(0x21, 0x20); // ICW2: IRQ0 → INT 0x20
-    port_io.out8(0x21, 0x04); // ICW3: slave on IRQ2
-    port_io.out8(0x21, 0x01); // ICW4: 8086 mode
-
-    // Disable timer for now.
-    port_io.out8(0x21, 0x01); // ICW4: 8086 mode
+    pic.remap(pic.MASTER_VECTOR_OFFSET, pic.SLAVE_VECTOR_OFFSET);
+    pic.maskAll();
+    pic.clearMask(pic.KEYBOARD_IRQ);
 }
 
 pub fn set(interruptVector: usize, address: usize, typeAttribute: usize) void {

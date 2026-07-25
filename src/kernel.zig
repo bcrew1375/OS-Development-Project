@@ -1,8 +1,10 @@
 const arch = @import("arch");
-const pmm = @import("kernel_common").pmm;
-const vmm = @import("kernel_common").vmm;
-const kernelHeap = @import("kernel_common").kernel_heap;
-const terminal = @import("kernel_common").terminal;
+const kernel_common = @import("kernel_common");
+const memory_management = kernel_common.memory_management;
+const pmm = memory_management.physical_memory;
+const vmm = memory_management.virtual_memory;
+const kernelHeap = memory_management.kernel_heap;
+const terminal = kernel_common.terminal;
 const TextColor = @import("arch").TextColor;
 
 const std = @import("std");
@@ -12,7 +14,7 @@ const KERNEL_VMA_TOTAL = 2;
 var kernelVmaBacking: [KERNEL_VMA_TOTAL]vmm.VirtualMemoryArea = undefined;
 
 var kernelAddressSpace: vmm.AddressSpace = vmm.AddressSpace{
-    .VMAList = &kernelVmaBacking,
+    .virtual_memory_areas = &kernelVmaBacking,
     .length = 0,
 };
 
@@ -47,15 +49,6 @@ pub export fn kernelMain() void {
         arch.cpu.unrecoverableHalt();
     };
 
-    const kernelHeapStartAddress = arch.mmu.getKernelHeapVirtualAddress();
-    const kernelHeapEndAddress = kernelHeapStartAddress + arch.mmu.getKernelHeapSize();
-
-    vmm.map(&kernelAddressSpace, kernelHeapStartAddress, kernelHeapEndAddress, heapMemoryPermissions) catch |err| {
-        arch.platform.setColor(TextColor.RED);
-        arch.platform.writer().print("Kernel heap address space init failed with error: {s}\n", .{@errorName(err)}) catch {};
-        arch.cpu.unrecoverableHalt();
-    };
-
     terminal.print.printString("Initializing PMM...");
     pmm.initialize() catch |err| {
         arch.platform.setColor(TextColor.RED);
@@ -63,6 +56,8 @@ pub export fn kernelMain() void {
         arch.cpu.unrecoverableHalt();
     };
     terminal.print.printStringColor("done!\n", TextColor.GREEN);
+
+    pmm.setTrackAllocationsAsReserved(true);
 
     arch.earlyAllocatorActive = false;
 
@@ -74,6 +69,15 @@ pub export fn kernelMain() void {
 
     arch.interrupts.enableInterrupts();
 
+    const kernelHeapStartAddress = arch.mmu.getKernelHeapVirtualAddress();
+    const kernelHeapEndAddress = kernelHeapStartAddress + arch.mmu.getKernelHeapSize();
+
+    vmm.map(&kernelAddressSpace, kernelHeapStartAddress, kernelHeapEndAddress, heapMemoryPermissions) catch |err| {
+        arch.platform.setColor(TextColor.RED);
+        arch.platform.writer().print("Kernel heap address space init failed with error: {s}\n", .{@errorName(err)}) catch {};
+        arch.cpu.unrecoverableHalt();
+    };
+
     terminal.print.printString("Initializing kernel heap...");
     kernelHeap.initialize() catch |err| {
         arch.platform.setColor(TextColor.RED);
@@ -82,7 +86,13 @@ pub export fn kernelMain() void {
     };
     terminal.print.printStringColor("done!\n", TextColor.GREEN);
 
-    const allocation: [*]u8 = @as([*]u8, @ptrCast(kernelHeap.kmalloc(1048576) catch |err| {
+    pmm.setTrackAllocationsAsReserved(false);
+
+    try arch.platform.writer().print("Total Available RAM: {d} KB\n", .{pmm.getTotalAvailableRAM() / 1024});
+    try arch.platform.writer().print("Total System Reserved RAM: {d} KB\n", .{pmm.getTotalSystemReservedRAM() / 1024});
+    try arch.platform.writer().print("Current Available RAM: {d} KB\n", .{pmm.getCurrentAvailableRAM() / 1024});
+
+    const allocation: [*]u8 = @as([*]u8, @ptrCast(kernelHeap.kmalloc(10 * 1024 * 1024) catch |err| {
         arch.platform.setColor(TextColor.RED);
         arch.platform.writer().print("Kernel allocate failed with error: {s}\n", .{@errorName(err)}) catch {};
         arch.cpu.unrecoverableHalt();
@@ -99,9 +109,8 @@ pub export fn kernelMain() void {
     allocation[900000] = 92;
     allocation[1000000] = 112;
 
-    try arch.platform.writer().print("Total Available RAM: {d} KB\n", .{pmm.getTotalAvailableRAM() / 1024});
-    try arch.platform.writer().print("Total System Reserved RAM: {d} KB\n", .{pmm.getTotalSystemReservedRAM() / 1024});
     try arch.platform.writer().print("Current Available RAM: {d} KB\n", .{pmm.getCurrentAvailableRAM() / 1024});
+    try arch.platform.writer().print("System Dynamic Allocation: {d} KB\n", .{kernelHeap.getDynamicAllocationSize() / 1024});
 
     arch.platform.initializeTimer(10);
 

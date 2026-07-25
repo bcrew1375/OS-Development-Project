@@ -1,10 +1,12 @@
 const arch = @import("arch");
 const heap = @import("heap.zig");
-const pmm = @import("kernel_common").pmm;
+const pmm = @import("pmm.zig");
 const std = @import("std");
 
 var kernelHeap: heap.Heap = undefined;
 pub var kernelAllocator: std.mem.Allocator = undefined;
+
+var dynamicAllocationSize: u64 = 0;
 
 pub fn initialize() !void {
     const heapStartAddress = arch.mmu.getKernelHeapVirtualAddress();
@@ -16,6 +18,7 @@ pub fn initialize() !void {
 
 pub fn kmalloc(size: usize) !*anyopaque {
     const pointer = try kernelHeap.allocate(size, 8);
+    dynamicAllocationSize += size;
     return @ptrCast(pointer);
 }
 
@@ -51,4 +54,10 @@ pub fn kfree(bytes: []u8) void {
             pmm.free(physicalFrame, 1) catch {};
         }
     }
+
+    dynamicAllocationSize -= blockOriginalSize;
+}
+
+pub fn getDynamicAllocationSize() u64 {
+    return dynamicAllocationSize;
 }

@@ -58,9 +58,14 @@ pub fn mapPage(virtualAddress: usize, physicalAddress: usize, flags: arch.PagePr
 }
 
 pub fn mapTable(virtualAddress: usize, physicalAddress: usize) arch.MmuError!void {
+    // Align to the page table region boundary so lookups via
+    // isTablePresent (which applies the same alignment) succeed.
+    const pageTableRegionSize = getPageTableRegionSize();
+    const tableAlignedAddress = virtualAddress & ~(pageTableRegionSize - 1);
+
     // Check if this table is already mapped.
     for (tableMappings[0..tableMappingCount]) |*mapping| {
-        if (mapping.virtual_address == virtualAddress) {
+        if (mapping.virtual_address == tableAlignedAddress) {
             return;
         }
     }
@@ -70,7 +75,7 @@ pub fn mapTable(virtualAddress: usize, physicalAddress: usize) arch.MmuError!voi
     }
 
     tableMappings[tableMappingCount] = .{
-        .virtual_address = virtualAddress,
+        .virtual_address = tableAlignedAddress,
         .physical_address = physicalAddress,
     };
     tableMappingCount += 1;

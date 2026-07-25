@@ -1,11 +1,14 @@
 const arch = @import("arch");
 
-const pmm = @import("kernel_common").pmm;
+const pmm = @import("pmm.zig");
 
-const VMMError = error{
+pub const VMMError = error{
     UndefinedAddressSpace,
     OverlappingVirtualMemoryArea,
     UndefinedVirtualMemoryArea,
+    OutOfVirtualMemoryAreas,
+    InvalidVirtualMemoryAreaRange,
+    UnalignedVirtualMemoryArea,
 };
 
 /// Defines the access rights for a specific virtual memory mapping.
@@ -23,7 +26,7 @@ pub const VirtualMemoryArea = struct {
 };
 
 pub const AddressSpace = struct {
-    VMAList: []VirtualMemoryArea = undefined,
+    virtual_memory_areas: []VirtualMemoryArea = undefined,
     length: usize = 0,
 };
 
@@ -34,25 +37,38 @@ pub fn setAddressSpace(addressSpace: *AddressSpace) void {
 }
 
 pub fn map(addressSpace: *AddressSpace, startAddress: u64, endAddress: u64, memoryPermissions: MemoryPermissions) !void {
-    if (addressSpace.VMAList.len == 0) {
+    if (addressSpace.virtual_memory_areas.len == 0) {
         return VMMError.UndefinedAddressSpace;
     }
 
-    for (addressSpace.VMAList[0..addressSpace.length]) |vma| {
+    if (addressSpace.length >= addressSpace.virtual_memory_areas.len) {
+        return VMMError.OutOfVirtualMemoryAreas;
+    }
+
+    if (startAddress >= endAddress) {
+        return VMMError.InvalidVirtualMemoryAreaRange;
+    }
+
+    const page_size: u64 = @intCast(arch.mmu.getPageSize());
+    if ((startAddress % page_size != 0) or (endAddress % page_size != 0)) {
+        return VMMError.UnalignedVirtualMemoryArea;
+    }
+
+    for (addressSpace.virtual_memory_areas[0..addressSpace.length]) |vma| {
         if ((startAddress < vma.end_address) and (endAddress > vma.start_address)) {
             return VMMError.OverlappingVirtualMemoryArea;
         }
     }
 
-    addressSpace.VMAList[addressSpace.length].start_address = startAddress;
-    addressSpace.VMAList[addressSpace.length].end_address = endAddress;
-    addressSpace.VMAList[addressSpace.length].permissions = memoryPermissions;
+    addressSpace.virtual_memory_areas[addressSpace.length].start_address = startAddress;
+    addressSpace.virtual_memory_areas[addressSpace.length].end_address = endAddress;
+    addressSpace.virtual_memory_areas[addressSpace.length].permissions = memoryPermissions;
 
     addressSpace.length += 1;
 }
 
 pub fn unmap(addressSpace: *AddressSpace, startAddress: u64, endAddress: u64) void {
-    for (addressSpace.VMAList[0..addressSpace.length], 0..) |vma, vmaIndex| {
+    for (addressSpace.virtual_memory_areas[0..addressSpace.length], 0..) |vma, vmaIndex| {
         if (vma.start_address == startAddress and vma.end_address == endAddress) {
             const pageSize = @as(u64, @intCast(arch.mmu.getPageSize()));
             var pageAddress = startAddress;
@@ -62,7 +78,7 @@ pub fn unmap(addressSpace: *AddressSpace, startAddress: u64, endAddress: u64) vo
 
             var shiftIndex = vmaIndex;
             while (shiftIndex < addressSpace.length - 1) : (shiftIndex += 1) {
-                addressSpace.VMAList[shiftIndex] = addressSpace.VMAList[shiftIndex + 1];
+                addressSpace.virtual_memory_areas[shiftIndex] = addressSpace.virtual_memory_areas[shiftIndex + 1];
             }
             addressSpace.length -= 1;
             return;
@@ -76,7 +92,7 @@ pub fn faultHandler(faultInfo: arch.FaultInfo) void {
     }
 
     if (faultInfo.present == false) {
-        for (currentAddressSpace.VMAList[0..currentAddressSpace.length]) |vma| {
+        for (currentAddressSpace.virtual_memory_areas[0..currentAddressSpace.length]) |vma| {
             if ((faultInfo.address >= vma.start_address) and (faultInfo.address < vma.end_address)) {
                 const pageProtection = arch.PageProtection{
                     .write = vma.permissions.writeable,

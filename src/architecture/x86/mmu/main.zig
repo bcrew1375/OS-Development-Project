@@ -95,7 +95,11 @@ pub fn getKernelHeapVirtualAddress() u64 {
 }
 
 pub fn getKernelHeapSize() u64 {
-    return common.KERNEL_HEAP_SIZE;
+    const available_ram = kernel_common.pmm.getTotalAvailableRAM();
+    const heap_size_float = @as(f64, @floatFromInt(available_ram)) * common.KERNEL_HEAP_SIZE_RATIO;
+    const heap_size_int = @as(u64, @intFromFloat(heap_size_float));
+    const aligned_heap_size = std.mem.alignForward(u64, heap_size_int, common.PAGE_SIZE) & std.mem.alignBackward(u64, heap_size_int, common.PAGE_SIZE);
+    return aligned_heap_size;
 }
 
 pub fn getPageSize() usize {

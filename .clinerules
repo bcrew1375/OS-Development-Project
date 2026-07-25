@@ -1,7 +1,8 @@
 # Project: OS Development - an early development hobby kernel.
 
 ## General Instructions:
-- Aim for a general purpose kernel with modern production-grade design patterns.
+- Aim for a general purpose kernel microkernel with modern production-grade design patterns.
+- Modularize whenever possible. Avoid monolithic files.
 - Aim for code clarity. Avoid internal abbreviations, but prefer industry-standard acronyms (e.g., ACPI, MMU, PCIe) where they aid recognition.
 - Aim for common code whenever possible. Architecture-dependent code should be minimal.
 - If a compromise must absolutely be made between efficiency and clarity, prefer clarity, except in performance-critical paths (e.g., context switching, MMU hot-paths) where efficiency may take precedence if documented.

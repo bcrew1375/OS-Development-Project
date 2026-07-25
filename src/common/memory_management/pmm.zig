@@ -21,6 +21,7 @@ var totalFrames: usize = 0;
 var totalSystemFrames: usize = 0;
 var totalAvailableFrames: usize = 0;
 var currentAvailableFrames: usize = 0;
+var trackAllocationsAsReserved: bool = false;
 
 const FrameInfo = extern struct {
     used: bool = undefined,
@@ -93,34 +94,7 @@ pub fn initialize() !void {
 
         try reserve(region_start_frame, region_total_frames);
     }
-
-    // markFrames(kernelBaseStartFrame, kernelBaseEndFrame - kernelBaseStartFrame, arch.MemoryMapEntryType.RESERVED);
-
-    // Also reserve the first 1MB for BIOS/Real Mode structures usually found on x86
-    //mark_frames(0, 0x100000 / FRAME_SIZE);
 }
-
-// pub fn initializeFrameRegion(index: usize, address: u64, size: u64, region_type: arch.MemoryMapEntryType) !void {
-//     const region_start_frame: usize = @truncate(try std.math.divCeil(u64, address, FRAME_SIZE));
-//     var region_total_frames: usize = @truncate(try std.math.divTrunc(u64, size, FRAME_SIZE));
-
-//     if (region_total_frames == 0) {
-//         region_total_frames = 1;
-//     }
-
-//     if (region_type == arch.MemoryMapEntryType.AVAILABLE) {
-//         totalAvailableFrames += region_total_frames;
-//     } else {
-//         memoryRegions[index].reserved = true;
-//     }
-
-//     totalFrames += region_total_frames;
-
-//     memoryRegions[index].base_address = region_start_frame * FRAME_SIZE;
-//     memoryRegions[index].frames = @as([*]FrameInfo, @ptrCast(@alignCast(try arch.boot.allocate(region_total_frames * @sizeOf(FrameInfo), FRAME_SIZE, arch.ReservedMapEntryType.PERSISTENT))));
-
-//     //markFrames(region_start_frame, region_total_frames, region_type);
-// }
 
 pub fn allocate(needed_frames: usize) !usize {
     if ((needed_frames < 1) or
@@ -141,6 +115,10 @@ pub fn allocate(needed_frames: usize) !usize {
     }
 
     currentAvailableFrames -= needed_frames;
+
+    if (trackAllocationsAsReserved) {
+        totalSystemFrames +|= needed_frames;
+    }
 
     return start_frame * FRAME_SIZE;
 }
@@ -252,4 +230,8 @@ pub fn getCurrentAvailableRAM() u64 {
 
 pub fn getTotalSystemReservedRAM() u64 {
     return totalSystemFrames * FRAME_SIZE;
+}
+
+pub fn setTrackAllocationsAsReserved(track: bool) void {
+    trackAllocationsAsReserved = track;
 }

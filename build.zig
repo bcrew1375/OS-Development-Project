@@ -37,11 +37,11 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     });
 
+    // arch modules use @import("arch") internally; provide a self-import.
     arch.addImport("arch", arch);
     arch.addImport("kernel_common", kernel_common);
 
     kernel_common.addImport("arch", arch);
-    kernel_common.addImport("kernel_common", kernel_common);
 
     kernel.root_module.addImport("arch", arch);
     kernel.root_module.addImport("kernel_common", kernel_common);
@@ -66,7 +66,6 @@ pub fn build(b: *std.Build) void {
     arch_test.addImport("kernel_common", kernel_common_test);
 
     kernel_common_test.addImport("arch", arch_test);
-    kernel_common_test.addImport("kernel_common", kernel_common_test);
 
     tests.root_module.addImport("arch", arch_test);
     tests.root_module.addImport("kernel_common", kernel_common_test);
