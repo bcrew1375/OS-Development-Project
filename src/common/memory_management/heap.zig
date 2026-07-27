@@ -4,59 +4,58 @@ pub const HeapError = error{
     OutOfMemory,
 };
 
-/// Magic value stamped into every live header/footer. Lets corruption be
-/// detected at the point it's *read*, instead of manifesting several
-/// operations later as a garbage size or a crash in unrelated code.
 const HEADER_MAGIC: u32 = 0x4845_4150; // "HEAP"
 const FOOTER_MAGIC: u32 = 0x464F_4F54; // "FOOT"
 
+/// Header stored at the beginning of every heap block.
+///
+/// `size` covers the entire block: header, payload area, padding, and footer.
+/// `payload_offset` is meaningful for allocated blocks and points from the
+/// header address to the user pointer returned by `allocate()`.
 pub const BlockHeader = struct {
     magic: u32 = HEADER_MAGIC,
-    /// Total block size including header and footer.
     size: usize,
-    /// Whether this block is free.
     free: bool,
+    payload_offset: usize = @sizeOf(BlockHeader),
 };
 
 pub const BlockFooter = struct {
     magic: u32 = FOOTER_MAGIC,
-    /// Total block size (must match the header's size).
     size: usize,
 };
 
-/// Minimum block size: must be large enough to hold header + footer + free
-/// list next pointer.
-const MINIMUM_BLOCK_SIZE: usize = @sizeOf(BlockHeader) + @sizeOf(BlockFooter) + @sizeOf(usize);
+const FreeBlock = struct {
+    next: ?*FreeBlock,
+};
 
-/// Default alignment for all heap allocations.
 const DEFAULT_ALIGNMENT: usize = 8;
+const ALLOCATION_TAG_SIZE: usize = @sizeOf(usize);
+const MINIMUM_BLOCK_SIZE: usize = alignForward(
+    @sizeOf(BlockHeader) + @sizeOf(FreeBlock) + @sizeOf(BlockFooter),
+    DEFAULT_ALIGNMENT,
+);
 
-/// A free-list based heap allocator with block coalescing and splitting.
+const AllocationLayout = struct {
+    user_address: usize,
+    payload_offset: usize,
+    block_size: usize,
+};
+
+/// A boundary-tag heap allocator backed by a sorted singly-linked free list.
 ///
-/// Memory layout of each block:
-///   [BlockHeader | user data | BlockFooter]
+/// Each block has this physical layout:
 ///
-/// Free blocks store a pointer to the next free block in the user data area.
-/// The footer at the end of each block enables O(1) coalescing with the
-/// previous block.
+///   [BlockHeader | payload/padding/free-node | BlockFooter]
 ///
-/// INVARIANT: every byte in [start_address, end_address) belongs to exactly
-/// one block, header-to-header, with zero gaps. free()'s coalescing walks
-/// neighboring blocks purely via `header.size` arithmetic, so any untracked
-/// gap causes it to read unrelated memory as a header. allocate() is
-/// written so it can never introduce such a gap: it either accounts for
-/// every leftover byte within a block it takes, or it rejects that block as
-/// a candidate rather than silently dropping bytes on the floor.
+/// Free blocks store their `FreeBlock` node in the payload area immediately
+/// after the header. Allocated blocks store a small tag immediately before the
+/// returned user pointer so `free()` can recover the block header even when the
+/// user pointer was moved forward to satisfy a larger alignment.
 pub const Heap = struct {
     start_address: usize,
     end_address: usize,
     free_list: ?*FreeBlock,
 
-    const FreeBlock = struct {
-        next: ?*FreeBlock,
-    };
-
-    /// Initializes the heap structure with a specific memory region.
     pub fn initialize(start_address: usize, size_in_bytes: usize) Heap {
         var heap = Heap{
             .start_address = start_address,
@@ -65,209 +64,79 @@ pub const Heap = struct {
         };
 
         if (size_in_bytes >= MINIMUM_BLOCK_SIZE) {
-            const header = @as(*BlockHeader, @ptrFromInt(start_address));
-            header.* = .{ .size = size_in_bytes, .free = true };
-            getFooter(header).* = .{ .size = size_in_bytes };
-
-            const free_block = @as(*FreeBlock, @ptrFromInt(start_address + @sizeOf(BlockHeader)));
-            free_block.next = null;
-            heap.free_list = free_block;
+            const header = initializeBlock(start_address, alignBackward(size_in_bytes, DEFAULT_ALIGNMENT), true, @sizeOf(BlockHeader));
+            freeNodeFromHeader(header).next = null;
+            heap.free_list = freeNodeFromHeader(header);
         }
 
         return heap;
     }
 
-    /// Allocates a block of memory from the heap.
     pub fn allocate(self: *Heap, size_in_bytes: usize, alignment: usize) HeapError![*]u8 {
         const actual_alignment = @max(alignment, DEFAULT_ALIGNMENT);
-        const aligned_size = alignForward(size_in_bytes, DEFAULT_ALIGNMENT);
-        const alloc_block_size = @sizeOf(BlockHeader) + aligned_size + @sizeOf(BlockFooter);
 
-        var prev: ?*FreeBlock = null;
+        var previous: ?*FreeBlock = null;
         var current = self.free_list;
-        while (current) |block| {
-            const header = getHeaderFromFreeBlock(block);
-            checkHeader(header);
-            const block_start = @intFromPtr(header);
+        while (current) |free_node| {
+            const free_header = headerFromFreeNode(free_node);
+            checkHeader(free_header);
 
-            // Where would the allocation's header need to sit so that its
-            // user data satisfies `actual_alignment`?
-            const aligned_user_data = alignForward(block_start + @sizeOf(BlockHeader), actual_alignment);
-            const header_offset = aligned_user_data - @sizeOf(BlockHeader);
-            const padding_size = header_offset - block_start;
-
-            // A padding gap smaller than MINIMUM_BLOCK_SIZE can't be turned
-            // into its own tracked free block. However, it *can* be absorbed
-            // into the allocation: the padding bytes are counted as consumed
-            // but no separate free block is created for them. This keeps the
-            // tiling invariant intact because consumed_from_block accounts
-            // for every byte from block_start to the start of the trailing
-            // remainder (or end of block).
-            if (padding_size != 0 and padding_size < MINIMUM_BLOCK_SIZE) {
-                // Absorb the small padding into the allocation rather than
-                // skipping the candidate. We skip creating a padding free
-                // block below by checking padding_size >= MINIMUM_BLOCK_SIZE.
-            }
-            const consumed_from_block = padding_size + alloc_block_size;
-            if (header.size < consumed_from_block) {
-                prev = current;
-                current = block.next;
+            const layout = computeAllocationLayout(@intFromPtr(free_header), size_in_bytes, actual_alignment);
+            if (layout.block_size > free_header.size) {
+                previous = free_node;
+                current = free_node.next;
                 continue;
             }
 
-            const original_block_size = header.size;
-            const next_free = block.next;
+            const original_size = free_header.size;
+            self.unlinkFreeNode(previous, free_node);
 
-            // Unlink this block from the free list.
-            if (prev) |p| {
-                p.next = next_free;
-            } else {
-                self.free_list = next_free;
+            const allocation_size = chooseAllocationBlockSize(original_size, layout.block_size);
+            const allocated_header = initializeBlock(@intFromPtr(free_header), allocation_size, false, layout.payload_offset);
+            writeAllocationTag(allocated_header);
+
+            const trailing_size = original_size - allocation_size;
+            if (trailing_size >= MINIMUM_BLOCK_SIZE) {
+                const trailing_header = initializeBlock(@intFromPtr(allocated_header) + allocation_size, trailing_size, true, @sizeOf(BlockHeader));
+                self.insertIntoFreeList(trailing_header);
             }
 
-            // Front padding: only created when padding_size >=
-            // MINIMUM_BLOCK_SIZE, so it's always safely trackable.
-            // Small padding (padding_size < MINIMUM_BLOCK_SIZE) is absorbed
-            // into the allocation as dead space.
-            if (padding_size >= MINIMUM_BLOCK_SIZE) {
-                const padding_header = @as(*BlockHeader, @ptrFromInt(block_start));
-                padding_header.* = .{ .size = padding_size, .free = true };
-                getFooter(padding_header).* = .{ .size = padding_size };
-                self.insertIntoFreeList(padding_header);
-            }
-
-            // Trailing remainder: if it's too small to stand alone as a
-            // tracked free block, absorb it into the allocation instead of
-            // discarding it, so every byte in the original block stays
-            // accounted for.
-            const remaining = original_block_size - consumed_from_block;
-            const final_alloc_size = if (remaining >= MINIMUM_BLOCK_SIZE)
-                alloc_block_size
-            else
-                alloc_block_size + remaining;
-
-            const alloc_header = @as(*BlockHeader, @ptrFromInt(header_offset));
-            alloc_header.* = .{ .size = final_alloc_size, .free = false };
-            getFooter(alloc_header).* = .{ .size = final_alloc_size };
-
-            if (remaining >= MINIMUM_BLOCK_SIZE) {
-                const new_free_addr = header_offset + alloc_block_size;
-                const new_header = @as(*BlockHeader, @ptrFromInt(new_free_addr));
-                new_header.* = .{ .size = remaining, .free = true };
-                getFooter(new_header).* = .{ .size = remaining };
-                self.insertIntoFreeList(new_header);
-            }
-
-            return @as([*]u8, @ptrFromInt(aligned_user_data));
+            return @as([*]u8, @ptrFromInt(layout.user_address));
         }
 
         return HeapError.OutOfMemory;
     }
 
-    /// Frees a previously allocated block of memory.
     pub fn free(self: *Heap, bytes: []u8) void {
         if (bytes.len == 0) return;
-        const header = @as(*BlockHeader, @ptrFromInt(@intFromPtr(bytes.ptr) - @sizeOf(BlockHeader)));
-        checkHeader(header);
-        std.debug.assert(!header.free); // catch double-free
+
+        var header = getBlockHeaderFromAllocation(bytes);
+        std.debug.assert(!header.free);
+
         header.free = true;
+        header.payload_offset = @sizeOf(BlockHeader);
 
-        // Coalesce with the next block if it is free.
-        const next_header_addr = @intFromPtr(header) + header.size;
-        if (next_header_addr < self.end_address) {
-            const next_header = @as(*BlockHeader, @ptrFromInt(next_header_addr));
-            checkHeader(next_header);
-            if (next_header.free) {
-                self.removeFromFreeList(next_header);
-                header.size += next_header.size;
-                getFooter(header).* = .{ .size = header.size };
-            }
-        }
-
-        // Coalesce with the previous block if it is free.
-        if (@intFromPtr(header) > self.start_address) {
-            const prev_footer_addr = @intFromPtr(header) - @sizeOf(BlockFooter);
-            // Only attempt backward coalescing if the footer is within the
-            // heap and its magic is valid. This is necessary because small
-            // alignment padding (< sizeof(BlockFooter)) absorbed into the
-            // allocation shifts the header past the old block start, making
-            // `header - sizeof(BlockFooter)` point into the padding region
-            // instead of at the previous block's footer.
-            if (prev_footer_addr >= self.start_address) {
-                const prev_footer = @as(*BlockFooter, @ptrFromInt(prev_footer_addr));
-                if (prev_footer.magic == FOOTER_MAGIC) {
-                    const prev_header = @as(*BlockHeader, @ptrFromInt(@intFromPtr(header) - prev_footer.size));
-                    checkHeader(prev_header);
-                    if (prev_header.free) {
-                        self.removeFromFreeList(prev_header);
-                        prev_header.size += header.size;
-                        getFooter(prev_header).* = .{ .size = prev_header.size };
-                        self.insertIntoFreeList(prev_header);
-                        return;
-                    }
-                }
-            }
-        }
-
+        header = self.coalesceWithNext(header);
+        header = self.coalesceWithPrevious(header);
         self.insertIntoFreeList(header);
     }
 
-    /// Resizes a previously allocated block. Returns true if successful.
     pub fn resize(self: *Heap, bytes: []u8, new_size_in_bytes: usize) bool {
         if (bytes.len == 0) return false;
-        const header = @as(*BlockHeader, @ptrFromInt(@intFromPtr(bytes.ptr) - @sizeOf(BlockHeader)));
+
+        const header = getBlockHeaderFromAllocation(bytes);
         checkHeader(header);
+        std.debug.assert(!header.free);
 
-        const aligned_new_size = alignForward(new_size_in_bytes, DEFAULT_ALIGNMENT);
-        const total_needed = @sizeOf(BlockHeader) + aligned_new_size + @sizeOf(BlockFooter);
-
-        if (total_needed <= header.size) {
-            const remaining = header.size - total_needed;
-            if (remaining >= MINIMUM_BLOCK_SIZE) {
-                header.size = total_needed;
-                getFooter(header).* = .{ .size = total_needed };
-
-                const new_free_addr = @intFromPtr(header) + total_needed;
-                const new_header = @as(*BlockHeader, @ptrFromInt(new_free_addr));
-                new_header.* = .{ .size = remaining, .free = true };
-                getFooter(new_header).* = .{ .size = remaining };
-                self.insertIntoFreeList(new_header);
-            }
+        const needed_size = requiredBlockSizeForExistingAllocation(header, new_size_in_bytes);
+        if (needed_size <= header.size) {
+            self.splitAllocatedBlockIfUseful(header, needed_size);
             return true;
         }
 
-        const next_header_addr = @intFromPtr(header) + header.size;
-        if (next_header_addr < self.end_address) {
-            const next_header = @as(*BlockHeader, @ptrFromInt(next_header_addr));
-            checkHeader(next_header);
-            if (next_header.free) {
-                const combined_size = header.size + next_header.size;
-                if (combined_size >= total_needed) {
-                    self.removeFromFreeList(next_header);
-
-                    header.size = combined_size;
-                    getFooter(header).* = .{ .size = combined_size };
-
-                    const remaining = header.size - total_needed;
-                    if (remaining >= MINIMUM_BLOCK_SIZE) {
-                        header.size = total_needed;
-                        getFooter(header).* = .{ .size = total_needed };
-
-                        const new_free_addr = @intFromPtr(header) + total_needed;
-                        const new_header = @as(*BlockHeader, @ptrFromInt(new_free_addr));
-                        new_header.* = .{ .size = remaining, .free = true };
-                        getFooter(new_header).* = .{ .size = remaining };
-                        self.insertIntoFreeList(new_header);
-                    }
-                    return true;
-                }
-            }
-        }
-
-        return false;
+        return self.tryGrowIntoNextBlock(header, needed_size);
     }
 
-    /// Returns a standard Zig Allocator interface for this heap.
     pub fn allocator(self: *Heap) std.mem.Allocator {
         return .{
             .ptr = self,
@@ -278,6 +147,124 @@ pub const Heap = struct {
                 .free = freeVtableEntry,
             },
         };
+    }
+
+    fn unlinkFreeNode(self: *Heap, previous: ?*FreeBlock, node: *FreeBlock) void {
+        if (previous) |previous_node| {
+            previous_node.next = node.next;
+        } else {
+            self.free_list = node.next;
+        }
+        node.next = null;
+    }
+
+    fn removeFromFreeList(self: *Heap, header: *BlockHeader) void {
+        const target = freeNodeFromHeader(header);
+        var previous: ?*FreeBlock = null;
+        var current = self.free_list;
+
+        while (current) |node| {
+            if (node == target) {
+                self.unlinkFreeNode(previous, node);
+                return;
+            }
+            previous = node;
+            current = node.next;
+        }
+    }
+
+    fn insertIntoFreeList(self: *Heap, header: *BlockHeader) void {
+        checkHeader(header);
+        std.debug.assert(header.free);
+
+        const node = freeNodeFromHeader(header);
+        const address = @intFromPtr(header);
+
+        var previous: ?*FreeBlock = null;
+        var current = self.free_list;
+        while (current) |current_node| {
+            const current_address = @intFromPtr(headerFromFreeNode(current_node));
+            if (address < current_address) break;
+            previous = current_node;
+            current = current_node.next;
+        }
+
+        node.next = current;
+        if (previous) |previous_node| {
+            previous_node.next = node;
+        } else {
+            self.free_list = node;
+        }
+    }
+
+    fn coalesceWithNext(self: *Heap, header: *BlockHeader) *BlockHeader {
+        const next_address = @intFromPtr(header) + header.size;
+        if (next_address >= self.end_address) return header;
+
+        const next_header = @as(*BlockHeader, @ptrFromInt(next_address));
+        checkHeader(next_header);
+        if (!next_header.free) return header;
+
+        self.removeFromFreeList(next_header);
+        return initializeBlock(@intFromPtr(header), header.size + next_header.size, true, @sizeOf(BlockHeader));
+    }
+
+    fn coalesceWithPrevious(self: *Heap, header: *BlockHeader) *BlockHeader {
+        const header_address = @intFromPtr(header);
+        if (header_address == self.start_address) return header;
+
+        const footer_address = header_address - @sizeOf(BlockFooter);
+        if (footer_address < self.start_address) return header;
+
+        const previous_footer = @as(*BlockFooter, @ptrFromInt(footer_address));
+        if (previous_footer.magic != FOOTER_MAGIC) return header;
+
+        const previous_address = header_address - previous_footer.size;
+        if (previous_address < self.start_address) return header;
+
+        const previous_header = @as(*BlockHeader, @ptrFromInt(previous_address));
+        checkHeader(previous_header);
+        if (!previous_header.free) return header;
+
+        self.removeFromFreeList(previous_header);
+        return initializeBlock(previous_address, previous_header.size + header.size, true, @sizeOf(BlockHeader));
+    }
+
+    fn splitAllocatedBlockIfUseful(self: *Heap, header: *BlockHeader, needed_size: usize) void {
+        const original_size = header.size;
+        if (original_size < needed_size + MINIMUM_BLOCK_SIZE) return;
+
+        _ = initializeBlock(@intFromPtr(header), needed_size, false, header.payload_offset);
+        writeAllocationTag(header);
+
+        const remainder_header = initializeBlock(@intFromPtr(header) + needed_size, original_size - needed_size, true, @sizeOf(BlockHeader));
+        self.insertIntoFreeList(remainder_header);
+    }
+
+    fn tryGrowIntoNextBlock(self: *Heap, header: *BlockHeader, needed_size: usize) bool {
+        const next_address = @intFromPtr(header) + header.size;
+        if (next_address >= self.end_address) return false;
+
+        const next_header = @as(*BlockHeader, @ptrFromInt(next_address));
+        checkHeader(next_header);
+        if (!next_header.free) return false;
+
+        const combined_size = header.size + next_header.size;
+        if (combined_size < needed_size) return false;
+
+        self.removeFromFreeList(next_header);
+
+        const allocation_size = chooseAllocationBlockSize(combined_size, needed_size);
+        _ = initializeBlock(@intFromPtr(header), allocation_size, false, header.payload_offset);
+        writeAllocationTag(header);
+
+        const remainder_size = combined_size - allocation_size;
+        if (remainder_size >= MINIMUM_BLOCK_SIZE) {
+            const remainder_header = initializeBlock(@intFromPtr(header) + allocation_size, remainder_size, true, @sizeOf(BlockHeader));
+            self.insertIntoFreeList(remainder_header);
+        }
+
+        return true;
     }
 
     fn allocateVtableEntry(context: *anyopaque, length: usize, pointer_alignment: std.mem.Alignment, _: usize) ?[*]u8 {
@@ -293,9 +280,7 @@ pub const Heap = struct {
 
     fn remapVtableEntry(context: *anyopaque, bytes: []u8, _: std.mem.Alignment, new_length: usize, _: usize) ?[*]u8 {
         const self: *Heap = @ptrCast(@alignCast(context));
-        if (self.resize(bytes, new_length)) {
-            return bytes.ptr;
-        }
+        if (self.resize(bytes, new_length)) return bytes.ptr;
         return null;
     }
 
@@ -303,77 +288,74 @@ pub const Heap = struct {
         const self: *Heap = @ptrCast(@alignCast(context));
         self.free(bytes);
     }
-
-    // --- Helper functions ---
-
-    fn getFooter(header: *BlockHeader) *BlockFooter {
-        return @as(*BlockFooter, @ptrFromInt(@intFromPtr(header) + (header.size - @sizeOf(BlockFooter))));
-    }
-
-    fn getHeaderFromFreeBlock(free_block: *FreeBlock) *BlockHeader {
-        return @as(*BlockHeader, @ptrFromInt(@intFromPtr(free_block) - @sizeOf(BlockHeader)));
-    }
-
-    /// Panics with a clear message the moment corrupted/misaligned memory
-    /// is read as a header, instead of letting a garbage `size` silently
-    /// propagate into later arithmetic.
-    fn checkHeader(header: *BlockHeader) void {
-        std.debug.assert(header.magic == HEADER_MAGIC);
-    }
-
-    fn checkFooter(footer: *BlockFooter) void {
-        std.debug.assert(footer.magic == FOOTER_MAGIC);
-    }
-
-    fn removeFromFreeList(self: *Heap, header: *BlockHeader) void {
-        const free_block = @as(*FreeBlock, @ptrFromInt(@intFromPtr(header) + @sizeOf(BlockHeader)));
-        var prev: ?*FreeBlock = null;
-        var current = self.free_list;
-        while (current) |block| {
-            if (block == free_block) {
-                if (prev) |p| {
-                    p.next = block.next;
-                } else {
-                    self.free_list = block.next;
-                }
-                return;
-            }
-            prev = current;
-            current = block.next;
-        }
-    }
-
-    fn insertIntoFreeList(self: *Heap, header: *BlockHeader) void {
-        const free_block = @as(*FreeBlock, @ptrFromInt(@intFromPtr(header) + @sizeOf(BlockHeader)));
-        const block_addr = @intFromPtr(header);
-
-        // Insert sorted by address to maintain order for coalescing.
-        var prev: ?*FreeBlock = null;
-        var current = self.free_list;
-        while (current) |block| {
-            const current_addr = @intFromPtr(getHeaderFromFreeBlock(block));
-            if (block_addr < current_addr) {
-                free_block.next = current;
-                if (prev) |p| {
-                    p.next = free_block;
-                } else {
-                    self.free_list = free_block;
-                }
-                return;
-            }
-            prev = current;
-            current = block.next;
-        }
-
-        free_block.next = null;
-        if (prev) |p| {
-            p.next = free_block;
-        } else {
-            self.free_list = free_block;
-        }
-    }
 };
 
-fn alignForward(addr: usize, alignment: usize) usize {
-    return (addr + alignment - 1) & ~(alignment - 1);
+pub fn getBlockHeaderFromAllocation(bytes: []u8) *BlockHeader {
+    const tag_address = @intFromPtr(bytes.ptr) - ALLOCATION_TAG_SIZE;
+    const header = @as(*BlockHeader, @ptrFromInt(@as(*usize, @ptrFromInt(tag_address)).*));
+    checkHeader(header);
+    return header;
+}
+
+fn computeAllocationLayout(block_address: usize, size_in_bytes: usize, alignment: usize) AllocationLayout {
+    const aligned_size = alignForward(size_in_bytes, DEFAULT_ALIGNMENT);
+    const user_address = alignForward(block_address + @sizeOf(BlockHeader) + ALLOCATION_TAG_SIZE, alignment);
+    const payload_offset = user_address - block_address;
+    const block_size = alignForward(payload_offset + aligned_size + @sizeOf(BlockFooter), DEFAULT_ALIGNMENT);
+
+    return .{
+        .user_address = user_address,
+        .payload_offset = payload_offset,
+        .block_size = block_size,
+    };
+}
+
+fn requiredBlockSizeForExistingAllocation(header: *const BlockHeader, new_size_in_bytes: usize) usize {
+    const aligned_size = alignForward(new_size_in_bytes, DEFAULT_ALIGNMENT);
+    return alignForward(header.payload_offset + aligned_size + @sizeOf(BlockFooter), DEFAULT_ALIGNMENT);
+}
+
+fn chooseAllocationBlockSize(available_size: usize, requested_size: usize) usize {
+    const remainder_size = available_size - requested_size;
+    return if (remainder_size >= MINIMUM_BLOCK_SIZE) requested_size else available_size;
+}
+
+fn initializeBlock(address: usize, size: usize, free: bool, payload_offset: usize) *BlockHeader {
+    const header = @as(*BlockHeader, @ptrFromInt(address));
+    header.* = .{
+        .size = size,
+        .free = free,
+        .payload_offset = payload_offset,
+    };
+    footerFromHeader(header).* = .{ .size = size };
+    return header;
+}
+
+fn writeAllocationTag(header: *BlockHeader) void {
+    const tag_address = @intFromPtr(header) + header.payload_offset - ALLOCATION_TAG_SIZE;
+    @as(*usize, @ptrFromInt(tag_address)).* = @intFromPtr(header);
+}
+
+fn footerFromHeader(header: *const BlockHeader) *BlockFooter {
+    return @as(*BlockFooter, @ptrFromInt(@intFromPtr(header) + header.size - @sizeOf(BlockFooter)));
+}
+
+fn freeNodeFromHeader(header: *BlockHeader) *FreeBlock {
+    return @as(*FreeBlock, @ptrFromInt(@intFromPtr(header) + @sizeOf(BlockHeader)));
+}
+
+fn headerFromFreeNode(node: *FreeBlock) *BlockHeader {
+    return @as(*BlockHeader, @ptrFromInt(@intFromPtr(node) - @sizeOf(BlockHeader)));
+}
+
+fn checkHeader(header: *const BlockHeader) void {
+    std.debug.assert(header.magic == HEADER_MAGIC);
+}
+
+fn alignForward(address: usize, alignment: usize) usize {
+    return (address + alignment - 1) & ~(alignment - 1);
+}
+
+fn alignBackward(address: usize, alignment: usize) usize {
+    return address & ~(alignment - 1);
 }

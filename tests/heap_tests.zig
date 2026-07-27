@@ -25,6 +25,23 @@ test "heap allocate respects alignment" {
     try std.testing.expect(@intFromPtr(ptr) % 64 == 0);
 }
 
+test "heap aligned allocation can be freed and reused" {
+    var test_heap = heap.Heap.initialize(@intFromPtr(&test_heap_memory), HEAP_TEST_SIZE);
+
+    const ptr = try test_heap.allocate(128, 256);
+    try std.testing.expectEqual(@as(usize, 0), @intFromPtr(ptr) % 256);
+
+    const header = heap.getBlockHeaderFromAllocation(ptr[0..128]);
+    try std.testing.expect(!header.free);
+    try std.testing.expect(@intFromPtr(ptr) > @intFromPtr(header));
+
+    test_heap.free(ptr[0..128]);
+
+    const reused = try test_heap.allocate(128, 256);
+    try std.testing.expectEqual(@as(usize, 0), @intFromPtr(reused) % 256);
+    try std.testing.expectEqual(@intFromPtr(ptr), @intFromPtr(reused));
+}
+
 test "heap allocate multiple blocks" {
     var test_heap = heap.Heap.initialize(@intFromPtr(&test_heap_memory), HEAP_TEST_SIZE);
     const ptr1 = try test_heap.allocate(128, 8);

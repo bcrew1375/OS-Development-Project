@@ -1,5 +1,6 @@
 const gdt = @import("global_descriptor_table.zig");
 const pic = @import("pic.zig");
+const vectors = @import("vectors.zig");
 
 const std = @import("std");
 
@@ -41,6 +42,8 @@ pub fn initialize() void {
         set(@truncate(vector), @intFromPtr(trampolines[vector]), 0x8E);
     }
 
+    set(vectors.syscall, @intFromPtr(trampolines[vectors.syscall]), 0xEE);
+
     interrupt_descriptor_table_register.limit = @sizeOf(@TypeOf(interrupt_descriptor_table)) - 1;
     interrupt_descriptor_table_register.base = @intFromPtr(&interrupt_descriptor_table);
 
@@ -74,17 +77,42 @@ fn makeTrampoline(comptime vector: u32) Trampoline {
         fn trampoline() align(16) callconv(.naked) noreturn {
             asm volatile ((if (hasErrorCode(vector)) "" else "push $0\n") ++
                     \\pusha
+                    \\mov %ds, %ax
+                    \\movzwl %ax, %eax
+                    \\push %eax
+                    \\mov %es, %ax
+                    \\movzwl %ax, %eax
+                    \\push %eax
+                    \\mov %fs, %ax
+                    \\movzwl %ax, %eax
+                    \\push %eax
+                    \\mov %gs, %ax
+                    \\movzwl %ax, %eax
+                    \\push %eax
+                    \\mov %[kernelDataSelector], %ax
+                    \\mov %ax, %ds
+                    \\mov %ax, %es
+                    \\mov %ax, %fs
+                    \\mov %ax, %gs
                     \\push %esp
                     \\push %[vector]
-                    \\mov %[interruptHandler], %eax
-                    \\call *%eax
+                    \\call %[interruptHandler:P]
                     \\add $8, %esp
+                    \\pop %eax
+                    \\mov %ax, %gs
+                    \\pop %eax
+                    \\mov %ax, %fs
+                    \\pop %eax
+                    \\mov %ax, %es
+                    \\pop %eax
+                    \\mov %ax, %ds
                     \\popa
                     \\add $4, %esp
                     \\iret
                 :
                 : [vector] "i" (vector),
                   [interruptHandler] "i" (&interruptHandler),
+                  [kernelDataSelector] "i" (gdt.KERNEL_DATA_SELECTOR),
                 : .{ .eax = true, .memory = true });
         }
     }.trampoline;

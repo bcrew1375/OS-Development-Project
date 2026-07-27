@@ -15,12 +15,32 @@ const MAX_MOCK_TABLES = 32;
 const MockTableMapping = struct {
     virtual_address: usize,
     physical_address: usize,
+    flags: arch.PageProtection,
 };
 var tableMappings: [MAX_MOCK_TABLES]MockTableMapping = undefined;
 var tableMappingCount: usize = 0;
 
+const MAX_MOCK_PAGE_MAPPINGS = 4096;
+pub const MockPageMapping = struct {
+    virtual_page: usize,
+    physical_page: usize,
+    protection: arch.PageProtection,
+    present: bool,
+};
+var pageMappings: [MAX_MOCK_PAGE_MAPPINGS]MockPageMapping = undefined;
+var pageMappingCount: usize = 0;
+
 pub fn getPhysicalAddress(virtualAddress: usize) ?usize {
-    _ = virtualAddress;
+    const pageSize = getPageSize();
+    const virtualPage = virtualAddress & ~(pageSize - 1);
+    const pageOffset = virtualAddress & (pageSize - 1);
+
+    for (pageMappings[0..pageMappingCount]) |mapping| {
+        if (mapping.present and mapping.virtual_page == virtualPage) {
+            return mapping.physical_page + pageOffset;
+        }
+    }
+
     return null;
 }
 
@@ -52,12 +72,37 @@ pub fn getMemoryMap() *arch.MemoryMap {
 }
 
 pub fn mapPage(virtualAddress: usize, physicalAddress: usize, flags: arch.PageProtection) arch.MmuError!void {
-    _ = virtualAddress;
-    _ = physicalAddress;
-    _ = flags;
+    if (!isTablePresent(virtualAddress)) {
+        return arch.MmuError.PageTableNotPresent;
+    }
+
+    const pageSize = getPageSize();
+    const virtualPage = virtualAddress & ~(pageSize - 1);
+    const physicalPage = physicalAddress & ~(pageSize - 1);
+
+    for (pageMappings[0..pageMappingCount]) |*mapping| {
+        if (mapping.virtual_page == virtualPage) {
+            mapping.physical_page = physicalPage;
+            mapping.protection = flags;
+            mapping.present = true;
+            return;
+        }
+    }
+
+    if (pageMappingCount >= MAX_MOCK_PAGE_MAPPINGS) {
+        return arch.MmuError.MappingError;
+    }
+
+    pageMappings[pageMappingCount] = .{
+        .virtual_page = virtualPage,
+        .physical_page = physicalPage,
+        .protection = flags,
+        .present = true,
+    };
+    pageMappingCount += 1;
 }
 
-pub fn mapTable(virtualAddress: usize, physicalAddress: usize) arch.MmuError!void {
+pub fn mapTable(virtualAddress: usize, physicalAddress: usize, flags: arch.PageProtection) arch.MmuError!void {
     // Align to the page table region boundary so lookups via
     // isTablePresent (which applies the same alignment) succeed.
     const pageTableRegionSize = getPageTableRegionSize();
@@ -66,6 +111,9 @@ pub fn mapTable(virtualAddress: usize, physicalAddress: usize) arch.MmuError!voi
     // Check if this table is already mapped.
     for (tableMappings[0..tableMappingCount]) |*mapping| {
         if (mapping.virtual_address == tableAlignedAddress) {
+            mapping.flags.write = mapping.flags.write or flags.write;
+            mapping.flags.user = mapping.flags.user or flags.user;
+            mapping.flags.execute = mapping.flags.execute and flags.execute;
             return;
         }
     }
@@ -77,12 +125,47 @@ pub fn mapTable(virtualAddress: usize, physicalAddress: usize) arch.MmuError!voi
     tableMappings[tableMappingCount] = .{
         .virtual_address = tableAlignedAddress,
         .physical_address = physicalAddress,
+        .flags = flags,
     };
     tableMappingCount += 1;
 }
 
+pub fn getTableProtection(virtualAddress: usize) ?arch.PageProtection {
+    const pageTableRegionSize = getPageTableRegionSize();
+    const tableAlignedAddress = virtualAddress & ~(pageTableRegionSize - 1);
+    for (tableMappings[0..tableMappingCount]) |mapping| {
+        if (mapping.virtual_address == tableAlignedAddress) {
+            return mapping.flags;
+        }
+    }
+    return null;
+}
+
 pub fn unmapPage(virtualAddress: usize) void {
-    _ = virtualAddress;
+    const pageSize = getPageSize();
+    const virtualPage = virtualAddress & ~(pageSize - 1);
+    for (pageMappings[0..pageMappingCount]) |*mapping| {
+        if (mapping.virtual_page == virtualPage) {
+            mapping.present = false;
+            return;
+        }
+    }
+}
+
+pub fn resetForTest() void {
+    tableMappingCount = 0;
+    pageMappingCount = 0;
+}
+
+pub fn getMappedPageForTest(virtualAddress: usize) ?MockPageMapping {
+    const pageSize = getPageSize();
+    const virtualPage = virtualAddress & ~(pageSize - 1);
+    for (pageMappings[0..pageMappingCount]) |mapping| {
+        if (mapping.virtual_page == virtualPage) {
+            return mapping;
+        }
+    }
+    return null;
 }
 
 pub fn getMaxAvailableAddress() u64 {

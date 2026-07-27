@@ -11,6 +11,7 @@ const MB_HEADER_MAGIC = 0x1BADB002;
 const MB_FLAG_ALIGN = 1 << 0;
 const MB_FLAG_MEMINFO = 1 << 1;
 const FLAGS = MB_FLAG_ALIGN | MB_FLAG_MEMINFO;
+const MAX_BOOT_MODULES = 16;
 
 const MultibootHeader = extern struct {
     magic: u32 = MB_HEADER_MAGIC,
@@ -61,7 +62,18 @@ const MultibootInfo = extern struct {
     color_info_1: u8,
 };
 
+const MultibootModule = extern struct {
+    mod_start: u32,
+    mod_end: u32,
+    string: u32,
+    reserved: u32,
+};
+
 pub var multibootInfo: *MultibootInfo linksection(".multiboot.data") = undefined;
+
+var bootModules: [MAX_BOOT_MODULES]arch.BootModule = undefined;
+var bootModuleCount: usize = 0;
+var bootModulesCached: bool = false;
 
 var startupStack: [16 * 1024]u8 align(16) linksection(".multiboot.data") = undefined;
 var kernelStack: [16 * 1024]u8 align(16) linksection(".bss") = undefined;
@@ -73,7 +85,7 @@ pub export fn _start() linksection(".multiboot.text") callconv(.naked) noreturn 
         \\cli
         \\movl %ebx, (%[multibootInfo:P])
         \\mov %[startupStack], %esp
-        \\jmp kernelSetup
+        \\jmp %[kernelSetup:P]
         :
         : [multibootInfo] "i" (&multibootInfo),
           [kernelSetup] "i" (&kernelSetup),
@@ -81,8 +93,12 @@ pub export fn _start() linksection(".multiboot.text") callconv(.naked) noreturn 
     );
 }
 
-export fn kernelSetup() linksection(".multiboot.text") noreturn {
+fn kernelSetup() linksection(".multiboot.text") noreturn {
     arch.early_allocator.initialize() catch |err| {
+        @panic(@errorName(err));
+    };
+
+    reserveBootModules() catch |err| {
         @panic(@errorName(err));
     };
 
@@ -91,13 +107,15 @@ export fn kernelSetup() linksection(".multiboot.text") noreturn {
     };
 
     asm volatile (
-        \\jmp higherHalfEntry
+        \\jmp %[higherHalfEntry:P]
+        :
+        : [higherHalfEntry] "i" (&higherHalfEntry),
     );
 
     unreachable;
 }
 
-export fn higherHalfEntry() noreturn {
+fn higherHalfEntry() noreturn {
     asm volatile (
         \\mov %[kernelStack], %esp
         \\call kernelMain
@@ -114,7 +132,90 @@ export fn higherHalfEntry() noreturn {
 }
 
 pub fn finishBoot() void {
-    gdt.initialize();
+    cacheBootModules();
+    gdt.initialize(@intFromPtr(@as([*]u8, &kernelStack) + kernelStack.len));
     idt.initialize();
     mmu.removeIdentityMapping();
+}
+
+pub fn getBootModuleCount() usize {
+    ensureBootModulesCached();
+    return bootModuleCount;
+}
+
+pub fn getBootModule(index: usize) ?arch.BootModule {
+    ensureBootModulesCached();
+    if (index >= bootModuleCount) {
+        return null;
+    }
+    return bootModules[index];
+}
+
+fn ensureBootModulesCached() void {
+    if (!bootModulesCached) {
+        cacheBootModules();
+    }
+}
+
+fn cacheBootModules() void {
+    if (bootModulesCached) {
+        return;
+    }
+
+    const available_modules = getAvailableMultibootModuleCount();
+    if (available_modules == 0) {
+        bootModuleCount = 0;
+        bootModulesCached = true;
+        return;
+    }
+
+    const multiboot_modules = getMultibootModules();
+
+    for (0..available_modules) |module_index| {
+        bootModules[module_index] = convertMultibootModule(multiboot_modules[module_index]);
+    }
+
+    bootModuleCount = available_modules;
+    bootModulesCached = true;
+}
+
+fn reserveBootModules() linksection(".multiboot.text") arch.EarlyAllocError!void {
+    const available_modules = getAvailableMultibootModuleCount();
+    if (available_modules == 0) {
+        return;
+    }
+
+    const multiboot_modules = getMultibootModules();
+
+    for (0..available_modules) |module_index| {
+        const boot_module = convertMultibootModule(multiboot_modules[module_index]);
+        if (boot_module.physical_start >= boot_module.physical_end) {
+            continue;
+        }
+
+        try arch.early_allocator.reserve(
+            boot_module.physical_start,
+            boot_module.physical_end - boot_module.physical_start,
+            arch.ReservedMapRegionType.BOOTLOADER_DATA,
+        );
+    }
+}
+
+fn getAvailableMultibootModuleCount() linksection(".multiboot.text") usize {
+    if (multibootInfo.mods_addr == 0) {
+        return 0;
+    }
+
+    return @min(@as(usize, @intCast(multibootInfo.mods_count)), MAX_BOOT_MODULES);
+}
+
+fn getMultibootModules() linksection(".multiboot.text") [*]const MultibootModule {
+    return @ptrFromInt(multibootInfo.mods_addr);
+}
+
+fn convertMultibootModule(multiboot_module: MultibootModule) linksection(".multiboot.text") arch.BootModule {
+    return .{
+        .physical_start = multiboot_module.mod_start,
+        .physical_end = multiboot_module.mod_end,
+    };
 }

@@ -5,7 +5,7 @@ pub fn build(b: *std.Build) void {
     const optimize = b.standardOptimizeOption(.{});
 
     const Target = std.Target.x86;
-    const target = b.resolveTargetQuery(.{
+    const kernel_target = b.resolveTargetQuery(.{
         .cpu_arch = .x86,
         .os_tag = .freestanding,
         .abi = .none,
@@ -15,11 +15,17 @@ pub fn build(b: *std.Build) void {
         .cpu_features_sub = Target.featureSet(&.{ .avx, .avx2, .sse, .sse2, .mmx }),
     });
 
+    const root_process_target = b.resolveTargetQuery(.{
+        .cpu_arch = .x86,
+        .os_tag = .freestanding,
+        .abi = .none,
+    });
+
     const kernel = b.addExecutable(.{
         .name = "kernel.elf",
         .root_module = b.createModule(.{
             .root_source_file = b.path(b.pathJoin(&.{"src/kernel.zig"})),
-            .target = target,
+            .target = kernel_target,
             .optimize = optimize,
             .code_model = .kernel,
         }),
@@ -27,14 +33,24 @@ pub fn build(b: *std.Build) void {
 
     const arch = b.createModule(.{
         .root_source_file = b.path("src/architecture/architecture.zig"),
-        .target = target,
+        .target = kernel_target,
         .optimize = optimize,
     });
 
     const kernel_common = b.createModule(.{
         .root_source_file = b.path("src/kernel_common.zig"),
-        .target = target,
+        .target = kernel_target,
         .optimize = optimize,
+    });
+
+    const root_process = b.addExecutable(.{
+        .name = "root_process.elf",
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("src/root_process/src/main.zig"),
+            .target = root_process_target,
+            .optimize = optimize,
+            .code_model = .normal,
+        }),
     });
 
     // arch modules use @import("arch") internally; provide a self-import.
@@ -82,6 +98,9 @@ pub fn build(b: *std.Build) void {
     kernel.setLinkerScript(b.path(b.pathJoin(&.{"src/linker.ld"})));
     b.installArtifact(kernel);
 
+    root_process.setLinkerScript(b.path(b.pathJoin(&.{"src/root_process/src/linker.ld"})));
+    b.installArtifact(root_process);
+
     const qemu_cmd = b.addSystemCommand(&[_][]const u8{
         // zig fmt: off
         "qemu-system-i386",
@@ -107,8 +126,11 @@ pub fn build(b: *std.Build) void {
     });
 
     qemu_cmd.addArg("-kernel");
-    const kernel_path = kernel.getEmittedBin();
-    qemu_cmd.addFileArg(kernel_path);
+    qemu_cmd.addFileArg(kernel.getEmittedBin());
+
+    qemu_cmd.addArg("-initrd");
+    qemu_cmd.addFileArg(root_process.getEmittedBin());
+
     qemu_cmd.step.dependOn(b.getInstallStep());
 
     const run_step = b.step("run", "Run kernel with qemu");

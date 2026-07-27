@@ -19,6 +19,14 @@ Completed so far:
 - [x] Renamed VMM backing storage from `VMAList` to `virtual_memory_areas`.
 - [x] Added VMM map validation for backing capacity, invalid/empty ranges, and page alignment.
 - [x] Added VMM validation tests for capacity, invalid ranges, and unaligned ranges.
+- [x] Split VMM demand-fault resolution into fallible `resolveFault()` and boundary-only `faultHandler()` panic behavior.
+- [x] Added explicit VMM protection-fault handling for present/write/user/instruction-fetch violations.
+- [x] Improved mock MMU page-mapping behavior enough for VMM tests to assert mapped physical pages and permissions.
+- [x] Added VMM fault tests for early faults, faults outside VMAs, present-page faults, and permission violations.
+- [x] Rewrote the generic heap internals around clearer block/free-list helpers while preserving the public `Heap` API.
+- [x] Added targeted heap coverage for freeing and reusing highly aligned allocations.
+- [x] Simplified `kernel_heap.kfree()` so normal frees no longer hide MMU/PMM page decommit policy.
+- [x] Fixed kernel heap accounting to track allocated block bytes consistently.
 - [x] Added a dedicated legacy PIC fallback module at `src/architecture/x86/interrupts/pic.zig`.
 - [x] Replaced raw PIC setup/EOI port writes with named PIC operations.
 - [x] Explicitly masks all PIC IRQs after remap, unmasks keyboard during interrupt initialization, and unmasks timer when PIT setup is requested.
@@ -27,8 +35,8 @@ Highest-value remaining next steps:
 
 - [ ] Introduce an x86 interrupt-controller abstraction so the current PIC fallback can later be replaced by Local APIC/I/O APIC routing cleanly.
 - [ ] Add ACPI discovery, especially MADT parsing, before implementing APIC in a production-grade way.
-- [ ] Split `vmm.resolveFault()` from `vmm.faultHandler()` and add explicit protection-fault behavior.
-- [ ] Improve mock MMU behavioral parity so VMM tests can assert real mappings and permissions.
+- [ ] Fix PMM `reserve()` silent out-of-bounds behavior.
+- [ ] Clean up PMM state transitions and accounting.
 
 The remaining work below is ordered to reduce architectural coupling first, then improve subsystem correctness and test credibility.
 
@@ -151,29 +159,37 @@ Success criteria:
 
 ---
 
-### 3. Split VMM fault resolution from fatal interrupt-boundary behavior
+### 3. [x] Split VMM fault resolution from fatal interrupt-boundary behavior
 
 Relevant file:
 
 - `src/common/memory_management/vmm.zig`
 
-`faultHandler()` currently panics internally for early faults, allocation failures, mapping failures, and faults outside a VMA. Panic may be reasonable at the final interrupt boundary, but lower-level VMM behavior should be explicitly fallible and testable.
+Status: completed. `faultHandler()` is now a thin interrupt-boundary wrapper, while lower-level VMM fault resolution is explicitly fallible and testable.
 
-Recommended deliverables:
+Completed deliverables:
 
 ```zig
 pub fn resolveFault(fault_info: arch.FaultInfo) VMMError!void
 pub fn faultHandler(fault_info: arch.FaultInfo) void
 ```
 
-- Move demand-page resolution into `resolveFault()`.
+- Moved demand-page resolution into `resolveFault()`.
 - Let `faultHandler()` call `resolveFault()` and panic only at the top-level fatal boundary.
-- Add VMM errors for at least:
+- Added VMM errors for:
   - early fault before memory management is active;
   - fault outside a VMA;
   - protection violation;
   - PMM allocation failure;
   - MMU mapping failure.
+- Added tests for previously panic-only early fault and outside-VMA fault cases.
+
+Verification:
+
+- `zig fmt src/common/memory_management/vmm.zig src/architecture/mock/mmu/main.zig tests/vmm_tests.zig` completed with exit code `0`.
+- `timeout 60s zig build tests` completed with exit code `0`.
+- `zig build` completed with exit code `0`.
+- `git diff --check` reported no whitespace/check errors for the VMM-related files.
 
 Success criteria:
 
@@ -183,22 +199,23 @@ Success criteria:
 
 ---
 
-### 4. Handle VMM protection faults explicitly
+### 4. [x] Handle VMM protection faults explicitly
 
 Relevant file:
 
 - `src/common/memory_management/vmm.zig`
 
-If `faultInfo.present == true`, the current handler returns silently. That hides write-to-read-only, user/supervisor, and instruction-fetch violations.
+Status: completed. Present-page faults and requested accesses that violate VMA permissions now return `VMMError.ProtectionViolation` from `resolveFault()` instead of disappearing silently.
 
-Recommended deliverables:
+Completed deliverables:
 
 - Detect protection faults and return explicit errors from `resolveFault()`.
 - Check requested access against VMA permissions:
   - write fault requires `writeable`;
   - user fault requires `user_accessible`;
   - instruction fetch requires `executable`.
-- Document architecture capability gaps, especially 32-bit x86 execute/NX limitations.
+- Documented the current 32-bit non-PAE x86 execute/NX limitation in the VMM permission check.
+- Added VMM tests for present-page faults, write-to-read-only faults, user-to-supervisor faults, and instruction-fetch-from-non-executable faults.
 
 Success criteria:
 
@@ -264,15 +281,15 @@ Success criteria:
 
 ---
 
-### 7. Improve mock MMU behavioral parity
+### 7. [x] Improve mock MMU behavioral parity
 
 Relevant file:
 
 - `src/architecture/mock/mmu/main.zig`
 
-The mock MMU currently tracks page-table presence but does not model page mappings fully. That weakens common-code test credibility.
+Status: completed for page-mapping behavior needed by current VMM tests. Mock memory-map lifecycle stability remains tracked separately in item 8.
 
-Recommended deliverables:
+Completed deliverables:
 
 ```zig
 const MockPageMapping = struct {
@@ -283,16 +300,18 @@ const MockPageMapping = struct {
 };
 ```
 
-- Implement meaningful `mapPage()`.
-- Implement meaningful `unmapPage()`.
-- Implement `getPhysicalAddress()`.
-- Store and expose permissions for tests.
-- Add test helpers such as:
+- Implemented meaningful `mapPage()` with page-table presence validation.
+- Implemented meaningful `unmapPage()` that marks mapped pages non-present.
+- Implemented `getPhysicalAddress()` using stored page mappings.
+- Stored and exposed mapped-page permissions for tests.
+- Added test helpers:
 
 ```zig
 pub fn resetForTest() void
 pub fn getMappedPageForTest(virtual_address: usize) ?MockPageMapping
 ```
+
+- Added VMM tests that assert mapped pages, physical-address lookup availability, and propagated permissions.
 
 Success criteria:
 
@@ -400,23 +419,62 @@ Success criteria:
 
 ---
 
-### 12. Fix or remove kernel heap dynamic allocation accounting
+### 12. [x] Fix kernel heap dynamic allocation accounting
 
 Relevant file:
 
 - `src/common/memory_management/kernel_heap.zig`
 
-`kmalloc(size)` increments accounting by requested size, while `kfree(bytes)` subtracts the allocator block size including metadata/alignment effects.
+Status: completed for the current block-based accounting metric. The old API name remains as a compatibility alias, but the tracked value now represents allocated heap block bytes rather than originally requested payload bytes.
 
-Recommended deliverables:
+Completed deliverables:
 
-- Track requested size consistently, or
-- track committed block size consistently, or
-- remove the metric until it can be made correct.
+- Renamed the internal counter to `allocatedBlockBytes`.
+- `kmalloc()` now adds the actual allocated heap block size.
+- `kfree()` subtracts the same heap block size before returning the block to the generic heap.
+- Added `getAllocatedBlockBytes()`.
+- Kept `getDynamicAllocationSize()` as a compatibility alias.
+- Removed hidden MMU/PMM page decommit from the normal `kfree()` path.
 
 Success criteria:
 
 - Allocation accounting cannot underflow or misrepresent dynamic usage after frees.
+
+---
+
+### 12a. [x] Rewrite generic heap internals for readability
+
+Relevant files:
+
+- `src/common/memory_management/heap.zig`
+- `src/common/memory_management/kernel_heap.zig`
+- `tests/heap_tests.zig`
+
+Status: completed for the generic heap allocator. `kernel_heap.zig` still has separate policy/accounting issues tracked in item 12 and later heap-reclamation work.
+
+Completed deliverables:
+
+- Rewrote `heap.zig` around named concepts:
+  - allocation layout calculation;
+  - block initialization;
+  - allocation tags for recovering headers from aligned user pointers;
+  - free-list insertion/removal;
+  - next/previous coalescing;
+  - in-place resize helpers.
+- Preserved the public `Heap` API:
+  - `initialize`;
+  - `allocate`;
+  - `free`;
+  - `resize`;
+  - `allocator`.
+- Updated `kernel_heap.zig` to use `heap.getBlockHeaderFromAllocation()` instead of assuming the block header is immediately before the user pointer.
+- Added a focused test for freeing and reusing a highly aligned allocation.
+
+Success criteria:
+
+- `zig build tests` passes.
+- `zig build` passes.
+- `allocate()`, `free()`, and `resize()` are organized around named helpers rather than large inline pointer-arithmetic workflows.
 
 ---
 
@@ -663,12 +721,14 @@ zig fmt src/architecture/x86/interrupts/controller.zig src/architecture/x86/inte
 zig build
 ```
 
-### Option B: VMM fault correctness and testability
+### Option B: [x] VMM fault correctness and testability
+
+Status: completed.
 
 1. Split `vmm.resolveFault()` from `vmm.faultHandler()`.
-2. Add explicit VMM protection fault handling.
-3. Improve mock MMU page mapping behavior enough to assert physical addresses and permissions.
-4. Add tests for fault-outside-VMA and protection faults.
+2. Added explicit VMM protection fault handling.
+3. Improved mock MMU page mapping behavior enough to assert physical addresses and permissions.
+4. Added tests for fault-outside-VMA and protection faults.
 
 Recommended verification for this slice:
 

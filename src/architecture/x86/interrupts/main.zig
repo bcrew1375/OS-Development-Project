@@ -7,6 +7,11 @@ pub const idt = @import("interrupt_descriptor_table.zig");
 pub const pic = @import("pic.zig");
 const keyboard = @import("../platform/io/keyboard.zig");
 
+const SyscallNumber = enum(u32) {
+    exit = 1,
+    _,
+};
+
 pub fn enableInterrupts() void {
     asm volatile (
         \\sti
@@ -24,6 +29,7 @@ pub fn acknowledgeInterrupt(vector: usize) void {
 }
 
 pub fn interruptHandler(vector: usize, stack_pointer: usize) callconv(.c) void {
+    const trap_frame: *const TrapFrame = @ptrFromInt(stack_pointer);
     const diagnostic = diagnostics.recordInterrupt(vector);
     if (diagnostic.print) {
         arch.platform.writer().print("Interrupt 0x{x}: ", .{vector}) catch {};
@@ -53,13 +59,15 @@ pub fn interruptHandler(vector: usize, stack_pointer: usize) callconv(.c) void {
             arch.platform.writer().writeAll("Stack segment fault.\n") catch {};
         },
         vectors.general_protection_fault => {
-            // const stack_array: *[1]usize = @ptrFromInt(stack_pointer);
-            // const error_code: usize = stack_array[0];
-            // _ = error_code; // Suppress unused variable warning
+            const interrupted_frame = readInterruptedFrame(trap_frame);
             arch.platform.writer().writeAll("General protection fault.\n") catch {};
-            arch.platform.writer().print(" Stack Index: 0x{x}\n", .{stack_pointer}) catch {};
+            arch.platform.writer().print(" EIP: 0x{x}, CS: 0x{x}, error: 0x{x}\n", .{ interrupted_frame.instruction_pointer, interrupted_frame.code_selector, interrupted_frame.error_code }) catch {};
+            if (interrupted_frame.user_mode) {
+                arch.platform.writer().writeAll(" Fault originated in user mode; first user process reached CPL 3.\n") catch {};
+                arch.cpu.unrecoverableHalt();
+            }
         },
-        vectors.page_fault => handlePageFault(stack_pointer, diagnostic),
+        vectors.page_fault => handlePageFault(trap_frame, diagnostic),
         0x0F => {},
         0x10 => {},
         vectors.alignment_check => {
@@ -77,7 +85,9 @@ pub fn interruptHandler(vector: usize, stack_pointer: usize) callconv(.c) void {
             }
             keyboard.clearKeyboard();
         },
-        0x22...0xFFFFFFFF => {},
+        0x22...0x7F => {},
+        vectors.syscall => handleSyscall(trap_frame),
+        0x81...0xFFFFFFFF => {},
     }
 
     if (diagnostic.print) {
@@ -87,19 +97,33 @@ pub fn interruptHandler(vector: usize, stack_pointer: usize) callconv(.c) void {
     acknowledgeInterrupt(vector);
 }
 
-fn handlePageFault(stack_pointer: usize, diagnostic: diagnostics.Decision) void {
-    kernel_common.vmm.faultHandler(readPageFaultInfo(stack_pointer));
+fn handlePageFault(trap_frame: *const TrapFrame, diagnostic: diagnostics.Decision) void {
+    kernel_common.vmm.faultHandler(readPageFaultInfo(trap_frame));
     if (diagnostic.print) {
         arch.platform.writer().writeAll("Page fault.\n") catch {};
     }
 }
 
-fn readPageFaultInfo(stack_pointer: usize) arch.FaultInfo {
+fn handleSyscall(trap_frame: *const TrapFrame) void {
+    const syscall_number: SyscallNumber = @enumFromInt(trap_frame.eax);
+
+    switch (syscall_number) {
+        .exit => {
+            arch.platform.writer().writeAll("User process exited through syscall.\n") catch {};
+            arch.cpu.unrecoverableHalt();
+        },
+        _ => {
+            arch.platform.writer().print("Unknown syscall: {d}\n", .{trap_frame.eax}) catch {};
+            arch.cpu.unrecoverableHalt();
+        },
+    }
+}
+
+fn readPageFaultInfo(trap_frame: *const TrapFrame) arch.FaultInfo {
     const virtual_address = asm volatile ("mov %%cr2, %[out]"
         : [out] "=r" (-> u32),
     );
-    const stack_array: *[1]usize = @ptrFromInt(stack_pointer);
-    const error_code: usize = stack_array[0];
+    const error_code: usize = @intCast(trap_frame.error_code);
 
     return .{
         .address = virtual_address,
@@ -110,5 +134,44 @@ fn readPageFaultInfo(stack_pointer: usize) arch.FaultInfo {
         .instruction_fetch = (error_code & 0x10) != 0,
         // .protection_key = (error_code & 0x20) != 0,
         // .shadow_stack   = (error_code & 0x40) != 0,
+    };
+}
+
+const TrapFrame = extern struct {
+    gs: u32,
+    fs: u32,
+    es: u32,
+    ds: u32,
+    edi: u32,
+    esi: u32,
+    ebp: u32,
+    original_stack_pointer: u32,
+    ebx: u32,
+    edx: u32,
+    ecx: u32,
+    eax: u32,
+    error_code: u32,
+    instruction_pointer: u32,
+    code_selector: u32,
+    flags: u32,
+};
+
+comptime {
+    @import("std").debug.assert(@sizeOf(TrapFrame) == 16 * @sizeOf(u32));
+}
+
+const InterruptedFrame = struct {
+    error_code: u32,
+    instruction_pointer: u32,
+    code_selector: u32,
+    user_mode: bool,
+};
+
+fn readInterruptedFrame(trap_frame: *const TrapFrame) InterruptedFrame {
+    return .{
+        .error_code = trap_frame.error_code,
+        .instruction_pointer = trap_frame.instruction_pointer,
+        .code_selector = trap_frame.code_selector,
+        .user_mode = (trap_frame.code_selector & 0x3) == 0x3,
     };
 }

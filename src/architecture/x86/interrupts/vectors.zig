@@ -12,4 +12,6 @@ pub const first_hardware_interrupt: usize = 0x20;
 pub const timer: usize = 0x20;
 pub const keyboard: usize = 0x21;
 
+pub const syscall: usize = 0x80;
+
 pub const total: usize = 256;

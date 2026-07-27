@@ -87,6 +87,11 @@ pub const ReservedMap = struct {
     length: usize = 0,
 };
 
+pub const BootModule = struct {
+    physical_start: usize,
+    physical_end: usize,
+};
+
 pub const EarlyAllocError = error{
     OutOfReservations,
     OutOfSpace,
@@ -123,10 +128,13 @@ pub fn validateImpl(comptime T: type) void {
 
         validateInterface(T.boot, struct {
             finishBoot: fn () void,
+            getBootModuleCount: fn () usize,
+            getBootModule: fn (index: usize) ?BootModule,
         });
 
         validateInterface(T.cpu, struct {
             unrecoverableHalt: fn () noreturn,
+            enterUserMode: fn (entry_point: usize, stack_top: usize) noreturn,
         });
 
         validateInterface(T.mmu, struct {
@@ -134,7 +142,7 @@ pub fn validateImpl(comptime T: type) void {
             isTablePresent: fn (virtualAddress: usize) bool,
             getMemoryMap: fn () *MemoryMap,
             mapPage: fn (virtualAddress: usize, physicalAddress: usize, flags: PageProtection) MmuError!void,
-            mapTable: fn (virtualAddress: usize, physicalAddress: usize) MmuError!void,
+            mapTable: fn (virtualAddress: usize, physicalAddress: usize, flags: PageProtection) MmuError!void,
             unmapPage: fn (virtualAddress: usize) void,
             getMaxAvailableAddress: fn () u64,
             getDirectMapVirtualAddress: fn () u64,

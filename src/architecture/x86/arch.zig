@@ -20,10 +20,13 @@ pub const early_allocator = struct {
 
 pub const boot = struct {
     pub const finishBoot = boot_impl.finishBoot;
+    pub const getBootModuleCount = boot_impl.getBootModuleCount;
+    pub const getBootModule = boot_impl.getBootModule;
 };
 
 pub const cpu = struct {
     pub const unrecoverableHalt = cpu_impl.unrecoverableHalt;
+    pub const enterUserMode = cpu_impl.enterUserMode;
 };
 
 pub const interrupts = struct {

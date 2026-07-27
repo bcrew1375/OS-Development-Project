@@ -5,11 +5,12 @@ const pmm = memory_management.physical_memory;
 const vmm = memory_management.virtual_memory;
 const kernelHeap = memory_management.kernel_heap;
 const terminal = kernel_common.terminal;
+const launch_root_process = @import("launch_root_process.zig");
 const TextColor = @import("arch").TextColor;
 
 const std = @import("std");
 
-const KERNEL_VMA_TOTAL = 2;
+const KERNEL_VMA_TOTAL = 16;
 
 var kernelVmaBacking: [KERNEL_VMA_TOTAL]vmm.VirtualMemoryArea = undefined;
 
@@ -113,6 +114,13 @@ pub export fn kernelMain() void {
     try arch.platform.writer().print("System Dynamic Allocation: {d} KB\n", .{kernelHeap.getDynamicAllocationSize() / 1024});
 
     arch.platform.initializeTimer(10);
+
+    terminal.print.printString("Launching first user process...\n");
+    launch_root_process.launchRootProcess(&kernelAddressSpace) catch |err| {
+        arch.platform.setColor(TextColor.RED);
+        arch.platform.writer().print("First user process launch failed with error: {s}\n", .{@errorName(err)}) catch {};
+        arch.cpu.unrecoverableHalt();
+    };
 
     //arch.cpu.unrecoverableHalt();
 }

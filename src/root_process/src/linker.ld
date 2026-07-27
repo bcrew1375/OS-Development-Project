@@ -1,0 +1,25 @@
+ENTRY(_start)
+OUTPUT_FORMAT(elf32-i386)
+
+ROOT_PROCESS_VIRTUAL_ADDRESS = 0x00400000;
+
+SECTIONS
+{
+	. = ROOT_PROCESS_VIRTUAL_ADDRESS;
+	.text ALIGN (4K) : AT (ADDR (.text) - ROOT_PROCESS_VIRTUAL_ADDRESS)
+	{
+		*(.text)
+	}
+	.rodata ALIGN (4K) : AT (ADDR (.rodata) - ROOT_PROCESS_VIRTUAL_ADDRESS)
+	{
+		*(.rodata)
+	}
+	.data ALIGN (4K) : AT (ADDR (.data) - ROOT_PROCESS_VIRTUAL_ADDRESS)
+	{
+		*(.data)
+	}
+	.bss ALIGN (4K) : AT (ADDR (.bss) - ROOT_PROCESS_VIRTUAL_ADDRESS)
+	{
+		*(.bss)
+	}
+}

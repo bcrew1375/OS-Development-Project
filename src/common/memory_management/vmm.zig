@@ -9,6 +9,11 @@ pub const VMMError = error{
     OutOfVirtualMemoryAreas,
     InvalidVirtualMemoryAreaRange,
     UnalignedVirtualMemoryArea,
+    FaultBeforeMemoryManagementActive,
+    FaultOutsideVirtualMemoryArea,
+    ProtectionViolation,
+    PhysicalMemoryAllocationFailed,
+    MappingFailed,
 };
 
 /// Defines the access rights for a specific virtual memory mapping.
@@ -87,47 +92,87 @@ pub fn unmap(addressSpace: *AddressSpace, startAddress: u64, endAddress: u64) vo
 }
 
 pub fn faultHandler(faultInfo: arch.FaultInfo) void {
+    resolveFault(faultInfo) catch |err| {
+        @panic(@errorName(err));
+    };
+}
+
+pub fn resolveFault(faultInfo: arch.FaultInfo) VMMError!void {
     if (arch.earlyAllocatorActive == true) {
-        @panic("Page fault before memory handling initialization!");
+        return VMMError.FaultBeforeMemoryManagementActive;
     }
 
-    if (faultInfo.present == false) {
-        for (currentAddressSpace.virtual_memory_areas[0..currentAddressSpace.length]) |vma| {
-            if ((faultInfo.address >= vma.start_address) and (faultInfo.address < vma.end_address)) {
-                const pageProtection = arch.PageProtection{
-                    .write = vma.permissions.writeable,
-                    .user = vma.permissions.user_accessible,
-                    .execute = vma.permissions.executable,
-                };
+    const vma = findVirtualMemoryArea(faultInfo.address) orelse {
+        return VMMError.FaultOutsideVirtualMemoryArea;
+    };
 
-                // Page tables are lazily allocated on the first fault to a region.
-                // isTablePresent() checks only the page directory entry, so it
-                // correctly distinguishes "table missing" from "page not yet mapped".
-                const tableAlignedAddress: usize = faultInfo.address & ~(arch.mmu.getPageSize() - 1);
+    if (!isAccessAllowed(faultInfo, vma)) {
+        return VMMError.ProtectionViolation;
+    }
 
-                if (!arch.mmu.isTablePresent(tableAlignedAddress)) {
-                    const tablePhysicalAddress = pmm.allocate(1) catch |err| {
-                        @panic(@errorName(err));
-                    };
-                    arch.mmu.mapTable(tableAlignedAddress, tablePhysicalAddress) catch |err| {
-                        @panic(@errorName(err));
-                    };
-                }
+    if (faultInfo.present) {
+        return VMMError.ProtectionViolation;
+    }
 
-                // Allocate a separate physical page for the actual data.
-                const dataPhysicalAddress = pmm.allocate(1) catch |err| {
-                    @panic(@errorName(err));
-                };
-                arch.mmu.mapPage(faultInfo.address, dataPhysicalAddress, pageProtection) catch |err| {
-                    @panic(@errorName(err));
-                };
+    const pageProtection = arch.PageProtection{
+        .write = vma.permissions.writeable,
+        .user = vma.permissions.user_accessible,
+        .execute = vma.permissions.executable,
+    };
 
-                // Zero the newly mapped page to prevent stale data from
-                // previous allocations from corrupting heap metadata.
-                @memset(@as([*]u8, @ptrFromInt(faultInfo.address & ~(arch.mmu.getPageSize() - 1)))[0..arch.mmu.getPageSize()], 0);
-                return;
-            }
+    // Page tables are lazily allocated on the first fault to a region.
+    // isTablePresent() checks only the page directory entry, so it correctly
+    // distinguishes "table missing" from "page not yet mapped".
+    const tableAlignedAddress: usize = faultInfo.address & ~(arch.mmu.getPageSize() - 1);
+
+    const tablePhysicalAddress = if (!arch.mmu.isTablePresent(tableAlignedAddress))
+        pmm.allocate(1) catch {
+            return VMMError.PhysicalMemoryAllocationFailed;
         }
-        @panic("Segmentation fault.");
+    else
+        0;
+
+    arch.mmu.mapTable(tableAlignedAddress, tablePhysicalAddress, pageProtection) catch {
+        return VMMError.MappingFailed;
+    };
+
+    // Allocate a separate physical page for the actual data.
+    const dataPhysicalAddress = pmm.allocate(1) catch {
+        return VMMError.PhysicalMemoryAllocationFailed;
+    };
+    arch.mmu.mapPage(faultInfo.address, dataPhysicalAddress, pageProtection) catch {
+        return VMMError.MappingFailed;
+    };
+
+    // Zero the newly mapped page to prevent stale data from previous
+    // allocations from corrupting heap metadata.
+    @memset(@as([*]u8, @ptrFromInt(faultInfo.address & ~(arch.mmu.getPageSize() - 1)))[0..arch.mmu.getPageSize()], 0);
+}
+
+fn findVirtualMemoryArea(address: usize) ?VirtualMemoryArea {
+    for (currentAddressSpace.virtual_memory_areas[0..currentAddressSpace.length]) |vma| {
+        if ((address >= vma.start_address) and (address < vma.end_address)) {
+            return vma;
+        }
     }
+    return null;
+}
+
+fn isAccessAllowed(faultInfo: arch.FaultInfo, vma: VirtualMemoryArea) bool {
+    if (faultInfo.write and !vma.permissions.writeable) {
+        return false;
+    }
+
+    if (faultInfo.user and !vma.permissions.user_accessible) {
+        return false;
+    }
+
+    // On current 32-bit non-PAE x86, execute permission is advisory because
+    // NX is unavailable. The VMM still enforces its architecture-independent
+    // policy here so unsupported hardware semantics remain explicit.
+    if (faultInfo.instruction_fetch and !vma.permissions.executable) {
+        return false;
+    }
+
+    return true;
 }

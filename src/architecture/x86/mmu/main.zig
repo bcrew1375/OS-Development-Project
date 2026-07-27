@@ -62,16 +62,21 @@ pub fn mapPage(virtualAddress: usize, physicalAddress: usize, flags: arch.PagePr
     flushTLB(virtualAddress);
 }
 
-pub fn mapTable(virtualAddress: usize, physicalAddress: usize) arch.MmuError!void {
+pub fn mapTable(virtualAddress: usize, physicalAddress: usize, flags: arch.PageProtection) arch.MmuError!void {
     const page_directory_index = getPageDirectoryIndex(virtualAddress);
 
     const page_dir = getCurrentPageDirectory();
-    if (page_dir[page_directory_index].present) return;
+    if (page_dir[page_directory_index].present) {
+        page_dir[page_directory_index].writeable = page_dir[page_directory_index].writeable or flags.write;
+        page_dir[page_directory_index].user_accessible = page_dir[page_directory_index].user_accessible or flags.user;
+        flushTLB(virtualAddress);
+        return;
+    }
 
     page_dir[page_directory_index].address = @truncate(physicalAddress >> 12);
     page_dir[page_directory_index].present = true;
     page_dir[page_directory_index].writeable = true;
-    page_dir[page_directory_index].user_accessible = false;
+    page_dir[page_directory_index].user_accessible = flags.user;
 
     const table_virtual_address = physicalAddress + common.DIRECT_MAP_VIRTUAL_ADDRESS;
     @memset(@as([*]u8, @ptrFromInt(table_virtual_address))[0..common.PAGE_SIZE], 0);
