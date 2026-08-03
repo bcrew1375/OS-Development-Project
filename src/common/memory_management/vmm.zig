@@ -1,4 +1,5 @@
 const arch = @import("arch");
+const abi = @import("abi");
 
 const pmm = @import("pmm.zig");
 
@@ -28,6 +29,8 @@ pub const VirtualMemoryArea = struct {
     start_address: u64 = undefined,
     end_address: u64 = undefined,
     permissions: MemoryPermissions = undefined,
+    memory_object_handle: u32 = abi.syscall.INVALID_HANDLE,
+    memory_object_offset: u64 = 0,
 };
 
 pub const AddressSpace = struct {
@@ -42,6 +45,17 @@ pub fn setAddressSpace(addressSpace: *AddressSpace) void {
 }
 
 pub fn map(addressSpace: *AddressSpace, startAddress: u64, endAddress: u64, memoryPermissions: MemoryPermissions) !void {
+    try mapObject(addressSpace, startAddress, endAddress, memoryPermissions, abi.syscall.INVALID_HANDLE, 0);
+}
+
+pub fn mapObject(
+    addressSpace: *AddressSpace,
+    startAddress: u64,
+    endAddress: u64,
+    memoryPermissions: MemoryPermissions,
+    memoryObjectHandle: u32,
+    memoryObjectOffset: u64,
+) !void {
     if (addressSpace.virtual_memory_areas.len == 0) {
         return VMMError.UndefinedAddressSpace;
     }
@@ -68,6 +82,8 @@ pub fn map(addressSpace: *AddressSpace, startAddress: u64, endAddress: u64, memo
     addressSpace.virtual_memory_areas[addressSpace.length].start_address = startAddress;
     addressSpace.virtual_memory_areas[addressSpace.length].end_address = endAddress;
     addressSpace.virtual_memory_areas[addressSpace.length].permissions = memoryPermissions;
+    addressSpace.virtual_memory_areas[addressSpace.length].memory_object_handle = memoryObjectHandle;
+    addressSpace.virtual_memory_areas[addressSpace.length].memory_object_offset = memoryObjectOffset;
 
     addressSpace.length += 1;
 }

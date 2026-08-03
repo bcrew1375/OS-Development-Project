@@ -3,4 +3,5 @@ test {
     _ = @import("kernel_common_tests.zig");
     _ = @import("heap_tests.zig");
     _ = @import("vmm_tests.zig");
+    _ = @import("process_tests.zig");
 }

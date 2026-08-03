@@ -1,0 +1,1 @@
+pkill -F .qemu.pid

@@ -180,6 +180,10 @@ pub fn getDirectMapMaxSize() u64 {
     return 0;
 }
 
+pub fn getKernelVirtualAddressStart() u64 {
+    return 0xC0000000;
+}
+
 pub fn getKernelHeapVirtualAddress() u64 {
     return 0;
 }

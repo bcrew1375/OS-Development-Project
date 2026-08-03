@@ -75,7 +75,10 @@ var bootModules: [MAX_BOOT_MODULES]arch.BootModule = undefined;
 var bootModuleCount: usize = 0;
 var bootModulesCached: bool = false;
 
-var startupStack: [16 * 1024]u8 align(16) linksection(".multiboot.data") = undefined;
+extern const _startup_stack_start: usize;
+extern const _startup_stack_end: usize;
+
+var startupStack: [16 * 1024]u8 align(16) linksection(".multiboot.bss") = undefined;
 var kernelStack: [16 * 1024]u8 align(16) linksection(".bss") = undefined;
 
 extern fn kernelMain() void;
@@ -98,9 +101,9 @@ fn kernelSetup() linksection(".multiboot.text") noreturn {
         @panic(@errorName(err));
     };
 
-    reserveBootModules() catch |err| {
-        @panic(@errorName(err));
-    };
+    // reserveBootModules() catch |err| {
+    //     @panic(@errorName(err));
+    // };
 
     mmu.initializePaging() catch |err| {
         @panic(@errorName(err));
@@ -132,7 +135,7 @@ fn higherHalfEntry() noreturn {
 }
 
 pub fn finishBoot() void {
-    cacheBootModules();
+    //cacheBootModules();
     gdt.initialize(@intFromPtr(@as([*]u8, &kernelStack) + kernelStack.len));
     idt.initialize();
     mmu.removeIdentityMapping();

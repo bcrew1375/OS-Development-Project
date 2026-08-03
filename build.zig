@@ -43,6 +43,18 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     });
 
+    const abi = b.createModule(.{
+        .root_source_file = b.path("src/abi/main.zig"),
+        .target = kernel_target,
+        .optimize = optimize,
+    });
+
+    const root_process_abi = b.createModule(.{
+        .root_source_file = b.path("src/abi/main.zig"),
+        .target = root_process_target,
+        .optimize = optimize,
+    });
+
     const root_process = b.addExecutable(.{
         .name = "root_process.elf",
         .root_module = b.createModule(.{
@@ -56,11 +68,16 @@ pub fn build(b: *std.Build) void {
     // arch modules use @import("arch") internally; provide a self-import.
     arch.addImport("arch", arch);
     arch.addImport("kernel_common", kernel_common);
+    arch.addImport("abi", abi);
 
     kernel_common.addImport("arch", arch);
+    kernel_common.addImport("abi", abi);
 
     kernel.root_module.addImport("arch", arch);
     kernel.root_module.addImport("kernel_common", kernel_common);
+    kernel.root_module.addImport("abi", abi);
+
+    root_process.root_module.addImport("abi", root_process_abi);
 
     const arch_test = b.createModule(.{
         .root_source_file = b.path("src/architecture/architecture.zig"),
@@ -74,17 +91,26 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     });
 
+    const abi_test = b.createModule(.{
+        .root_source_file = b.path("src/abi/main.zig"),
+        .target = b.graph.host,
+        .optimize = optimize,
+    });
+
     const tests = b.addTest(.{
         .root_module = b.createModule(.{ .root_source_file = b.path("tests/tests.zig"), .target = b.graph.host, .optimize = optimize, .code_model = .normal }),
     });
 
     arch_test.addImport("arch", arch_test);
     arch_test.addImport("kernel_common", kernel_common_test);
+    arch_test.addImport("abi", abi_test);
 
     kernel_common_test.addImport("arch", arch_test);
+    kernel_common_test.addImport("abi", abi_test);
 
     tests.root_module.addImport("arch", arch_test);
     tests.root_module.addImport("kernel_common", kernel_common_test);
+    tests.root_module.addImport("abi", abi_test);
 
     tests.root_module.error_tracing = true;
 

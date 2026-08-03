@@ -49,8 +49,11 @@ pub fn mapPage(virtualAddress: usize, physicalAddress: usize, flags: arch.PagePr
     const page_table_index = getPageTableIndex(virtualAddress);
 
     const page_dir = getCurrentPageDirectory();
-    if (!page_dir[page_directory_index].present) {
-        return arch.MmuError.PageTableNotPresent;
+    if (page_dir[page_directory_index].present) {
+        page_dir[page_directory_index].writeable = page_dir[page_directory_index].writeable or flags.write;
+        page_dir[page_directory_index].user_accessible = page_dir[page_directory_index].user_accessible or flags.user;
+        flushTLB(virtualAddress);
+        return;
     }
 
     const page_table = getPageTableFromDirectory(page_dir, page_directory_index);
@@ -78,9 +81,6 @@ pub fn mapTable(virtualAddress: usize, physicalAddress: usize, flags: arch.PageP
     page_dir[page_directory_index].writeable = true;
     page_dir[page_directory_index].user_accessible = flags.user;
 
-    const table_virtual_address = physicalAddress + common.DIRECT_MAP_VIRTUAL_ADDRESS;
-    @memset(@as([*]u8, @ptrFromInt(table_virtual_address))[0..common.PAGE_SIZE], 0);
-
     flushTLB(virtualAddress);
 }
 
@@ -93,6 +93,10 @@ pub fn unmapPage(virtualAddress: usize) void {
     page_table[page_table_index].present = false;
 
     flushTLB(virtualAddress);
+}
+
+pub fn getKernelVirtualAddressStart() u64 {
+    return common.DIRECT_MAP_VIRTUAL_ADDRESS;
 }
 
 pub fn getKernelHeapVirtualAddress() u64 {
@@ -147,4 +151,13 @@ inline fn getPageDirectoryIndex(virtualAddress: usize) usize {
 
 inline fn getPageTableIndex(virtualAddress: usize) usize {
     return (virtualAddress >> 12) & 0x3FF;
+}
+
+pub inline fn switchPageDirectory(pageDirectoryAddress: common.PageDirectory) void {
+    asm volatile (
+        \\mov %[pageDirectoryAddress], %eax
+        \\mov %eax, %cr3
+        :
+        : [pageDirectoryAddress] "r" (pageDirectoryAddress),
+        : .{ .eax = true, .memory = true });
 }

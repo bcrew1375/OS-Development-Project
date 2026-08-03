@@ -103,7 +103,7 @@ pub const EarlyAllocError = error{
 pub const PageProtection = struct {
     write: bool = false,
     user: bool = false,
-    execute: bool = true,
+    execute: bool = false,
     global: bool = false,
 };
 
@@ -147,6 +147,7 @@ pub fn validateImpl(comptime T: type) void {
             getMaxAvailableAddress: fn () u64,
             getDirectMapVirtualAddress: fn () u64,
             getDirectMapMaxSize: fn () u64,
+            getKernelVirtualAddressStart: fn () u64,
             getKernelHeapVirtualAddress: fn () u64,
             getKernelHeapSize: fn () u64,
             getPageSize: fn () usize,

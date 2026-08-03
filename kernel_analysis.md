@@ -627,7 +627,7 @@ After `kernel_common.vmm.faultHandler(fault_info);`, the handler prints `"Page f
 
 Relevant file: `src/architecture/x86/interrupts/main.zig`
 
-The handler has a large switch with printing and limited semantics. For a production-grade kernel, exceptions should be decoded into structured fault records and routed to the kernel fault subsystem.
+The handler has a large ith printing and limited semantics. For a production-grade kernel, exceptions should be decoded into structured fault records and routed to the kernel fault subsystem.
 
 **Recommendation:** create architecture-independent exception/fault dispatch types and keep x86-specific register decoding in x86 code.
 

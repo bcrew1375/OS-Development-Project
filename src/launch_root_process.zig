@@ -1,11 +1,18 @@
 const arch = @import("arch");
 const kernel_common = @import("kernel_common");
 const std = @import("std");
+const abi = @import("abi");
 
 const vmm = kernel_common.memory_management.virtual_memory;
 
+const USER_BOOT_INFO_START: u64 = 0x0010_0000;
+const USER_BOOT_INFO_END: u64 = USER_BOOT_INFO_START + 0x1000;
 const USER_STACK_START: u64 = 0x0080_0000;
 const USER_STACK_END: u64 = USER_STACK_START + 0x0040_0000;
+const MAX_BOOT_INFO_MODULES = 16;
+
+const ROOT_PROCESS_VIRTUAL_ADDRESS_START: u64 = 0x0040_0000;
+const ROOT_PROCESS_VIRTUAL_ADDRESS_END: u64 = ROOT_PROCESS_VIRTUAL_ADDRESS_START + 0x0040_0000;
 
 const ElfLoadError = error{
     RootProcessModuleMissing,
@@ -27,6 +34,11 @@ const LoadableImageRange = struct {
     end: u64,
 };
 
+const BootInfoLayout = extern struct {
+    boot_info: abi.boot_info.BootInfo,
+    modules: [MAX_BOOT_INFO_MODULES]abi.boot_info.BootModuleInfo,
+};
+
 pub fn launchRootProcess(address_space: *vmm.AddressSpace) !noreturn {
     const userStackPermissions = vmm.MemoryPermissions{
         .readable = true,
@@ -35,15 +47,60 @@ pub fn launchRootProcess(address_space: *vmm.AddressSpace) !noreturn {
         .user_accessible = true,
     };
 
+    // vmm.setAddressSpace(address_space);
+
     const root_module = arch.boot.getBootModule(0) orelse return ElfLoadError.RootProcessModuleMissing;
     const entry_point = try loadRootProcessElf(address_space, root_module);
 
-    try vmm.map(address_space, USER_STACK_START, USER_STACK_END, userStackPermissions);
+    // try mapBootInfo(address_space);
+    // try vmm.map(address_space, USER_STACK_START, USER_STACK_END, userStackPermissions);
 
-    const userStackLastByte: *u8 = @ptrFromInt(USER_STACK_END - 1);
-    userStackLastByte.* = 0;
+    const initial_stack_pointer = initializeUserStack(USER_STACK_END, USER_BOOT_INFO_START);
 
-    arch.cpu.enterUserMode(entry_point, @intCast(USER_STACK_END));
+    arch.cpu.enterUserMode(entry_point, initial_stack_pointer);
+}
+
+fn mapBootInfo(address_space: *vmm.AddressSpace) !void {
+    const bootInfoPermissions = vmm.MemoryPermissions{
+        .readable = true,
+        .writeable = true,
+        .executable = false,
+        .user_accessible = true,
+    };
+
+    try vmm.map(address_space, USER_BOOT_INFO_START, USER_BOOT_INFO_END, bootInfoPermissions);
+
+    const layout: *BootInfoLayout = @ptrFromInt(USER_BOOT_INFO_START);
+    const module_count = @min(arch.boot.getBootModuleCount(), MAX_BOOT_INFO_MODULES);
+
+    layout.boot_info = .{
+        .magic = abi.boot_info.BOOT_INFO_MAGIC,
+        .version = abi.boot_info.BOOT_INFO_VERSION,
+        .module_count = @intCast(module_count),
+        .modules_address = USER_BOOT_INFO_START + @offsetOf(BootInfoLayout, "modules"),
+    };
+
+    for (0..module_count) |module_index| {
+        const module = arch.boot.getBootModule(module_index).?;
+        layout.modules[module_index] = .{
+            .physical_start = @intCast(module.physical_start),
+            .physical_end = @intCast(module.physical_end),
+        };
+    }
+}
+
+fn initializeUserStack(stack_top: u64, boot_info_address: u64) usize {
+    var stack_pointer = @as(usize, @intCast(stack_top));
+
+    stack_pointer -= @sizeOf(u32);
+    const boot_info_argument: *u32 = @ptrFromInt(stack_pointer);
+    boot_info_argument.* = @intCast(boot_info_address);
+
+    stack_pointer -= @sizeOf(u32);
+    const fake_return_address: *u32 = @ptrFromInt(stack_pointer);
+    fake_return_address.* = 0;
+
+    return stack_pointer;
 }
 
 fn loadRootProcessElf(address_space: *vmm.AddressSpace, root_module: arch.BootModule) !usize {
@@ -64,7 +121,7 @@ fn loadRootProcessElf(address_space: *vmm.AddressSpace, root_module: arch.BootMo
         .user_accessible = true,
     };
 
-    try vmm.map(address_space, loadable_image_range.start, loadable_image_range.end, userImagePermissions);
+    // try vmm.map(address_space, loadable_image_range.start, loadable_image_range.end, userImagePermissions);
 
     for (0..elf_header.e_phnum) |program_header_index| {
         const program_header = try readProgramHeader(image, elf_header, program_header_index);

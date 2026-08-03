@@ -47,6 +47,7 @@ pub const mmu = struct {
     pub const getMaxAvailableAddress = mmu_impl.getMaxAvailableAddress;
     pub const getDirectMapVirtualAddress = mmu_impl.getDirectMapVirtualAddress;
     pub const getDirectMapMaxSize = mmu_impl.getDirectMapMaxSize;
+    pub const getKernelVirtualAddressStart = mmu_impl.getKernelVirtualAddressStart;
     pub const getKernelHeapVirtualAddress = mmu_impl.getKernelHeapVirtualAddress;
     pub const getKernelHeapSize = mmu_impl.getKernelHeapSize;
     pub const getPageSize = mmu_impl.getPageSize;
