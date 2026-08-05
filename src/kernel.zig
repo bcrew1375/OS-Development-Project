@@ -5,7 +5,7 @@ const pmm = memory_management.physical_memory;
 const vmm = memory_management.virtual_memory;
 const kernelHeap = memory_management.kernel_heap;
 const terminal = kernel_common.terminal;
-// const launch_root_process = @import("launch_root_process.zig");
+const launch_root_process = @import("launch_root_process.zig");
 const TextColor = @import("arch").TextColor;
 
 const std = @import("std");
@@ -69,13 +69,13 @@ pub export fn kernelMain() void {
 
     // arch.earlyAllocatorActive = false;
 
-    arch.boot.finishBoot();
+    // arch.boot.finishBoot();
 
     terminal.print.printString("Initializing interrupts...");
     arch.interrupts.initialize();
     terminal.print.printStringColor("done!\n", TextColor.GREEN);
 
-    arch.interrupts.enableInterrupts();
+    // arch.interrupts.enableInterrupts();
 
     // const kernelHeapStartAddress = arch.mmu.getKernelHeapVirtualAddress();
     // const kernelHeapEndAddress = kernelHeapStartAddress + arch.mmu.getKernelHeapSize();
@@ -122,12 +122,12 @@ pub export fn kernelMain() void {
 
     // arch.platform.initializeTimer(10);
 
-    // terminal.print.printString("Launching first user process...\n");
-    // launch_root_process.launchRootProcess(&rootAddressSpace) catch |err| {
-    //     arch.platform.setColor(TextColor.RED);
-    //     arch.platform.writer().print("First user process launch failed with error: {s}\n", .{@errorName(err)}) catch {};
-    //     arch.cpu.unrecoverableHalt();
-    // };
+    terminal.print.printString("Launching first user process...\n");
+    launch_root_process.launchRootProcess(&rootAddressSpace) catch |err| {
+        arch.platform.setColor(TextColor.RED);
+        arch.platform.writer().print("First user process launch failed with error: {s}\n", .{@errorName(err)}) catch {};
+        arch.cpu.unrecoverableHalt();
+    };
 
     //arch.cpu.unrecoverableHalt();
 }

@@ -70,8 +70,8 @@ pub const MemoryMapRegionType = enum(u8) {
 };
 
 pub const ReservedMapRegionType = enum {
-    TEMPORARY, // Can be reclaimed once the full VM/Slab allocator is up
-    PERSISTENT, // Kernel structures that live for the lifetime of the OS
+    TEMPORARY,
+    PERSISTENT,
     KERNEL_CODE,
     BOOTLOADER_DATA,
 };

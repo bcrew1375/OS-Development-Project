@@ -47,13 +47,13 @@ pub fn launchRootProcess(address_space: *vmm.AddressSpace) !noreturn {
         .user_accessible = true,
     };
 
-    // vmm.setAddressSpace(address_space);
+    vmm.setAddressSpace(address_space);
 
     const root_module = arch.boot.getBootModule(0) orelse return ElfLoadError.RootProcessModuleMissing;
     const entry_point = try loadRootProcessElf(address_space, root_module);
 
-    // try mapBootInfo(address_space);
-    // try vmm.map(address_space, USER_STACK_START, USER_STACK_END, userStackPermissions);
+    try mapBootInfo(address_space);
+    try vmm.map(address_space, USER_STACK_START, USER_STACK_END, userStackPermissions);
 
     const initial_stack_pointer = initializeUserStack(USER_STACK_END, USER_BOOT_INFO_START);
 
@@ -121,7 +121,7 @@ fn loadRootProcessElf(address_space: *vmm.AddressSpace, root_module: arch.BootMo
         .user_accessible = true,
     };
 
-    // try vmm.map(address_space, loadable_image_range.start, loadable_image_range.end, userImagePermissions);
+    try vmm.map(address_space, loadable_image_range.start, loadable_image_range.end, userImagePermissions);
 
     for (0..elf_header.e_phnum) |program_header_index| {
         const program_header = try readProgramHeader(image, elf_header, program_header_index);

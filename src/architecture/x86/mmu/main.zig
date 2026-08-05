@@ -5,8 +5,8 @@ const common = @import("common.zig");
 const early_boot = @import("early_boot.zig");
 
 pub const initializePaging = @import("early_boot.zig").initializePaging;
-pub const getMemoryMap = @import("early_boot.zig").getMemoryMap;
-pub const getMaxAvailableAddress = @import("early_boot.zig").getMaxAvailableAddress;
+pub const getMemoryMap = @import("memory_map.zig").getMemoryMap;
+pub const getMaxAvailableAddress = @import("memory_map.zig").getMaxAvailableAddress;
 pub const getDirectMapVirtualAddress = @import("early_boot.zig").getDirectMapVirtualAddress;
 pub const getDirectMapMaxSize = @import("early_boot.zig").getDirectMapMaxSize;
 

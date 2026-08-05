@@ -3,6 +3,9 @@
     "lldb.showDisassembly": "auto",
     "lldb.dereferencePointers": true,
     "lldb.consoleMode": "commands",
-    "zig.testArgs": ["build", "tests", "--", "--test-filter", "${filter}"]
+    "zig.testArgs": ["build", "tests", "--", "--test-filter", "${filter}"],
+    "memory-inspector.debugTypes": [
+        "gdb"
+    ]
 }
  

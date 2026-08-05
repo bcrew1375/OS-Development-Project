@@ -15,17 +15,14 @@ pub fn initialize() linksection(".multiboot.text") arch.EarlyAllocError!void {
     try common_early_allocator.initialize();
 
     // Reserve legacy x86 regions.
-    arch.early_allocator.reserve(0, 0x9FC00, arch.ReservedMapRegionType.PERSISTENT) catch |err| {
-        @panic(@errorName(err));
-    };
-    arch.early_allocator.reserve(0xA0000, 0x50000, arch.ReservedMapRegionType.PERSISTENT) catch |err| {
+    arch.early_allocator.reserve(0, 0x100000, arch.ReservedMapRegionType.PERSISTENT) catch |err| {
         @panic(@errorName(err));
     };
 
     const kernel_start_address = @intFromPtr(&_kernel_start);
     const kernel_end_address = @intFromPtr(&_kernel_end);
 
-    arch.early_allocator.reserve(kernel_start_address, kernel_end_address - kernel_start_address, arch.ReservedMapRegionType.PERSISTENT) catch |err| {
+    arch.early_allocator.reserve(kernel_start_address, kernel_end_address - kernel_start_address, arch.ReservedMapRegionType.KERNEL_CODE) catch |err| {
         @panic(@errorName(err));
     };
 }
