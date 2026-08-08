@@ -7,7 +7,9 @@
       "program": "${workspaceFolder}/zig-out/bin/kernel.elf",
       "targetCreateCommands": [
         "target create ${workspaceFolder}/zig-out/bin/kernel.elf",
-        "target modules load --file ${workspaceFolder}/zig-out/bin/kernel.elf .text 0xC0205000"
+        "target modules add ${workspaceFolder}/zig-out/bin/root_process.elf",
+        "target modules load --file ${workspaceFolder}/zig-out/bin/kernel.elf .text 0xC0205000",
+        "target modules load --file ${workspaceFolder}/zig-out/bin/root_process.elf .text 0x01000000"
       ],
       "processCreateCommands": [
         "gdb-remote 1234",
@@ -19,6 +21,6 @@
       "exitCommands": [
         "quit"
       ]
-    }
-  ]
+    },
+ ]
 }
