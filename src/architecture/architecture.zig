@@ -48,6 +48,11 @@ pub const MmuError = error{
     MemoryMapReadError,
     MappingError,
     PageTableNotPresent,
+    AddressSpaceRootAllocationFailed,
+};
+
+pub const AddressSpaceRoot = struct {
+    value: usize,
 };
 
 pub const MemoryMap = struct {
@@ -72,8 +77,10 @@ pub const MemoryMapRegionType = enum(u8) {
 pub const ReservedMapRegionType = enum {
     TEMPORARY,
     PERSISTENT,
-    KERNEL_CODE,
+    KERNEL_READ_ONLY,
+    KERNEL_WRITABLE,
     BOOTLOADER_DATA,
+    DEVICE_MEMORY,
 };
 
 pub const ReservedMapEntry = struct {
@@ -138,10 +145,16 @@ pub fn validateImpl(comptime T: type) void {
         });
 
         validateInterface(T.mmu, struct {
+            createAddressSpaceRoot: fn () MmuError!AddressSpaceRoot,
+            switchAddressSpaceRoot: fn (root: AddressSpaceRoot) void,
+            getPhysicalAddressInAddressSpace: fn (root: AddressSpaceRoot, virtualAddress: usize) ?usize,
             getPhysicalAddress: fn (virtualAddress: usize) ?usize,
+            isTablePresentInAddressSpace: fn (root: AddressSpaceRoot, virtualAddress: usize) bool,
             isTablePresent: fn (virtualAddress: usize) bool,
             getMemoryMap: fn () *MemoryMap,
+            mapPageInAddressSpace: fn (root: AddressSpaceRoot, virtualAddress: usize, physicalAddress: usize, flags: PageProtection) MmuError!void,
             mapPage: fn (virtualAddress: usize, physicalAddress: usize, flags: PageProtection) MmuError!void,
+            mapTableInAddressSpace: fn (root: AddressSpaceRoot, virtualAddress: usize, physicalAddress: usize, flags: PageProtection) MmuError!void,
             mapTable: fn (virtualAddress: usize, physicalAddress: usize, flags: PageProtection) MmuError!void,
             unmapPage: fn (virtualAddress: usize) void,
             getMaxAvailableAddress: fn () u64,

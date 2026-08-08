@@ -38,10 +38,16 @@ pub const interrupts = struct {
 };
 
 pub const mmu = struct {
+    pub const createAddressSpaceRoot = mmu_impl.createAddressSpaceRoot;
+    pub const switchAddressSpaceRoot = mmu_impl.switchAddressSpaceRoot;
+    pub const getPhysicalAddressInAddressSpace = mmu_impl.getPhysicalAddressInAddressSpace;
     pub const getPhysicalAddress = mmu_impl.getPhysicalAddress;
+    pub const isTablePresentInAddressSpace = mmu_impl.isTablePresentInAddressSpace;
     pub const isTablePresent = mmu_impl.isTablePresent;
     pub const getMemoryMap = mmu_impl.getMemoryMap;
+    pub const mapPageInAddressSpace = mmu_impl.mapPageInAddressSpace;
     pub const mapPage = mmu_impl.mapPage;
+    pub const mapTableInAddressSpace = mmu_impl.mapTableInAddressSpace;
     pub const mapTable = mmu_impl.mapTable;
     pub const unmapPage = mmu_impl.unmapPage;
     pub const getMaxAvailableAddress = mmu_impl.getMaxAvailableAddress;

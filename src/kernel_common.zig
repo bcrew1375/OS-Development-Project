@@ -8,3 +8,4 @@ pub const vmm = memory_management.virtual_memory;
 pub const kernel_heap = memory_management.kernel_heap;
 pub const heap = memory_management.heap;
 pub const process = @import("common/process/main.zig");
+pub const elf_loader = @import("common/elf_loader.zig");

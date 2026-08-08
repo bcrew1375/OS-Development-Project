@@ -1,30 +1,78 @@
 const arch = @import("arch");
 const common_early_allocator = @import("../../early_allocator.zig");
-
-const mmu = @import("../mmu/early_boot.zig");
-
-const PAGE_SIZE = @import("../mmu/common.zig").PAGE_SIZE;
-const ENTRIES_PER_TABLE = @import("../mmu/common.zig").ENTRIES_PER_TABLE;
+const mmu_common = @import("../mmu/common.zig");
 
 var reservedMap: arch.ReservedMap linksection(".multiboot.data") = arch.ReservedMap{};
 
-extern const _kernel_start: usize;
-extern const _kernel_end: usize;
+/// Resolves a linker-defined symbol's address by name, without needing a
+/// dedicated `extern const` declaration for every symbol in the file.
+fn linkerAddr(comptime name: [:0]const u8) linksection(".multiboot.text") usize {
+    return @intFromPtr(@extern(*const anyopaque, .{ .name = name }));
+}
+
+const RESERVED_LOWER_START: usize = 0x00000000;
+const RESERVED_LOWER_END: usize = 0x000B8000;
+
+const VGA_BUFFER_START = 0x000B8000;
+const VGA_BUFFER_END = VGA_BUFFER_START + 0x8000;
+
+const RESERVED_UPPER_START: usize = 0x000C0000;
+const RESERVED_UPPER_END: usize = 0x00100000;
 
 pub fn initialize() linksection(".multiboot.text") arch.EarlyAllocError!void {
     try common_early_allocator.initialize();
 
-    // Reserve legacy x86 regions.
-    arch.early_allocator.reserve(0, 0x100000, arch.ReservedMapRegionType.PERSISTENT) catch |err| {
-        @panic(@errorName(err));
-    };
+    try reserveLegacyRegions();
+    try reserveKernelImageRegions();
+}
 
-    const kernel_start_address = @intFromPtr(&_kernel_start);
-    const kernel_end_address = @intFromPtr(&_kernel_end);
+fn reserveLegacyRegions() linksection(".multiboot.text") arch.EarlyAllocError!void {
+    try arch.early_allocator.reserve(
+        RESERVED_LOWER_START,
+        RESERVED_LOWER_END - RESERVED_LOWER_START,
+        arch.ReservedMapRegionType.PERSISTENT,
+    );
+    try arch.early_allocator.reserve(
+        VGA_BUFFER_START,
+        VGA_BUFFER_END - VGA_BUFFER_START,
+        arch.ReservedMapRegionType.DEVICE_MEMORY,
+    );
+    try arch.early_allocator.reserve(
+        RESERVED_UPPER_START,
+        RESERVED_UPPER_END - RESERVED_UPPER_START,
+        arch.ReservedMapRegionType.PERSISTENT,
+    );
+}
 
-    arch.early_allocator.reserve(kernel_start_address, kernel_end_address - kernel_start_address, arch.ReservedMapRegionType.KERNEL_CODE) catch |err| {
-        @panic(@errorName(err));
-    };
+fn reserveKernelImageRegions() linksection(".multiboot.text") arch.EarlyAllocError!void {
+    try reserveLinkerRange("_multiboot_header_start", "_multiboot_header_end", arch.ReservedMapRegionType.KERNEL_READ_ONLY);
+    try reserveLinkerRange("_multiboot_text_start", "_multiboot_text_end", arch.ReservedMapRegionType.KERNEL_READ_ONLY);
+    try reserveLinkerRange("_multiboot_rodata_start", "_multiboot_rodata_end", arch.ReservedMapRegionType.KERNEL_READ_ONLY);
+    try reserveLinkerRange("_multiboot_data_start", "_multiboot_data_end", arch.ReservedMapRegionType.KERNEL_WRITABLE);
+    try reserveLinkerRange("_multiboot_bss_start", "_multiboot_bss_end", arch.ReservedMapRegionType.KERNEL_WRITABLE);
+    try reserveLinkerRange("_text_start", "_text_end", arch.ReservedMapRegionType.KERNEL_READ_ONLY);
+    try reserveLinkerRange("_rodata_start", "_rodata_end", arch.ReservedMapRegionType.KERNEL_READ_ONLY);
+    try reserveLinkerRange("_data_start", "_data_end", arch.ReservedMapRegionType.KERNEL_WRITABLE);
+    try reserveLinkerRange("_bss_start", "_bss_end", arch.ReservedMapRegionType.KERNEL_WRITABLE);
+}
+
+fn reserveLinkerRange(
+    comptime start_name: [:0]const u8,
+    comptime end_name: [:0]const u8,
+    region_type: arch.ReservedMapRegionType,
+) linksection(".multiboot.text") arch.EarlyAllocError!void {
+    const start_address = linkerAddr(start_name);
+    const end_address = linkerAddr(end_name);
+
+    if (end_address < start_address) {
+        return arch.EarlyAllocError.InvalidMemoryMap;
+    }
+
+    if (end_address == start_address) {
+        return;
+    }
+
+    try arch.early_allocator.reserve(start_address, end_address - start_address, region_type);
 }
 
 pub fn allocate(neededSize: usize, alignment: usize, entryType: arch.ReservedMapRegionType) linksection(".multiboot.text") arch.EarlyAllocError!*allowzero anyopaque {

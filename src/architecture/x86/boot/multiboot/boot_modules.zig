@@ -15,7 +15,7 @@ var bootModules: [MAX_BOOT_MODULES]arch.BootModule = undefined;
 var bootModuleCount: usize = 0;
 var bootModulesCached: bool = false;
 
-pub fn cacheBootModules() void {
+pub fn cacheBootModules() linksection(".multiboot.text") void {
     if (bootModulesCached) {
         return;
     }
@@ -52,7 +52,7 @@ pub fn getBootModuleCount() usize {
 
 fn ensureBootModulesCached() void {
     if (!bootModulesCached) {
-        cacheBootModules();
+        @panic("Boot modules were not cached before runtime access");
     }
 }
 

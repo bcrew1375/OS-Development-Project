@@ -4,6 +4,9 @@ const std = @import("std");
 
 var memoryMap = arch.MemoryMap{};
 
+var nextAddressSpaceRootValue: usize = 1;
+var currentAddressSpaceRoot: arch.AddressSpaceRoot = .{ .value = 0 };
+
 var testRegion: arch.MemoryMapEntry = undefined;
 var testRegionHeap: []u8 = undefined;
 
@@ -13,6 +16,7 @@ var heapBase: usize = 0;
 // "table not present" from "page not present".
 const MAX_MOCK_TABLES = 32;
 const MockTableMapping = struct {
+    root_value: usize,
     virtual_address: usize,
     physical_address: usize,
     flags: arch.PageProtection,
@@ -22,6 +26,7 @@ var tableMappingCount: usize = 0;
 
 const MAX_MOCK_PAGE_MAPPINGS = 4096;
 pub const MockPageMapping = struct {
+    root_value: usize = 0,
     virtual_page: usize,
     physical_page: usize,
     protection: arch.PageProtection,
@@ -30,13 +35,31 @@ pub const MockPageMapping = struct {
 var pageMappings: [MAX_MOCK_PAGE_MAPPINGS]MockPageMapping = undefined;
 var pageMappingCount: usize = 0;
 
+pub fn createAddressSpaceRoot() arch.MmuError!arch.AddressSpaceRoot {
+    const address_space_root = arch.AddressSpaceRoot{
+        .value = nextAddressSpaceRootValue,
+    };
+
+    nextAddressSpaceRootValue += 1;
+
+    return address_space_root;
+}
+
+pub fn switchAddressSpaceRoot(root: arch.AddressSpaceRoot) void {
+    currentAddressSpaceRoot = root;
+}
+
 pub fn getPhysicalAddress(virtualAddress: usize) ?usize {
+    return getPhysicalAddressInAddressSpace(currentAddressSpaceRoot, virtualAddress);
+}
+
+pub fn getPhysicalAddressInAddressSpace(root: arch.AddressSpaceRoot, virtualAddress: usize) ?usize {
     const pageSize = getPageSize();
     const virtualPage = virtualAddress & ~(pageSize - 1);
     const pageOffset = virtualAddress & (pageSize - 1);
 
     for (pageMappings[0..pageMappingCount]) |mapping| {
-        if (mapping.present and mapping.virtual_page == virtualPage) {
+        if (mapping.present and mapping.root_value == root.value and mapping.virtual_page == virtualPage) {
             return mapping.physical_page + pageOffset;
         }
     }
@@ -45,10 +68,14 @@ pub fn getPhysicalAddress(virtualAddress: usize) ?usize {
 }
 
 pub fn isTablePresent(virtualAddress: usize) bool {
+    return isTablePresentInAddressSpace(currentAddressSpaceRoot, virtualAddress);
+}
+
+pub fn isTablePresentInAddressSpace(root: arch.AddressSpaceRoot, virtualAddress: usize) bool {
     const pageTableRegionSize = getPageTableRegionSize();
     const tableAlignedAddress = virtualAddress & ~(pageTableRegionSize - 1);
     for (tableMappings[0..tableMappingCount]) |mapping| {
-        if (mapping.virtual_address == tableAlignedAddress) {
+        if (mapping.root_value == root.value and mapping.virtual_address == tableAlignedAddress) {
             return true;
         }
     }
@@ -72,7 +99,11 @@ pub fn getMemoryMap() *arch.MemoryMap {
 }
 
 pub fn mapPage(virtualAddress: usize, physicalAddress: usize, flags: arch.PageProtection) arch.MmuError!void {
-    if (!isTablePresent(virtualAddress)) {
+    try mapPageInAddressSpace(currentAddressSpaceRoot, virtualAddress, physicalAddress, flags);
+}
+
+pub fn mapPageInAddressSpace(root: arch.AddressSpaceRoot, virtualAddress: usize, physicalAddress: usize, flags: arch.PageProtection) arch.MmuError!void {
+    if (!isTablePresentInAddressSpace(root, virtualAddress)) {
         return arch.MmuError.PageTableNotPresent;
     }
 
@@ -81,7 +112,7 @@ pub fn mapPage(virtualAddress: usize, physicalAddress: usize, flags: arch.PagePr
     const physicalPage = physicalAddress & ~(pageSize - 1);
 
     for (pageMappings[0..pageMappingCount]) |*mapping| {
-        if (mapping.virtual_page == virtualPage) {
+        if (mapping.root_value == root.value and mapping.virtual_page == virtualPage) {
             mapping.physical_page = physicalPage;
             mapping.protection = flags;
             mapping.present = true;
@@ -94,6 +125,7 @@ pub fn mapPage(virtualAddress: usize, physicalAddress: usize, flags: arch.PagePr
     }
 
     pageMappings[pageMappingCount] = .{
+        .root_value = root.value,
         .virtual_page = virtualPage,
         .physical_page = physicalPage,
         .protection = flags,
@@ -103,6 +135,10 @@ pub fn mapPage(virtualAddress: usize, physicalAddress: usize, flags: arch.PagePr
 }
 
 pub fn mapTable(virtualAddress: usize, physicalAddress: usize, flags: arch.PageProtection) arch.MmuError!void {
+    try mapTableInAddressSpace(currentAddressSpaceRoot, virtualAddress, physicalAddress, flags);
+}
+
+pub fn mapTableInAddressSpace(root: arch.AddressSpaceRoot, virtualAddress: usize, physicalAddress: usize, flags: arch.PageProtection) arch.MmuError!void {
     // Align to the page table region boundary so lookups via
     // isTablePresent (which applies the same alignment) succeed.
     const pageTableRegionSize = getPageTableRegionSize();
@@ -110,7 +146,7 @@ pub fn mapTable(virtualAddress: usize, physicalAddress: usize, flags: arch.PageP
 
     // Check if this table is already mapped.
     for (tableMappings[0..tableMappingCount]) |*mapping| {
-        if (mapping.virtual_address == tableAlignedAddress) {
+        if (mapping.root_value == root.value and mapping.virtual_address == tableAlignedAddress) {
             mapping.flags.write = mapping.flags.write or flags.write;
             mapping.flags.user = mapping.flags.user or flags.user;
             mapping.flags.execute = mapping.flags.execute and flags.execute;
@@ -123,6 +159,7 @@ pub fn mapTable(virtualAddress: usize, physicalAddress: usize, flags: arch.PageP
     }
 
     tableMappings[tableMappingCount] = .{
+        .root_value = root.value,
         .virtual_address = tableAlignedAddress,
         .physical_address = physicalAddress,
         .flags = flags,
@@ -134,7 +171,7 @@ pub fn getTableProtection(virtualAddress: usize) ?arch.PageProtection {
     const pageTableRegionSize = getPageTableRegionSize();
     const tableAlignedAddress = virtualAddress & ~(pageTableRegionSize - 1);
     for (tableMappings[0..tableMappingCount]) |mapping| {
-        if (mapping.virtual_address == tableAlignedAddress) {
+        if (mapping.root_value == currentAddressSpaceRoot.value and mapping.virtual_address == tableAlignedAddress) {
             return mapping.flags;
         }
     }
@@ -145,7 +182,7 @@ pub fn unmapPage(virtualAddress: usize) void {
     const pageSize = getPageSize();
     const virtualPage = virtualAddress & ~(pageSize - 1);
     for (pageMappings[0..pageMappingCount]) |*mapping| {
-        if (mapping.virtual_page == virtualPage) {
+        if (mapping.root_value == currentAddressSpaceRoot.value and mapping.virtual_page == virtualPage) {
             mapping.present = false;
             return;
         }
@@ -153,6 +190,8 @@ pub fn unmapPage(virtualAddress: usize) void {
 }
 
 pub fn resetForTest() void {
+    nextAddressSpaceRootValue = 1;
+    currentAddressSpaceRoot = .{ .value = 0 };
     tableMappingCount = 0;
     pageMappingCount = 0;
 }
@@ -161,7 +200,7 @@ pub fn getMappedPageForTest(virtualAddress: usize) ?MockPageMapping {
     const pageSize = getPageSize();
     const virtualPage = virtualAddress & ~(pageSize - 1);
     for (pageMappings[0..pageMappingCount]) |mapping| {
-        if (mapping.virtual_page == virtualPage) {
+        if (mapping.root_value == currentAddressSpaceRoot.value and mapping.virtual_page == virtualPage) {
             return mapping;
         }
     }

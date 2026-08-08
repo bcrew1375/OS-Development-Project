@@ -202,6 +202,42 @@ test "Virtual Memory Manager: Unmap Non-Existent Region Does Nothing" {
     try std.testing.expectEqual(@as(usize, 1), addressSpace.length);
 }
 
+test "VMM mapEager: uses early allocator before PMM initialization" {
+    testSetup();
+
+    const memoryMap = arch.mmu.getMemoryMap();
+    const regionBase = memoryMap.entries[0].address;
+    const pageSize: u64 = arch.mmu.getPageSize();
+    const vmaStart = regionBase + 0x100000;
+    const vmaEnd = vmaStart + pageSize * 2;
+
+    var vmaBacking: [1]kernel.vmm.VirtualMemoryArea = undefined;
+    var addressSpace = kernel.vmm.AddressSpace{
+        .virtual_memory_areas = &vmaBacking,
+        .length = 0,
+    };
+    kernel.vmm.setAddressSpace(&addressSpace);
+
+    const permissions = kernel.vmm.MemoryPermissions{
+        .readable = true,
+        .writeable = true,
+        .executable = false,
+        .user_accessible = false,
+    };
+
+    try kernel.vmm.mapEager(&addressSpace, vmaStart, vmaEnd, permissions);
+
+    try std.testing.expectEqual(@as(usize, 1), addressSpace.length);
+    try std.testing.expect(arch.mmu.isTablePresent(@as(usize, @intCast(vmaStart))));
+    try std.testing.expect(arch.mmu.getPhysicalAddress(@as(usize, @intCast(vmaStart))) != null);
+    try std.testing.expect(arch.mmu.getPhysicalAddress(@as(usize, @intCast(vmaStart + pageSize))) != null);
+
+    const firstPage: [*]u8 = @ptrFromInt(@as(usize, @intCast(vmaStart)));
+    const secondPage: [*]u8 = @ptrFromInt(@as(usize, @intCast(vmaStart + pageSize)));
+    try std.testing.expectEqual(@as(u8, 0), firstPage[0]);
+    try std.testing.expectEqual(@as(u8, 0), secondPage[0]);
+}
+
 // --- VMM fault resolution tests ---
 //
 // The mock MMU allocates a 64 MB heap region and reports it as available

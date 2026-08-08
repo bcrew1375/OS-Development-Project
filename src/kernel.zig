@@ -71,6 +71,15 @@ pub export fn kernelMain() void {
 
     // arch.boot.finishBoot();
 
+    terminal.print.printString("Preparing first user process...\n");
+    const prepared_root_process = launch_root_process.prepareRootProcess(&rootAddressSpace) catch |err| {
+        arch.platform.setColor(TextColor.RED);
+        arch.platform.writer().print("First user process preparation failed with error: {s}\n", .{@errorName(err)}) catch {};
+        arch.cpu.unrecoverableHalt();
+    };
+
+    arch.boot.finishBoot();
+
     terminal.print.printString("Initializing interrupts...");
     arch.interrupts.initialize();
     terminal.print.printStringColor("done!\n", TextColor.GREEN);
@@ -123,11 +132,7 @@ pub export fn kernelMain() void {
     // arch.platform.initializeTimer(10);
 
     terminal.print.printString("Launching first user process...\n");
-    launch_root_process.launchRootProcess(&rootAddressSpace) catch |err| {
-        arch.platform.setColor(TextColor.RED);
-        arch.platform.writer().print("First user process launch failed with error: {s}\n", .{@errorName(err)}) catch {};
-        arch.cpu.unrecoverableHalt();
-    };
+    launch_root_process.enterPreparedRootProcess(prepared_root_process);
 
     //arch.cpu.unrecoverableHalt();
 }
