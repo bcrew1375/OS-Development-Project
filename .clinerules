@@ -1,15 +1,22 @@
 # Project: OS Development - an early development hobby kernel.
 
 ## General Instructions:
+- Follow guidelines in 'kernel-os-code-organization-best-practices.md'
+
 - Aim for a general purpose kernel microkernel with modern production-grade design patterns.
+- The kernel will loosely follow the seL4 capability model.
 - Modularize whenever possible. Avoid monolithic files.
-- Aim for code clarity. Avoid internal abbreviations, but prefer industry-standard acronyms (e.g., ACPI, MMU, PCIe) where they aid recognition.
+- Aim for code clarity. Avoid internal abbreviations, but prefer industry-standard acronyms (e.g., ACPI, MMU, PCIe)
+where they aid recognition.
 - Aim for common code whenever possible. Architecture-dependent code should be minimal.
-- If a compromise must absolutely be made between efficiency and clarity, prefer clarity, except in performance-critical paths (e.g., context switching, MMU hot-paths) where efficiency may take precedence if documented.
+- If a compromise must absolutely be made between efficiency and clarity, prefer clarity, except in
+performance-critical paths (e.g., context switching, MMU hot-paths) where efficiency may take precedence if documented.
 - Prefer static polymorphism (e.g., Zig's comptime) over dynamic dispatch to maintain performance with high abstraction.
 - Error handling must be explicit. Use Zig's error union types; avoid catching errors unless they can be recovered from.
 
 ## Coding style
+- Follow guidelines in 'zig-code=structure-best-practices.md'
+
 - Use typical Zig or C++ identifier casing. Do not abbreviate identifiers.
 - Prefer abstraction and generic interfaces whenever possible.
 - Define common interfaces for architectural components before implementing them for specific hardware or mocks.

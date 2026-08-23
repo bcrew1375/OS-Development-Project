@@ -14,16 +14,16 @@ pub export fn _start(boot_info: *const abi.boot_info.BootInfo) callconv(.c) nore
     }
 
     const address_space = memory_manager.createAddressSpace() orelse {
-        debugWrite("root: failed to create managed address space\n");
+        debugWrite("root: failed to acquire address-space capability\n");
         exit(abi.syscall.EXIT_FAILURE);
     };
-    debugWrite("root: created managed address space\n");
+    debugWrite("root: acquired address-space capability\n");
 
     const memory_object = memory_manager.createMemoryObject(MANAGED_REGION_SIZE) orelse {
-        debugWrite("root: failed to create managed memory object\n");
+        debugWrite("root: failed to acquire memory-object capability\n");
         exit(abi.syscall.EXIT_FAILURE);
     };
-    debugWrite("root: created managed memory object\n");
+    debugWrite("root: acquired memory-object capability\n");
 
     if (!memory_manager.mapMemoryObject(
         address_space,
@@ -32,10 +32,10 @@ pub export fn _start(boot_info: *const abi.boot_info.BootInfo) callconv(.c) nore
         MANAGED_REGION_SIZE,
         memory_manager.MAP_READ | memory_manager.MAP_WRITE,
     )) {
-        debugWrite("root: failed to map managed memory object\n");
+        debugWrite("root: failed to map managed memory object using capabilities\n");
         exit(abi.syscall.EXIT_FAILURE);
     }
-    debugWrite("root: mapped managed memory object\n");
+    debugWrite("root: mapped managed memory object using capabilities\n");
 
     exit(abi.syscall.EXIT_SUCCESS);
 }

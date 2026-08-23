@@ -4,9 +4,10 @@ const abi = @import("abi");
 
 const diagnostics = @import("diagnostics.zig");
 const vectors = @import("vectors.zig");
+const keyboard = @import("../platform/io/keyboard.zig");
+
 pub const idt = @import("interrupt_descriptor_table.zig");
 pub const pic = @import("pic.zig");
-const keyboard = @import("../platform/io/keyboard.zig");
 
 pub fn enableInterrupts() void {
     asm volatile (
@@ -24,7 +25,7 @@ pub fn acknowledgeInterrupt(vector: usize) void {
     pic.sendEndOfInterrupt(vector);
 }
 
-pub fn interruptHandler(vector: usize, stack_pointer: usize) callconv(.c) void {
+pub fn interruptHandler(vector: u8, stack_pointer: usize) callconv(.c) void {
     const trap_frame: *TrapFrame = @ptrFromInt(stack_pointer);
     const diagnostic = diagnostics.recordInterrupt(vector);
     if (diagnostic.print) {
@@ -83,7 +84,7 @@ pub fn interruptHandler(vector: usize, stack_pointer: usize) callconv(.c) void {
         },
         0x22...0x7F => {},
         vectors.syscall => handleSyscall(trap_frame),
-        0x81...0xFFFFFFFF => {},
+        0x81...0xFF => {},
     }
 
     if (diagnostic.print) {
@@ -102,6 +103,7 @@ fn handlePageFault(trap_frame: *const TrapFrame, diagnostic: diagnostics.Decisio
 
 fn handleSyscall(trap_frame: *TrapFrame) void {
     const syscall_number: abi.syscall.SyscallNumber = @enumFromInt(trap_frame.eax);
+    const root_process_handle = kernel_common.process.ROOT_PROCESS_HANDLE;
 
     switch (syscall_number) {
         .debug_write => {
@@ -115,15 +117,21 @@ fn handleSyscall(trap_frame: *TrapFrame) void {
             arch.cpu.unrecoverableHalt();
         },
         .create_address_space => {
-            const handle = kernel_common.process.createAddressSpace() catch |err| {
+            const capability = kernel_common.capability.createAddressSpaceCapability(root_process_handle) catch |err| {
                 arch.platform.writer().print("create_address_space failed: {s}\n", .{@errorName(err)}) catch {};
-                trap_frame.eax = abi.syscall.INVALID_HANDLE;
+                trap_frame.eax = abi.capability.INVALID_CAPABILITY;
                 return;
             };
-            trap_frame.eax = handle;
+            trap_frame.eax = capability;
         },
         .map_memory => {
-            kernel_common.process.mapMemory(trap_frame.ebx, trap_frame.ecx, trap_frame.edx) catch |err| {
+            const address_space_handle = kernel_common.capability.resolveAddressSpace(root_process_handle, trap_frame.ebx, .{ .manage = true }) catch |err| {
+                arch.platform.writer().print("map_memory address-space capability failed: {s}\n", .{@errorName(err)}) catch {};
+                trap_frame.eax = abi.syscall.SYSCALL_FAILURE;
+                return;
+            };
+
+            kernel_common.process.mapMemory(address_space_handle, trap_frame.ecx, trap_frame.edx) catch |err| {
                 arch.platform.writer().print("map_memory failed: {s}\n", .{@errorName(err)}) catch {};
                 trap_frame.eax = abi.syscall.SYSCALL_FAILURE;
                 return;
@@ -131,17 +139,29 @@ fn handleSyscall(trap_frame: *TrapFrame) void {
             trap_frame.eax = abi.syscall.SYSCALL_SUCCESS;
         },
         .create_memory_object => {
-            const handle = kernel_common.process.createMemoryObject(trap_frame.ebx) catch |err| {
+            const capability = kernel_common.capability.createMemoryObjectCapability(root_process_handle, trap_frame.ebx) catch |err| {
                 arch.platform.writer().print("create_memory_object failed: {s}\n", .{@errorName(err)}) catch {};
-                trap_frame.eax = abi.syscall.INVALID_HANDLE;
+                trap_frame.eax = abi.capability.INVALID_CAPABILITY;
                 return;
             };
-            trap_frame.eax = handle;
+            trap_frame.eax = capability;
         },
         .map_memory_object => {
+            const address_space_handle = kernel_common.capability.resolveAddressSpace(root_process_handle, trap_frame.ebx, .{ .manage = true }) catch |err| {
+                arch.platform.writer().print("map_memory_object address-space capability failed: {s}\n", .{@errorName(err)}) catch {};
+                trap_frame.eax = abi.syscall.SYSCALL_FAILURE;
+                return;
+            };
+
+            const memory_object_handle = kernel_common.capability.resolveMemoryObject(root_process_handle, trap_frame.ecx, rightsFromMapFlags(trap_frame.edi)) catch |err| {
+                arch.platform.writer().print("map_memory_object memory-object capability failed: {s}\n", .{@errorName(err)}) catch {};
+                trap_frame.eax = abi.syscall.SYSCALL_FAILURE;
+                return;
+            };
+
             kernel_common.process.mapMemoryObject(
-                trap_frame.ebx,
-                trap_frame.ecx,
+                address_space_handle,
+                memory_object_handle,
                 trap_frame.edx,
                 0,
                 trap_frame.esi,
@@ -158,6 +178,14 @@ fn handleSyscall(trap_frame: *TrapFrame) void {
             arch.cpu.unrecoverableHalt();
         },
     }
+}
+
+fn rightsFromMapFlags(permission_flags: u32) abi.capability.Rights {
+    return .{
+        .read = (permission_flags & abi.syscall.MAP_READ) != 0,
+        .write = (permission_flags & abi.syscall.MAP_WRITE) != 0,
+        .execute = (permission_flags & abi.syscall.MAP_EXECUTE) != 0,
+    };
 }
 
 fn readPageFaultInfo(trap_frame: *const TrapFrame) arch.FaultInfo {

@@ -1,5 +1,5 @@
 const arch = @import("arch");
-const common_early_allocator = @import("../../early_allocator.zig");
+const common_early_allocator = @import("../../../early_allocator.zig");
 const mmu_common = @import("../mmu/common.zig");
 
 var reservedMap: arch.ReservedMap linksection(".multiboot.data") = arch.ReservedMap{};

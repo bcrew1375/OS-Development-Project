@@ -3,8 +3,8 @@ const builtin = @import("builtin");
 pub const impl = if (builtin.is_test)
     @import("mock/arch.zig")
 else switch (builtin.cpu.arch) {
-    //.x86_64 => @import("x86_64/impl.zig"),
-    .x86 => @import("x86/arch.zig"),
+    .x86 => @import("x86/32/arch.zig"),
+    .x86_64 => @import("x86/64/arch.zig"),
     //.aarch64 => @import("aarch64/impl.zig"),
     //.riscv64 => @import("riscv64/impl.zig"),
     else => @compileError("unsupported architecture: " ++
@@ -66,7 +66,6 @@ pub const MemoryMapEntry = struct {
     size: u64 = undefined,
     region_type: MemoryMapRegionType = MemoryMapRegionType.RESERVED,
 };
-
 pub const MemoryMapRegionType = enum(u8) {
     AVAILABLE,
     RESERVED,

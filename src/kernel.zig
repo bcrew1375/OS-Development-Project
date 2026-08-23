@@ -78,11 +78,11 @@ pub export fn kernelMain() void {
         arch.cpu.unrecoverableHalt();
     };
 
-    arch.boot.finishBoot();
+    // arch.boot.finishBoot();
 
-    terminal.print.printString("Initializing interrupts...");
-    arch.interrupts.initialize();
-    terminal.print.printStringColor("done!\n", TextColor.GREEN);
+    // terminal.print.printString("Initializing interrupts...");
+    // arch.interrupts.initialize();
+    // terminal.print.printStringColor("done!\n", TextColor.GREEN);
 
     // arch.interrupts.enableInterrupts();
 
@@ -130,6 +130,8 @@ pub export fn kernelMain() void {
     // try arch.platform.writer().print("System Dynamic Allocation: {d} KB\n", .{kernelHeap.getDynamicAllocationSize() / 1024});
 
     // arch.platform.initializeTimer(10);
+
+    arch.boot.finishBoot();
 
     terminal.print.printString("Launching first user process...\n");
     launch_root_process.enterPreparedRootProcess(prepared_root_process);

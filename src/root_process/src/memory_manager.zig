@@ -1,11 +1,11 @@
 const abi = @import("abi");
 
 pub const AddressSpace = struct {
-    handle: u32,
+    capability: abi.capability.CapabilityHandle,
 };
 
 pub const MemoryObject = struct {
-    handle: u32,
+    capability: abi.capability.CapabilityHandle,
 };
 
 pub const MAP_READ = abi.syscall.MAP_READ;
@@ -13,24 +13,24 @@ pub const MAP_WRITE = abi.syscall.MAP_WRITE;
 pub const MAP_EXECUTE = abi.syscall.MAP_EXECUTE;
 
 pub fn createAddressSpace() ?AddressSpace {
-    const handle = abi.syscall.syscall3(
+    const capability = abi.syscall.syscall3(
         @intFromEnum(abi.syscall.SyscallNumber.create_address_space),
         0,
         0,
         0,
     );
 
-    if (handle == abi.syscall.INVALID_HANDLE) {
+    if (capability == abi.capability.INVALID_CAPABILITY) {
         return null;
     }
 
-    return .{ .handle = handle };
+    return .{ .capability = capability };
 }
 
 pub fn mapRegion(address_space: AddressSpace, virtual_start: usize, size_in_bytes: usize) bool {
     const result = abi.syscall.syscall3(
         @intFromEnum(abi.syscall.SyscallNumber.map_memory),
-        address_space.handle,
+        address_space.capability,
         virtual_start,
         size_in_bytes,
     );
@@ -39,18 +39,18 @@ pub fn mapRegion(address_space: AddressSpace, virtual_start: usize, size_in_byte
 }
 
 pub fn createMemoryObject(size_in_bytes: usize) ?MemoryObject {
-    const handle = abi.syscall.syscall3(
+    const capability = abi.syscall.syscall3(
         @intFromEnum(abi.syscall.SyscallNumber.create_memory_object),
         size_in_bytes,
         0,
         0,
     );
 
-    if (handle == abi.syscall.INVALID_HANDLE) {
+    if (capability == abi.capability.INVALID_CAPABILITY) {
         return null;
     }
 
-    return .{ .handle = handle };
+    return .{ .capability = capability };
 }
 
 pub fn mapMemoryObject(
@@ -62,8 +62,8 @@ pub fn mapMemoryObject(
 ) bool {
     const result = abi.syscall.syscall5(
         @intFromEnum(abi.syscall.SyscallNumber.map_memory_object),
-        address_space.handle,
-        memory_object.handle,
+        address_space.capability,
+        memory_object.capability,
         virtual_start,
         size_in_bytes,
         permission_flags,

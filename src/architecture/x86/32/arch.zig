@@ -5,7 +5,7 @@ const interrupts_impl = @import("interrupts/main.zig");
 const mmu_impl = @import("mmu/main.zig");
 const platform_impl = @import("platform/main.zig");
 
-const validateImpl = @import("../architecture.zig").validateImpl;
+const validateImpl = @import("../../architecture.zig").validateImpl;
 
 comptime {
     validateImpl(@This());

@@ -1,0 +1,129 @@
+const abi = @import("abi");
+const process = @import("../process/main.zig");
+
+pub const CapabilityError = error{
+    OutOfCapabilitySlots,
+    InvalidCapability,
+    CapabilityOwnerMismatch,
+    InvalidCapabilityType,
+    InsufficientCapabilityRights,
+} || process.ProcessError;
+
+const MAX_CAPABILITIES = 128;
+
+const CapabilityObject = union(enum) {
+    address_space: process.AddressSpaceHandle,
+    memory_object: process.MemoryObjectHandle,
+};
+
+const CapabilitySlot = struct {
+    handle: abi.capability.CapabilityHandle = abi.capability.INVALID_CAPABILITY,
+    owner_process_handle: process.ProcessHandle = 0,
+    rights: abi.capability.Rights = .{},
+    object: ?CapabilityObject = null,
+    used: bool = false,
+};
+
+var nextCapabilityHandle: abi.capability.CapabilityHandle = 1;
+var capabilitySlots: [MAX_CAPABILITIES]CapabilitySlot = [_]CapabilitySlot{.{}} ** MAX_CAPABILITIES;
+
+pub fn createAddressSpaceCapability(owner_process_handle: process.ProcessHandle) CapabilityError!abi.capability.CapabilityHandle {
+    const slot = findFreeCapabilitySlot() orelse return CapabilityError.OutOfCapabilitySlots;
+    const address_space_handle = try process.createAddressSpaceForOwner(owner_process_handle);
+
+    return initializeCapabilitySlot(slot, owner_process_handle, .{
+        .manage = true,
+        .read = true,
+        .write = true,
+    }, .{ .address_space = address_space_handle });
+}
+
+pub fn createMemoryObjectCapability(owner_process_handle: process.ProcessHandle, size_in_bytes: u64) CapabilityError!abi.capability.CapabilityHandle {
+    const slot = findFreeCapabilitySlot() orelse return CapabilityError.OutOfCapabilitySlots;
+    const memory_object_handle = try process.createMemoryObjectForOwner(owner_process_handle, size_in_bytes);
+
+    return initializeCapabilitySlot(slot, owner_process_handle, .{
+        .manage = true,
+        .read = true,
+        .write = true,
+        .execute = true,
+    }, .{ .memory_object = memory_object_handle });
+}
+
+pub fn resolveAddressSpace(
+    owner_process_handle: process.ProcessHandle,
+    capability_handle: abi.capability.CapabilityHandle,
+    required_rights: abi.capability.Rights,
+) CapabilityError!process.AddressSpaceHandle {
+    const slot = try resolveCapabilitySlot(owner_process_handle, capability_handle, required_rights);
+    return switch (slot.object.?) {
+        .address_space => |address_space_handle| address_space_handle,
+        else => CapabilityError.InvalidCapabilityType,
+    };
+}
+
+pub fn resolveMemoryObject(
+    owner_process_handle: process.ProcessHandle,
+    capability_handle: abi.capability.CapabilityHandle,
+    required_rights: abi.capability.Rights,
+) CapabilityError!process.MemoryObjectHandle {
+    const slot = try resolveCapabilitySlot(owner_process_handle, capability_handle, required_rights);
+    return switch (slot.object.?) {
+        .memory_object => |memory_object_handle| memory_object_handle,
+        else => CapabilityError.InvalidCapabilityType,
+    };
+}
+
+fn initializeCapabilitySlot(
+    slot: *CapabilitySlot,
+    owner_process_handle: process.ProcessHandle,
+    rights: abi.capability.Rights,
+    object: CapabilityObject,
+) abi.capability.CapabilityHandle {
+    const handle = nextCapabilityHandle;
+    nextCapabilityHandle += 1;
+
+    slot.* = .{
+        .handle = handle,
+        .owner_process_handle = owner_process_handle,
+        .rights = rights,
+        .object = object,
+        .used = true,
+    };
+
+    return handle;
+}
+
+fn resolveCapabilitySlot(
+    owner_process_handle: process.ProcessHandle,
+    capability_handle: abi.capability.CapabilityHandle,
+    required_rights: abi.capability.Rights,
+) CapabilityError!*const CapabilitySlot {
+    const slot = findCapabilitySlot(capability_handle) orelse return CapabilityError.InvalidCapability;
+    if (slot.owner_process_handle != owner_process_handle) return CapabilityError.CapabilityOwnerMismatch;
+    if (!slot.rights.contains(required_rights)) return CapabilityError.InsufficientCapabilityRights;
+    return slot;
+}
+
+fn findFreeCapabilitySlot() ?*CapabilitySlot {
+    for (&capabilitySlots) |*slot| {
+        if (!slot.used) return slot;
+    }
+    return null;
+}
+
+fn findCapabilitySlot(capability_handle: abi.capability.CapabilityHandle) ?*const CapabilitySlot {
+    if (capability_handle == abi.capability.INVALID_CAPABILITY) return null;
+
+    for (&capabilitySlots) |*slot| {
+        if (slot.used and slot.handle == capability_handle) return slot;
+    }
+    return null;
+}
+
+pub fn resetForTest() void {
+    nextCapabilityHandle = 1;
+    for (&capabilitySlots) |*slot| {
+        slot.* = .{};
+    }
+}

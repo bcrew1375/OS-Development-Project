@@ -1,16 +1,24 @@
 const arch = @import("arch");
 const kernel_common = @import("kernel_common");
+const shared = @import("shared");
 const std = @import("std");
 const abi = @import("abi");
 
 const vmm = kernel_common.memory_management.virtual_memory;
-const elf_loader = kernel_common.elf_loader;
+const elf_loader = shared.executable.elf;
 
-const USER_BOOT_INFO_START: u64 = 0x0010_0000;
-const USER_BOOT_INFO_END: u64 = USER_BOOT_INFO_START + 0x1000;
-const USER_STACK_START: u64 = 0x0080_0000;
-const USER_STACK_END: u64 = USER_STACK_START + 0x0040_0000;
+const ROOT_PROCESS_BOOT_MODULE_INDEX = 0;
 const MAX_BOOT_INFO_MODULES = 16;
+
+const RootProcessLayout = struct {
+    const boot_info_start: u64 = 0x0010_0000;
+    const boot_info_size: u64 = 0x1000;
+    const boot_info_end: u64 = boot_info_start + boot_info_size;
+
+    const initial_stack_committed_size: u64 = 0x1000;
+    const initial_stack_top: u64 = 0x00C0_0000;
+    const initial_stack_start: u64 = initial_stack_top - initial_stack_committed_size;
+};
 
 const RootProcessLaunchError = error{
     RootProcessModuleMissing,
@@ -18,8 +26,8 @@ const RootProcessLaunchError = error{
     RootAddressSpaceMappingMissing,
 } || elf_loader.ElfLoadError || arch.MmuError;
 
-const BootInfoLayout = extern struct {
-    boot_info: abi.boot_info.BootInfo,
+const BootInfoBlob = extern struct {
+    header: abi.boot_info.BootInfo,
     modules: [MAX_BOOT_INFO_MODULES]abi.boot_info.BootModuleInfo,
 };
 
@@ -35,34 +43,22 @@ pub fn launchRootProcess(address_space: *vmm.AddressSpace) !noreturn {
 }
 
 pub fn prepareRootProcess(address_space: *vmm.AddressSpace) !PreparedRootProcess {
-    const userStackPermissions = vmm.MemoryPermissions{
-        .readable = true,
-        .writeable = true,
-        .executable = false,
-        .user_accessible = true,
-    };
+    const page_table_root = try arch.mmu.createAddressSpaceRoot();
+    activateAsCurrentBootstrapAddressSpace(address_space);
 
-    const root_address_space = try arch.mmu.createAddressSpaceRoot();
+    const root_module = try getRootProcessModule();
+    const entry_point = try loadRootProcessElf(page_table_root, address_space, root_module);
 
-    vmm.setAddressSpace(address_space);
-
-    const root_module = arch.boot.getBootModule(0) orelse return RootProcessLaunchError.RootProcessModuleMissing;
-    const entry_point = try loadRootProcessElf(root_address_space, address_space, root_module);
-
-    try mapBootInfo(root_address_space, address_space);
-    const initial_stack_page_start = USER_STACK_END - arch.mmu.getPageSize();
-    try vmm.mapBootstrapContiguousInAddressSpace(
-        root_address_space,
-        address_space,
-        initial_stack_page_start,
-        USER_STACK_END,
-        userStackPermissions,
+    try mapAndWriteBootInfoPage(page_table_root, address_space);
+    try mapInitialUserStack(page_table_root, address_space);
+    const initial_stack_pointer = try writeInitialCdeclCallFrame(
+        page_table_root,
+        RootProcessLayout.initial_stack_top,
+        RootProcessLayout.boot_info_start,
     );
 
-    const initial_stack_pointer = try initializeUserStack(root_address_space, USER_STACK_END, USER_BOOT_INFO_START);
-
     return .{
-        .address_space_root = root_address_space,
+        .address_space_root = page_table_root,
         .entry_point = entry_point,
         .initial_stack_pointer = initial_stack_pointer,
     };
@@ -73,29 +69,37 @@ pub fn enterPreparedRootProcess(prepared_root_process: PreparedRootProcess) nore
     arch.cpu.enterUserMode(prepared_root_process.entry_point, prepared_root_process.initial_stack_pointer);
 }
 
-fn mapBootInfo(root_address_space: arch.AddressSpaceRoot, address_space: *vmm.AddressSpace) !void {
-    const bootInfoPermissions = vmm.MemoryPermissions{
-        .readable = true,
-        .writeable = true,
-        .executable = false,
-        .user_accessible = true,
-    };
+/// `vmm`'s bootstrap-mapping calls (mapBootstrapContiguousInAddressSpace,
+/// protectInAddressSpace, ...) act on whichever address space was last
+/// activated here, rather than taking it as an explicit parameter.
+fn activateAsCurrentBootstrapAddressSpace(address_space: *vmm.AddressSpace) void {
+    vmm.setAddressSpace(address_space);
+}
 
+// --- boot-info page ---------------------------------------------------
+
+fn mapAndWriteBootInfoPage(page_table_root: arch.AddressSpaceRoot, address_space: *vmm.AddressSpace) !void {
     try vmm.mapBootstrapContiguousInAddressSpace(
-        root_address_space,
+        page_table_root,
         address_space,
-        USER_BOOT_INFO_START,
-        USER_BOOT_INFO_END,
-        bootInfoPermissions,
+        RootProcessLayout.boot_info_start,
+        RootProcessLayout.boot_info_end,
+        readWriteUserPagePermissions,
     );
 
+    const blob = try collectBootInfoBlob();
+    try copyIntoUserSpace(page_table_root, RootProcessLayout.boot_info_start, std.mem.asBytes(&blob));
+}
+
+fn collectBootInfoBlob() !BootInfoBlob {
     const module_count = @min(arch.boot.getBootModuleCount(), MAX_BOOT_INFO_MODULES);
-    var layout = BootInfoLayout{
-        .boot_info = .{
+
+    var blob = BootInfoBlob{
+        .header = .{
             .magic = abi.boot_info.BOOT_INFO_MAGIC,
             .version = abi.boot_info.BOOT_INFO_VERSION,
             .module_count = @intCast(module_count),
-            .modules_address = USER_BOOT_INFO_START + @offsetOf(BootInfoLayout, "modules"),
+            .modules_address = RootProcessLayout.boot_info_start + @offsetOf(BootInfoBlob, "modules"),
         },
         .modules = [_]abi.boot_info.BootModuleInfo{.{
             .physical_start = 0,
@@ -105,118 +109,200 @@ fn mapBootInfo(root_address_space: arch.AddressSpaceRoot, address_space: *vmm.Ad
 
     for (0..module_count) |module_index| {
         const module = arch.boot.getBootModule(module_index).?;
-        layout.modules[module_index] = .{
+        try validateBootModuleRange(module);
+        blob.modules[module_index] = .{
             .physical_start = @intCast(module.physical_start),
             .physical_end = @intCast(module.physical_end),
         };
     }
 
-    try writeToAddressSpace(root_address_space, USER_BOOT_INFO_START, std.mem.asBytes(&layout));
+    return blob;
 }
 
-fn initializeUserStack(root_address_space: arch.AddressSpaceRoot, stack_top: u64, boot_info_address: u64) !usize {
+// --- initial user stack -------------------------------------------------
+
+fn mapInitialUserStack(page_table_root: arch.AddressSpaceRoot, address_space: *vmm.AddressSpace) !void {
+    try vmm.mapBootstrapContiguousInAddressSpace(
+        page_table_root,
+        address_space,
+        RootProcessLayout.initial_stack_start,
+        RootProcessLayout.initial_stack_top,
+        readWriteUserPagePermissions,
+    );
+}
+
+/// The root process's `_start` is entered as a 32-bit cdecl function, so the
+/// stack must hold, from the top down: a fake return address, then the
+/// boot-info pointer as its one argument.
+fn writeInitialCdeclCallFrame(page_table_root: arch.AddressSpaceRoot, stack_top: u64, boot_info_address: u64) !usize {
     var stack_pointer = @as(usize, @intCast(stack_top));
 
     stack_pointer -= @sizeOf(u32);
-    var boot_info_argument: u32 = @intCast(boot_info_address);
-    try writeToAddressSpace(root_address_space, stack_pointer, std.mem.asBytes(&boot_info_argument));
+    const boot_info_argument: u32 = @intCast(boot_info_address);
+    try copyIntoUserSpace(page_table_root, stack_pointer, std.mem.asBytes(&boot_info_argument));
 
     stack_pointer -= @sizeOf(u32);
-    var fake_return_address: u32 = 0;
-    try writeToAddressSpace(root_address_space, stack_pointer, std.mem.asBytes(&fake_return_address));
+    const fake_return_address: u32 = 0;
+    try copyIntoUserSpace(page_table_root, stack_pointer, std.mem.asBytes(&fake_return_address));
 
     return stack_pointer;
 }
 
-fn loadRootProcessElf(root_address_space: arch.AddressSpaceRoot, address_space: *vmm.AddressSpace, root_module: arch.BootModule) !usize {
-    const image = getBootModuleBytes(root_module);
+// --- ELF loading ----------------------------------------------------------
+
+fn loadRootProcessElf(page_table_root: arch.AddressSpaceRoot, address_space: *vmm.AddressSpace, root_module: arch.BootModule) !usize {
+    const image = try getBootModuleBytes(root_module);
     const page_size: u64 = @intCast(arch.mmu.getPageSize());
     const loadable_image = try elf_loader.parseLoadableImage(image, page_size);
 
     for (0..loadable_image.segment_count) |segment_index| {
-        try loadRootProcessSegment(root_address_space, address_space, image, try elf_loader.getLoadableSegment(image, segment_index));
+        try loadRootProcessSegment(page_table_root, address_space, image, try elf_loader.getLoadableSegment(image, segment_index));
     }
 
     return @intCast(loadable_image.entry_point);
 }
 
-fn loadRootProcessSegment(root_address_space: arch.AddressSpaceRoot, address_space: *vmm.AddressSpace, image: []const u8, segment: elf_loader.LoadableSegment) !void {
-    const page_size: u64 = @intCast(arch.mmu.getPageSize());
-    const virtual_start = segment.virtual_address;
-    const virtual_end = try std.math.add(u64, virtual_start, segment.memory_size);
-    const mapping_start = std.mem.alignBackward(u64, virtual_start, page_size);
-    const mapping_end = std.mem.alignForward(u64, virtual_end, page_size);
+fn loadRootProcessSegment(
+    page_table_root: arch.AddressSpaceRoot,
+    address_space: *vmm.AddressSpace,
+    image: []const u8,
+    segment: elf_loader.LoadableSegment,
+) !void {
+    const mapping_range = pageAlignedSegmentRange(segment);
 
-    const final_permissions = vmm.MemoryPermissions{
+    try mapSegmentWriteableForLoading(page_table_root, address_space, mapping_range, segment);
+    try writeSegmentContents(page_table_root, image, segment);
+    try restoreSegmentPermissions(page_table_root, address_space, mapping_range, finalUserSegmentPermissions(segment));
+}
+
+const AddressRange = struct { start: u64, end: u64 };
+
+fn pageAlignedSegmentRange(segment: elf_loader.LoadableSegment) AddressRange {
+    const page_size: u64 = @intCast(arch.mmu.getPageSize());
+    const virtual_end = segment.virtual_address + segment.memory_size;
+    return .{
+        .start = std.mem.alignBackward(u64, segment.virtual_address, page_size),
+        .end = std.mem.alignForward(u64, virtual_end, page_size),
+    };
+}
+
+fn finalUserSegmentPermissions(segment: elf_loader.LoadableSegment) vmm.MemoryPermissions {
+    return .{
         .readable = segment.permissions.readable,
         .writeable = segment.permissions.writeable,
         .executable = segment.permissions.executable,
         .user_accessible = true,
     };
+}
 
-    try vmm.mapBootstrapContiguousInAddressSpace(root_address_space, address_space, mapping_start, mapping_end, .{
-        .readable = final_permissions.readable,
+/// Maps the segment writeable regardless of its final permissions, since
+/// `writeSegmentContents` needs write access to populate it. Permissions are
+/// locked down to their real values afterward by `restoreSegmentPermissions`.
+fn mapSegmentWriteableForLoading(
+    page_table_root: arch.AddressSpaceRoot,
+    address_space: *vmm.AddressSpace,
+    range: AddressRange,
+    segment: elf_loader.LoadableSegment,
+) !void {
+    try vmm.mapBootstrapContiguousInAddressSpace(page_table_root, address_space, range.start, range.end, .{
+        .readable = segment.permissions.readable,
         .writeable = true,
-        .executable = final_permissions.executable,
-        .user_accessible = final_permissions.user_accessible,
+        .executable = segment.permissions.executable,
+        .user_accessible = true,
     });
+}
 
+fn writeSegmentContents(page_table_root: arch.AddressSpaceRoot, image: []const u8, segment: elf_loader.LoadableSegment) !void {
     const file_end = try std.math.add(usize, segment.file_offset, segment.file_size);
-    try writeToAddressSpace(
-        root_address_space,
-        virtual_start,
-        image[segment.file_offset..file_end],
-    );
-    try zeroAddressSpace(
-        root_address_space,
-        virtual_start + segment.file_size,
-        segment.memory_size - segment.file_size,
-    );
+    try copyIntoUserSpace(page_table_root, segment.virtual_address, image[segment.file_offset..file_end]);
 
-    try vmm.protectInAddressSpace(root_address_space, address_space, mapping_start, mapping_end, final_permissions);
+    const bss_start = segment.virtual_address + segment.file_size;
+    const bss_size = segment.memory_size - segment.file_size;
+    try zeroUserSpace(page_table_root, bss_start, bss_size);
 }
 
-fn writeToAddressSpace(root: arch.AddressSpaceRoot, virtual_address: u64, bytes: []const u8) !void {
-    var written: usize = 0;
-    while (written < bytes.len) {
-        const destination_virtual_address = @as(usize, @intCast(virtual_address)) + written;
-        const destination = try directMapPointerForAddressSpace(root, destination_virtual_address);
-        const page_remaining = arch.mmu.getPageSize() - (destination_virtual_address & (arch.mmu.getPageSize() - 1));
-        const write_size = @min(page_remaining, bytes.len - written);
+fn restoreSegmentPermissions(
+    page_table_root: arch.AddressSpaceRoot,
+    address_space: *vmm.AddressSpace,
+    range: AddressRange,
+    permissions: vmm.MemoryPermissions,
+) !void {
+    try vmm.protectInAddressSpace(page_table_root, address_space, range.start, range.end, permissions);
+}
 
-        @memcpy(destination[0..write_size], bytes[written .. written + write_size]);
-        written += write_size;
+// --- copying bytes into the new address space ------------------------------
+
+const readWriteUserPagePermissions = vmm.MemoryPermissions{
+    .readable = true,
+    .writeable = true,
+    .executable = false,
+    .user_accessible = true,
+};
+
+fn copyIntoUserSpace(page_table_root: arch.AddressSpaceRoot, virtual_address: u64, source: []const u8) !void {
+    var address = virtual_address;
+    var remaining = source;
+    while (remaining.len > 0) {
+        const destination = try userSpacePageSlice(page_table_root, address, remaining.len);
+        @memcpy(destination, remaining[0..destination.len]);
+        address += destination.len;
+        remaining = remaining[destination.len..];
     }
 }
 
-fn zeroAddressSpace(root: arch.AddressSpaceRoot, virtual_address: u64, byte_count: u64) !void {
-    var zeroed: usize = 0;
-    const total: usize = @intCast(byte_count);
-    while (zeroed < total) {
-        const destination_virtual_address = @as(usize, @intCast(virtual_address)) + zeroed;
-        const destination = try directMapPointerForAddressSpace(root, destination_virtual_address);
-        const page_remaining = arch.mmu.getPageSize() - (destination_virtual_address & (arch.mmu.getPageSize() - 1));
-        const zero_size = @min(page_remaining, total - zeroed);
-
-        @memset(destination[0..zero_size], 0);
-        zeroed += zero_size;
+fn zeroUserSpace(page_table_root: arch.AddressSpaceRoot, virtual_address: u64, byte_count: u64) !void {
+    var address = virtual_address;
+    var remaining_len: usize = @intCast(byte_count);
+    while (remaining_len > 0) {
+        const destination = try userSpacePageSlice(page_table_root, address, remaining_len);
+        @memset(destination, 0);
+        address += destination.len;
+        remaining_len -= destination.len;
     }
 }
 
-fn directMapPointerForAddressSpace(root: arch.AddressSpaceRoot, virtual_address: usize) ![*]u8 {
-    const physical_address = arch.mmu.getPhysicalAddressInAddressSpace(root, virtual_address) orelse {
+/// The direct-mapped bytes of `virtual_address`'s physical page, truncated
+/// to `max_len` and to the end of that page (a direct-map pointer is only
+/// valid within a single physical page).
+fn userSpacePageSlice(page_table_root: arch.AddressSpaceRoot, virtual_address: u64, max_len: usize) ![]u8 {
+    const page_size = arch.mmu.getPageSize();
+    const address: usize = @intCast(virtual_address);
+    const page_offset = address & (page_size - 1);
+    const page_remaining = page_size - page_offset;
+
+    const page = try directMapPagePointer(page_table_root, address);
+    return page[0..@min(page_remaining, max_len)];
+}
+
+fn directMapPagePointer(page_table_root: arch.AddressSpaceRoot, virtual_address: usize) ![*]u8 {
+    const physical_address = arch.mmu.getPhysicalAddressInAddressSpace(page_table_root, virtual_address) orelse {
         return RootProcessLaunchError.RootAddressSpaceMappingMissing;
     };
-    const direct_map_address = @as(usize, @intCast(arch.mmu.getDirectMapVirtualAddress())) + physical_address;
-    return @ptrFromInt(direct_map_address);
+    const direct_map_base: usize = @intCast(arch.mmu.getDirectMapVirtualAddress());
+    return @ptrFromInt(direct_map_base + physical_address);
 }
 
-fn getBootModuleBytes(root_module: arch.BootModule) []const u8 {
-    if (root_module.physical_start >= root_module.physical_end) {
-        return &[_]u8{};
+// --- boot modules -----------------------------------------------------
+
+fn getRootProcessModule() RootProcessLaunchError!arch.BootModule {
+    return arch.boot.getBootModule(ROOT_PROCESS_BOOT_MODULE_INDEX) orelse RootProcessLaunchError.RootProcessModuleMissing;
+}
+
+fn validateBootModuleRange(boot_module: arch.BootModule) RootProcessLaunchError!void {
+    if (boot_module.physical_start >= boot_module.physical_end) {
+        return RootProcessLaunchError.InvalidBootModuleRange;
     }
 
+    if (boot_module.physical_end > std.math.maxInt(u32)) {
+        return RootProcessLaunchError.InvalidBootModuleRange;
+    }
+}
+
+fn getBootModuleBytes(root_module: arch.BootModule) RootProcessLaunchError![]const u8 {
+    try validateBootModuleRange(root_module);
+
     const module_size = root_module.physical_end - root_module.physical_start;
-    const module_virtual_start = @as(usize, @intCast(arch.mmu.getDirectMapVirtualAddress())) + root_module.physical_start;
+    const direct_map_base: usize = @intCast(arch.mmu.getDirectMapVirtualAddress());
+    const module_virtual_start = direct_map_base + root_module.physical_start;
     return @as([*]const u8, @ptrFromInt(module_virtual_start))[0..module_size];
 }

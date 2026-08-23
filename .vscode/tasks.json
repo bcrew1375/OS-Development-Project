@@ -16,7 +16,7 @@
     {
       "label": "Run QEMU",
       "type": "shell",
-      "command": "zig build run",
+      "command": "zig build run -Darch=x86_64",
       "presentation": {
         "panel": "dedicated",
         "reveal": "always",

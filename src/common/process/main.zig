@@ -20,11 +20,11 @@ pub const ProcessError = error{
 pub const AddressSpaceHandle = u32;
 pub const MemoryObjectHandle = u32;
 pub const ProcessHandle = u32;
+pub const ROOT_PROCESS_HANDLE: ProcessHandle = 1;
 
 const MAX_ADDRESS_SPACES = 16;
 const MAX_MEMORY_OBJECTS = 64;
 const MAX_VMAS_PER_ADDRESS_SPACE = 32;
-const ROOT_PROCESS_HANDLE: ProcessHandle = 1;
 const MAP_KNOWN_FLAGS = abi.syscall.MAP_READ | abi.syscall.MAP_WRITE | abi.syscall.MAP_EXECUTE;
 
 const AddressSpaceSlot = struct {

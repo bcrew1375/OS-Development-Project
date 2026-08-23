@@ -5,7 +5,7 @@ const std = @import("std");
 pub inline fn initialize() arch.EarlyAllocError!void {
     const memoryMap = arch.mmu.getMemoryMap();
 
-    for (memoryMap.entries[0..memoryMap.length]) |entry| {
+    for (memoryMap.entries[0..memoryMap.length]) |*entry| {
         if (entry.region_type != arch.MemoryMapRegionType.AVAILABLE) {
             try arch.early_allocator.reserve(@truncate(entry.address), @truncate(entry.size), arch.ReservedMapRegionType.PERSISTENT);
         }
@@ -24,7 +24,7 @@ pub inline fn allocate(neededSize: usize, alignment: usize, regionType: arch.Res
     const memoryMap = arch.mmu.getMemoryMap();
     const reservedMap = arch.early_allocator.getReservedMap();
 
-    for (memoryMap.entries[0..memoryMap.length]) |region| {
+    for (memoryMap.entries[0..memoryMap.length]) |*region| {
         if (region.region_type != arch.MemoryMapRegionType.AVAILABLE) {
             continue;
         }
@@ -43,7 +43,7 @@ pub inline fn allocate(neededSize: usize, alignment: usize, regionType: arch.Res
                 break :find_gap;
             }
 
-            for (reservedMap.entries[0..reservedMap.length]) |reserved| {
+            for (reservedMap.entries[0..reservedMap.length]) |*reserved| {
                 const reserved_start = reserved.address;
                 const reserved_end = reserved_start +| (reserved.size - 1);
 
