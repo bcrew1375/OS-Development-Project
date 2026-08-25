@@ -1,5 +1,7 @@
 const boot = @import("../main.zig");
 
+const COMMON_MAGIC = .{ 0xc7b1dd30df4c8b88, 0x0a82e883a194f07b };
+
 pub export var requests_start_marker: [4]u64 linksection(".limine_requests_start") = .{
     0xf6b8f4b39de7d1ae,
     0xfab91a6940fcb9cf,
@@ -21,7 +23,7 @@ pub export fn _start() callconv(.c) noreturn {
 }
 
 pub const HhdmRequest = extern struct {
-    id: [2]u64 = .{ 0x48dcf1cb8ad2b852, 0x63984e959a98244b },
+    id: [4]u64 = COMMON_MAGIC ++ .{ 0x48dcf1cb8ad2b852, 0x63984e959a98244b },
     revision: u64 = 0,
     response: ?*HhdmResponse = null,
 };
@@ -32,7 +34,7 @@ pub const HhdmResponse = extern struct {
 };
 
 pub const MemoryMapRequest = extern struct {
-    id: [2]u64 = .{ 0x67cf3d9d378a806f, 0xe304acdfc50c3c62 },
+    id: [4]u64 = COMMON_MAGIC ++ .{ 0x67cf3d9d378a806f, 0xe304acdfc50c3c62 },
     revision: u64 = 0,
     response: ?*MemoryMapResponse = null,
 };
@@ -62,7 +64,7 @@ pub const MemoryMapEntryType = enum(u64) {
 };
 
 pub const ModuleRequest = extern struct {
-    id: [2]u64 = .{ 0x3e7e279702be32af, 0xca1c4f3bd1280cee },
+    id: [4]u64 = COMMON_MAGIC ++ .{ 0x3e7e279702be32af, 0xca1c4f3bd1280cee },
     revision: u64 = 0,
     response: ?*ModuleResponse = null,
     internal_module_count: u64 = 0,

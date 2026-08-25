@@ -3,7 +3,7 @@ const common_early_allocator = @import("../../early_allocator.zig");
 
 const mmu = @import("../mmu/main.zig");
 
-var reservedMap: arch.ReservedMap linksection(".multiboot.data") = arch.ReservedMap{};
+var reservedMap: arch.ReservedMap = arch.ReservedMap{};
 
 pub fn initialize() arch.EarlyAllocError!void {
     try common_early_allocator.initialize();
@@ -17,6 +17,6 @@ pub fn reserve(address: usize, size: usize, entry_type: arch.ReservedMapRegionTy
     try common_early_allocator.reserve(address, size, entry_type);
 }
 
-pub fn getReservedMap() linksection(".multiboot.text") *arch.ReservedMap {
+pub fn getReservedMap() *arch.ReservedMap {
     return &reservedMap;
 }

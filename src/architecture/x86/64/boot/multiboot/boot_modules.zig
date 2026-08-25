@@ -15,7 +15,7 @@ var bootModules: [MAX_BOOT_MODULES]arch.BootModule = undefined;
 var bootModuleCount: usize = 0;
 var bootModulesCached: bool = false;
 
-pub fn cacheBootModules() linksection(".multiboot.text") void {
+pub fn cacheBootModules() void {
     if (bootModulesCached) {
         return;
     }
@@ -56,7 +56,7 @@ fn ensureBootModulesCached() void {
     }
 }
 
-pub fn reserveBootModules() linksection(".multiboot.text") arch.EarlyAllocError!void {
+pub fn reserveBootModules() arch.EarlyAllocError!void {
     const available_modules = getAvailableMultibootModuleCount();
     if (available_modules == 0) {
         return;
@@ -87,7 +87,7 @@ pub fn reserveBootModules() linksection(".multiboot.text") arch.EarlyAllocError!
     }
 }
 
-fn getAvailableMultibootModuleCount() linksection(".multiboot.text") usize {
+fn getAvailableMultibootModuleCount() usize {
     if (multiboot.multibootTable.mods_addr == 0) {
         return 0;
     }
@@ -95,11 +95,11 @@ fn getAvailableMultibootModuleCount() linksection(".multiboot.text") usize {
     return @min(@as(usize, @intCast(multiboot.multibootTable.mods_count)), MAX_BOOT_MODULES);
 }
 
-fn getMultibootModules() linksection(".multiboot.text") [*]const MultibootModule {
+fn getMultibootModules() [*]const MultibootModule {
     return @ptrFromInt(multiboot.multibootTable.mods_addr);
 }
 
-fn convertMultibootModule(multiboot_module: MultibootModule) linksection(".multiboot.text") arch.BootModule {
+fn convertMultibootModule(multiboot_module: MultibootModule) arch.BootModule {
     return .{
         .physical_start = multiboot_module.mod_start,
         .physical_end = multiboot_module.mod_end,

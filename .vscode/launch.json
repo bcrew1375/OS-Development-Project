@@ -1,26 +1,44 @@
 {
   "configurations": [
     {
-      "name": "Kernel Debug",
+      "name": "Kernel Debug (x86-32)",
       "type": "lldb",
       "request": "attach",
-      "program": "${workspaceFolder}/zig-out/bin/kernel.elf",
+      "program": "${workspaceFolder}/zig-out/x86_32/bin/kernel.elf",
       "targetCreateCommands": [
-        "target create ${workspaceFolder}/zig-out/bin/kernel.elf",
-        "target modules add ${workspaceFolder}/zig-out/bin/root_process.elf",
-        "target modules load --file ${workspaceFolder}/zig-out/bin/kernel.elf .text 0xC0205000",
-        "target modules load --file ${workspaceFolder}/zig-out/bin/root_process.elf .text 0x01000000"
+        "target create ${workspaceFolder}/zig-out/x86_32/bin/kernel.elf",
+        "target modules add ${workspaceFolder}/zig-out/x86_32/bin/root_process.elf",
       ],
       "processCreateCommands": [
         "gdb-remote 1234",
         "continue"
       ],
       "stopOnEntry": false,
-      "preLaunchTask": "Run QEMU",
+      "preLaunchTask": "Run QEMU (x86-32)",
       "postDebugTask": "Kill QEMU",
       "exitCommands": [
         "quit"
       ]
     },
- ]
+    {
+      "name": "Kernel Debug (x86-64)",
+      "type": "lldb",
+      "request": "attach",
+      "program": "${workspaceFolder}/zig-out/x86_64/bin/kernel.elf",
+      "targetCreateCommands": [
+        "target create ${workspaceFolder}/zig-out/x86_64/bin/kernel.elf",
+        "target modules add ${workspaceFolder}/zig-out/x86_64/bin/root_process.elf",
+      ],
+      "processCreateCommands": [
+        "gdb-remote 1234",
+        "continue"
+      ],
+      "stopOnEntry": false,
+      "preLaunchTask": "Run QEMU (x86-64)",
+      "postDebugTask": "Kill QEMU",
+      "exitCommands": [
+        "quit"
+      ]
+    }
+  ]
 }

@@ -36,7 +36,7 @@ pub const PageTable = *[ENTRIES_PER_TABLE]PageEntry;
 pub fn alignForward(
     value: usize,
     alignment: usize,
-) linksection(".multiboot.text") error{ InvalidBootstrapMapping, BootstrapMappingOverflow }!usize {
+) error{ InvalidBootstrapMapping, BootstrapMappingOverflow }!usize {
     if (alignment == 0 or (alignment & (alignment - 1)) != 0) {
         return error.InvalidBootstrapMapping;
     }
@@ -44,7 +44,7 @@ pub fn alignForward(
     return (try checkedAdd(value, alignment - 1)) & ~(alignment - 1);
 }
 
-pub fn checkedAdd(left: usize, right: usize) linksection(".multiboot.text") error{BootstrapMappingOverflow}!usize {
+pub fn checkedAdd(left: usize, right: usize) error{BootstrapMappingOverflow}!usize {
     const result = left +% right;
     if (result < left) {
         return error.BootstrapMappingOverflow;
@@ -53,7 +53,7 @@ pub fn checkedAdd(left: usize, right: usize) linksection(".multiboot.text") erro
     return result;
 }
 
-pub fn checkedMultiply(left: usize, right: usize) linksection(".multiboot.text") error{PageTableAllocationOverflow}!usize {
+pub fn checkedMultiply(left: usize, right: usize) error{PageTableAllocationOverflow}!usize {
     const maximum_usize = ~@as(usize, 0);
     if (left != 0 and right > maximum_usize / left) {
         return error.PageTableAllocationOverflow;

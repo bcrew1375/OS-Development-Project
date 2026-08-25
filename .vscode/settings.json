@@ -1,5 +1,6 @@
 {
     "lldb.displayFormat": "hex",
+    "lldb.verboseLogging": true,
     "lldb.showDisassembly": "auto",
     "lldb.dereferencePointers": true,
     "lldb.consoleMode": "commands",

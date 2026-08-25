@@ -2,10 +2,10 @@ const limine = @import("../boot/limine/main.zig");
 
 const arch = @import("arch");
 
-var memoryMap: arch.MemoryMap linksection(".multiboot.data") = arch.MemoryMap{};
-var maxAvailableAddress: u64 linksection(".multiboot.data") = 0;
+var memoryMap: arch.MemoryMap = arch.MemoryMap{};
+var maxAvailableAddress: u64 = 0;
 
-pub fn readLimineMemoryMap() linksection(".multiboot.text") void {
+pub fn readLimineMemoryMap() void {
     const response = limine.memory_map_request.response orelse return;
     const entry_count = @min(@as(usize, @intCast(response.entry_count)), arch.MAX_MEMORY_MAP_ENTRIES);
 
@@ -32,13 +32,13 @@ pub fn readLimineMemoryMap() linksection(".multiboot.text") void {
 /// place now owns "has the map been read yet" - if that condition
 /// ever needs to change (e.g. to a real `bool` flag instead of
 /// `length == 0`), it changes in exactly one place instead of two.
-fn ensureMemoryMapLoaded() linksection(".multiboot.text") void {
+fn ensureMemoryMapLoaded() void {
     if (memoryMap.length == 0) {
         readLimineMemoryMap();
     }
 }
 
-pub fn getMemoryMap() linksection(".multiboot.text") *arch.MemoryMap {
+pub fn getMemoryMap() *arch.MemoryMap {
     ensureMemoryMapLoaded();
 
     if (memoryMap.length == 0) {
@@ -48,7 +48,7 @@ pub fn getMemoryMap() linksection(".multiboot.text") *arch.MemoryMap {
     return &memoryMap;
 }
 
-pub fn getMaxAvailableAddress() linksection(".multiboot.text") u64 {
+pub fn getMaxAvailableAddress() u64 {
     ensureMemoryMapLoaded();
 
     if (maxAvailableAddress == 0) {

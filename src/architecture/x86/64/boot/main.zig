@@ -30,16 +30,16 @@ pub fn kernelSetup() noreturn {
         @panic(@errorName(err));
     };
 
-    boot_modules.reserveBootModules() catch |err| {
-        @panic(@errorName(err));
-    };
+    // boot_modules.reserveBootModules() catch |err| {
+    //     @panic(@errorName(err));
+    // };
 
     // mmu.initializePaging() catch |err| {
     //     @panic(@errorName(err));
     // };
 
-    boot_modules.cacheBootModules();
-    kernelMain();
+    // boot_modules.cacheBootModules();
+    // kernelMain();
 
     arch.cpu.unrecoverableHalt();
     unreachable;

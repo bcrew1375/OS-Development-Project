@@ -5,60 +5,37 @@ KERNEL_VIRTUAL_ADDRESS = 0xFFFFFFFF80000000;
 
 SECTIONS
 {
-    . =2M;
+	. = KERNEL_VIRTUAL_ADDRESS;
 	_kernel_start = .;
 
-	.multiboot.header ALIGN(4): AT (ADDR (.multiboot.header)) {
-		_multiboot_header_start = .;
-		*(.multiboot.header .multiboot.header.*)
-		_multiboot_header_end = .;
-	}
-	.multiboot.text ALIGN (4K) : AT (ADDR (.multiboot.text)) {
-		_multiboot_text_start = .;
-		*(.multiboot.text .multiboot.text.*)
-		_multiboot_text_end = .;
-	}
-	.multiboot.rodata ALIGN (4K) : AT (ADDR (.multiboot.rodata)) {
-		_multiboot_rodata_start = .;
-		*(.multiboot.rodata .multiboot.rodata.*)
-		_multiboot_rodata_end = .;
-	}
-	.multiboot.data ALIGN (4K) : AT (ADDR (.multiboot.data)) {
-		_multiboot_data_start = .;
-		*(.multiboot.data .multiboot.data.*)
-		_multiboot_data_end = .;
-	}
-	.multiboot.bss ALIGN (4K) : AT (ADDR (.multiboot.bss)) {
-		_multiboot_bss_start = .;
-		*(.multiboot.bss .multiboot.bss.*)
-		_multiboot_bss_end = .;
-	}
-
-	. += KERNEL_VIRTUAL_ADDRESS;
-
 	.text ALIGN (4K) : AT (ADDR (.text) - KERNEL_VIRTUAL_ADDRESS) {
-		_text_start = . - KERNEL_VIRTUAL_ADDRESS;
+		_text_start = .;
 		*(.text .text.*)
-		_text_end = . - KERNEL_VIRTUAL_ADDRESS;
+		_text_end = .;
 	}
 	.rodata ALIGN (4K) : AT (ADDR (.rodata) - KERNEL_VIRTUAL_ADDRESS) {
-		_rodata_start = . - KERNEL_VIRTUAL_ADDRESS;
+		_rodata_start = .;
+		*(.rodata .rodata.*)
+		_rodata_end = .;
+	}
+	. = ALIGN(4K);
+	.limine_requests ALIGN (4K) : AT (ADDR (.limine_requests) - KERNEL_VIRTUAL_ADDRESS) {
 		KEEP(*(.limine_requests_start))
 		KEEP(*(.limine_requests))
 		KEEP(*(.limine_requests_end))
-		*(.rodata .rodata.*)
-		_rodata_end = . - KERNEL_VIRTUAL_ADDRESS;
 	}
 	.data ALIGN (4K) : AT (ADDR (.data) - KERNEL_VIRTUAL_ADDRESS) {
-		_data_start = . - KERNEL_VIRTUAL_ADDRESS;
+		_data_start = .;
 		*(.data .data.*)
-		_data_end = . - KERNEL_VIRTUAL_ADDRESS;
+		_data_end = .;
 	}
 	.bss ALIGN (4K) : AT (ADDR (.bss) - KERNEL_VIRTUAL_ADDRESS) {
-		_bss_start = . - KERNEL_VIRTUAL_ADDRESS;
+		_bss_start = .;
 		*(.bss .bss.*)
-		_bss_end = . - KERNEL_VIRTUAL_ADDRESS;
+		_bss_end = .;
 	}
+
+	_kernel_end = .;
 
 	/DISCARD/ : {
     *(.eh_frame)
@@ -66,6 +43,4 @@ SECTIONS
     *(.comment)
     *(.note.*)
 	}
-
-	_kernel_end = . - KERNEL_VIRTUAL_ADDRESS;
 }

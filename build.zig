@@ -145,10 +145,16 @@ pub fn build(b: *std.Build) void {
     tests_step.dependOn(&run_tests.step);
 
     kernel.setLinkerScript(b.path(config.kernel_linker_script));
-    b.installArtifact(kernel);
+    const install_kernel = b.addInstallArtifact(kernel, .{
+        .dest_dir = .{ .override = .{ .custom = b.fmt("{s}/bin", .{@tagName(config.architecture)}) } },
+    });
+    b.getInstallStep().dependOn(&install_kernel.step);
 
     root_process.setLinkerScript(b.path(config.root_process_linker_script));
-    b.installArtifact(root_process);
+    const install_root_process = b.addInstallArtifact(root_process, .{
+        .dest_dir = .{ .override = .{ .custom = b.fmt("{s}/bin", .{@tagName(config.architecture)}) } },
+    });
+    b.getInstallStep().dependOn(&install_root_process.step);
 
     const run_step = b.step("run", "Run kernel with qemu");
     switch (config.architecture) {
@@ -316,7 +322,7 @@ const directQemuArgs = [_][]const u8{
     "-serial", "chardev:serial0",
     "-S",
     "-s",
-    "-m", "2G",
+    "-m", "4G",
     "-daemonize",
     "-pidfile", ".qemu.pid",
     "-M", "accel=tcg,smm=off",

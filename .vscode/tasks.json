@@ -14,7 +14,17 @@
     //   },
     // },
     {
-      "label": "Run QEMU",
+      "label": "Run QEMU (x86-32)",
+      "type": "shell",
+      "command": "zig build run -Darch=x86_32",
+      "presentation": {
+        "panel": "dedicated",
+        "reveal": "always",
+        "clear": true,
+      },
+    },
+    {
+      "label": "Run QEMU (x86-64)",
       "type": "shell",
       "command": "zig build run -Darch=x86_64",
       "presentation": {
