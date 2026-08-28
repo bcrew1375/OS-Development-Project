@@ -1,17 +1,18 @@
 const arch = @import("arch");
 
 const common = @import("common.zig");
+const limine_requests = @import("../boot/limine/requests.zig");
 
 pub fn createAddressSpaceRoot() arch.MmuError!arch.AddressSpaceRoot {
-    const page_directory_physical_address = allocatePageDirectory() catch {
+    const page_table_root_physical_address = allocatePageTableRoot() catch {
         return arch.MmuError.AddressSpaceRootAllocationFailed;
     };
-    const page_directory = getDirectMapPageDirectory(page_directory_physical_address);
+    const page_table_root = getDirectMapPageTableRoot(page_table_root_physical_address);
 
-    cloneKernelMappings(page_directory);
+    cloneKernelMappings(page_table_root);
 
     return .{
-        .value = page_directory_physical_address,
+        .value = page_table_root_physical_address,
     };
 }
 
@@ -19,52 +20,53 @@ pub fn switchAddressSpaceRoot(root: arch.AddressSpaceRoot) void {
     switchPageDirectoryPhysical(root.value);
 }
 
-fn allocatePageDirectory() arch.EarlyAllocError!usize {
-    const allocation_size = @sizeOf(common.PageEntry) * common.ENTRIES_PER_DIRECTORY;
-    const page_directory_physical_address = @intFromPtr(try arch.early_allocator.allocate(
+fn allocatePageTableRoot() arch.EarlyAllocError!usize {
+    const allocation_size = @sizeOf(common.PageEntry) * common.ENTRIES_PER_TABLE;
+    const page_table_root_physical_address = @intFromPtr(try arch.early_allocator.allocate(
         allocation_size,
         common.PAGE_SIZE,
         arch.ReservedMapRegionType.PERSISTENT,
     ));
-    const page_directory = getDirectMapPageDirectory(page_directory_physical_address);
+    const page_table_root = getDirectMapPageTableRoot(page_table_root_physical_address);
 
-    clearPageDirectory(page_directory);
+    clearPageTable(page_table_root);
 
-    return page_directory_physical_address;
+    return page_table_root_physical_address;
 }
 
-fn getDirectMapPageDirectory(page_directory_physical_address: usize) common.PageDirectory {
-    return @ptrFromInt(page_directory_physical_address + common.DIRECT_MAP_VIRTUAL_ADDRESS);
+fn getDirectMapPageTableRoot(page_table_root_physical_address: usize) common.PageTableRoot {
+    return @ptrFromInt(page_table_root_physical_address + directMapVirtualAddress());
 }
 
-fn clearPageDirectory(page_directory: common.PageDirectory) void {
-    for (page_directory) |*entry| {
+fn directMapVirtualAddress() usize {
+    return limine_requests.hhdmOffset();
+}
+
+fn clearPageTable(page_table: common.PageTable) void {
+    for (page_table) |*entry| {
         entry.* = .{};
     }
 }
 
-fn cloneKernelMappings(page_directory: common.PageDirectory) void {
-    const current_page_directory = getCurrentPageDirectory();
+fn cloneKernelMappings(page_table_root: common.PageTableRoot) void {
+    const current_page_table_root = getCurrentPageTableRoot();
 
-    for (common.HIGHER_HALF_INDEX..common.ENTRIES_PER_DIRECTORY) |directory_index| {
-        page_directory[directory_index] = current_page_directory[directory_index];
+    for (common.PML4_HIGHER_HALF_INDEX..common.ENTRIES_PER_TABLE) |root_index| {
+        page_table_root[root_index] = current_page_table_root[root_index];
     }
 }
 
-fn getCurrentPageDirectory() common.PageDirectory {
-    const cr3: usize = 0; //undefined;
-    // asm volatile ("mov %cr3, %[cr3]"
-    //     : [cr3] "=r" (cr3),
-    // );
-    return @ptrFromInt(cr3 + common.DIRECT_MAP_VIRTUAL_ADDRESS);
+fn getCurrentPageTableRoot() common.PageTableRoot {
+    var cr3: usize = undefined;
+    asm volatile ("mov %cr3, %[cr3]"
+        : [cr3] "=r" (cr3),
+    );
+    return @ptrFromInt((cr3 & ~@as(usize, 0xFFF)) + directMapVirtualAddress());
 }
 
 inline fn switchPageDirectoryPhysical(page_directory_physical_address: usize) void {
-    _ = page_directory_physical_address;
-    // asm volatile (
-    //     \\mov %[pageDirectoryPhysicalAddress], %eax
-    //     \\mov %eax, %cr3
-    //     :
-    //     : [pageDirectoryPhysicalAddress] "r" (page_directory_physical_address),
-    //     : .{ .eax = true, .memory = true });
+    asm volatile ("mov %[pageDirectoryPhysicalAddress], %cr3"
+        :
+        : [pageDirectoryPhysicalAddress] "r" (page_directory_physical_address),
+        : .{ .memory = true });
 }

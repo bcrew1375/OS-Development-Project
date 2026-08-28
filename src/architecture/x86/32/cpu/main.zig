@@ -8,7 +8,9 @@ pub fn unrecoverableHalt() noreturn {
     unreachable;
 }
 
-pub fn enterUserMode(entry_point: usize, stack_top: usize) noreturn {
+pub fn enterUserMode(entry_point: usize, stack_top: usize, argument0: usize) noreturn {
+    _ = argument0;
+
     asm volatile (
         \\cli
         \\mov %[userDataSelector], %ax

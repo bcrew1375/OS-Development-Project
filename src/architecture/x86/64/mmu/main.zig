@@ -1,8 +1,11 @@
 const arch = @import("arch");
 const kernel_common = @import("kernel_common");
 
-const common = @import("common.zig");
 const address_space = @import("address_space.zig");
+const common = @import("common.zig");
+const limine_requests = @import("../boot/limine/requests.zig");
+
+const std = @import("std");
 
 pub const createAddressSpaceRoot = address_space.createAddressSpaceRoot;
 pub const switchAddressSpaceRoot = address_space.switchAddressSpaceRoot;
@@ -10,24 +13,23 @@ pub const initializePaging = @import("early_boot.zig").initializePaging;
 pub const getMemoryMap = @import("memory_map.zig").getMemoryMap;
 pub const getMaxAvailableAddress = @import("memory_map.zig").getMaxAvailableAddress;
 
-const std = @import("std");
-
-/// Reads the current page directory base from CR3 and returns it as a
-/// higher-half virtual address so it can be indexed directly.
-inline fn getCurrentPageDirectory() common.PageDirectory {
-    return getPageDirectoryFromAddressSpaceRoot(getCurrentAddressSpaceRoot());
-}
+const PageWalk = struct {
+    pml4: common.PageTable,
+    pdpt: common.PageTable,
+    page_directory: common.PageTable,
+    page_table: common.PageTable,
+    pml4_index: usize,
+    pdpt_index: usize,
+    page_directory_index: usize,
+    page_table_index: usize,
+};
 
 inline fn getCurrentAddressSpaceRoot() arch.AddressSpaceRoot {
     var cr3: usize = undefined;
     asm volatile ("mov %cr3, %[cr3]"
         : [cr3] "=r" (cr3),
     );
-    return .{ .value = cr3 };
-}
-
-inline fn getPageDirectoryFromAddressSpaceRoot(root: arch.AddressSpaceRoot) common.PageDirectory {
-    return @ptrFromInt(root.value + common.DIRECT_MAP_VIRTUAL_ADDRESS);
+    return .{ .value = cr3 & ~@as(usize, 0xFFF) };
 }
 
 pub fn getPhysicalAddress(virtualAddress: usize) ?usize {
@@ -35,19 +37,23 @@ pub fn getPhysicalAddress(virtualAddress: usize) ?usize {
 }
 
 pub fn getPhysicalAddressInAddressSpace(root: arch.AddressSpaceRoot, virtualAddress: usize) ?usize {
-    const page_directory_index = getPageDirectoryIndex(virtualAddress);
-    const page_table_index = getPageTableIndex(virtualAddress);
-    const page_offset = virtualAddress & 0xFFF;
+    const pml4 = getPageTableFromPhysical(root.value);
+    const pml4_entry = pml4[pml4Index(virtualAddress)];
+    if (!pml4_entry.present) return null;
 
-    const page_dir = getPageDirectoryFromAddressSpaceRoot(root);
-    if (!page_dir[page_directory_index].present) return null;
+    const pdpt = getNextLevelTable(pml4_entry);
+    const pdpt_entry = pdpt[pdptIndex(virtualAddress)];
+    if (!pdpt_entry.present or pdpt_entry.page_size) return null;
 
-    const page_table = getPageTableFromDirectory(page_dir, page_directory_index);
-    const page_table_entry = page_table[page_table_index];
+    const page_directory = getNextLevelTable(pdpt_entry);
+    const page_directory_entry = page_directory[pageDirectoryIndex(virtualAddress)];
+    if (!page_directory_entry.present or page_directory_entry.page_size) return null;
+
+    const page_table = getNextLevelTable(page_directory_entry);
+    const page_table_entry = page_table[pageTableIndex(virtualAddress)];
     if (!page_table_entry.present) return null;
 
-    const physical_address = (@as(usize, page_table_entry.address) << 12) + page_offset;
-    return physical_address;
+    return pageBasePhysicalAddress(page_table_entry) + pageOffset(virtualAddress);
 }
 
 pub fn isTablePresent(virtualAddress: usize) bool {
@@ -55,9 +61,7 @@ pub fn isTablePresent(virtualAddress: usize) bool {
 }
 
 pub fn isTablePresentInAddressSpace(root: arch.AddressSpaceRoot, virtualAddress: usize) bool {
-    const page_directory_index = getPageDirectoryIndex(virtualAddress);
-    const page_dir = getPageDirectoryFromAddressSpaceRoot(root);
-    return page_dir[page_directory_index].present;
+    return walkToPageTable(root, virtualAddress) != null;
 }
 
 pub fn mapPage(virtualAddress: usize, physicalAddress: usize, flags: arch.PageProtection) arch.MmuError!void {
@@ -65,28 +69,12 @@ pub fn mapPage(virtualAddress: usize, physicalAddress: usize, flags: arch.PagePr
 }
 
 pub fn mapPageInAddressSpace(root: arch.AddressSpaceRoot, virtualAddress: usize, physicalAddress: usize, flags: arch.PageProtection) arch.MmuError!void {
-    _ = root;
-    _ = virtualAddress;
-    _ = physicalAddress;
-    _ = flags;
-    // const page_directory_index = getPageDirectoryIndex(virtualAddress);
-    // const page_table_index = getPageTableIndex(virtualAddress);
+    const walk = walkToPageTable(root, virtualAddress) orelse return arch.MmuError.PageTableNotPresent;
 
-    // const page_dir = getPageDirectoryFromAddressSpaceRoot(root);
-    // if (!page_dir[page_directory_index].present) {
-    //     return arch.MmuError.PageTableNotPresent;
-    // }
+    widenIntermediatePermissions(walk, flags);
+    walk.page_table[walk.page_table_index] = makePageEntry(physicalAddress, flags);
 
-    // page_dir[page_directory_index].writeable = page_dir[page_directory_index].writeable or flags.write;
-    // page_dir[page_directory_index].user_accessible = page_dir[page_directory_index].user_accessible or flags.user;
-
-    // const page_table = getPageTableFromDirectory(page_dir, page_directory_index);
-    // page_table[page_table_index].address = @truncate(physicalAddress >> 12);
-    // page_table[page_table_index].present = true;
-    // page_table[page_table_index].writeable = flags.write;
-    // page_table[page_table_index].user_accessible = flags.user;
-
-    // flushTLB(virtualAddress);
+    flushTLB(virtualAddress);
 }
 
 pub fn mapTable(virtualAddress: usize, physicalAddress: usize, flags: arch.PageProtection) arch.MmuError!void {
@@ -94,47 +82,54 @@ pub fn mapTable(virtualAddress: usize, physicalAddress: usize, flags: arch.PageP
 }
 
 pub fn mapTableInAddressSpace(root: arch.AddressSpaceRoot, virtualAddress: usize, physicalAddress: usize, flags: arch.PageProtection) arch.MmuError!void {
-    _ = root;
-    _ = virtualAddress;
-    _ = physicalAddress;
-    _ = flags;
-    // const page_directory_index = getPageDirectoryIndex(virtualAddress);
+    const pml4 = getPageTableFromPhysical(root.value);
+    const pml4_index = pml4Index(virtualAddress);
+    const pdpt_index = pdptIndex(virtualAddress);
+    const page_directory_index = pageDirectoryIndex(virtualAddress);
 
-    // const page_dir = getPageDirectoryFromAddressSpaceRoot(root);
-    // if (page_dir[page_directory_index].present) {
-    //     page_dir[page_directory_index].writeable = page_dir[page_directory_index].writeable or flags.write;
-    //     page_dir[page_directory_index].user_accessible = page_dir[page_directory_index].user_accessible or flags.user;
-    //     flushTLB(virtualAddress);
-    //     return;
-    // }
+    if (!pml4[pml4_index].present) {
+        const pdpt_physical_address = allocatePageTablePhysicalAddress() catch return arch.MmuError.MappingError;
+        clearPageTable(pdpt_physical_address);
+        pml4[pml4_index] = makeTableEntry(pdpt_physical_address, flags);
+    }
 
-    // clearPageTable(physicalAddress);
+    widenEntryPermissions(&pml4[pml4_index], flags);
+    const pdpt = getNextLevelTable(pml4[pml4_index]);
+    if (!pdpt[pdpt_index].present) {
+        const page_directory_physical_address = allocatePageTablePhysicalAddress() catch return arch.MmuError.MappingError;
+        clearPageTable(page_directory_physical_address);
+        pdpt[pdpt_index] = makeTableEntry(page_directory_physical_address, flags);
+    }
 
-    // page_dir[page_directory_index].address = @truncate(physicalAddress >> 12);
-    // page_dir[page_directory_index].present = true;
-    // page_dir[page_directory_index].writeable = true;
-    // page_dir[page_directory_index].user_accessible = flags.user;
+    widenEntryPermissions(&pdpt[pdpt_index], flags);
+    const page_directory = getNextLevelTable(pdpt[pdpt_index]);
+    if (!page_directory[page_directory_index].present) {
+        clearPageTable(physicalAddress);
+        page_directory[page_directory_index] = makeTableEntry(physicalAddress, flags);
+        flushTLB(virtualAddress);
+        return;
+    }
 
-    // flushTLB(virtualAddress);
-}
-
-pub fn unmapPage(virtualAddress: usize) void {
-    const page_directory_index = getPageDirectoryIndex(virtualAddress);
-    const page_table_index = getPageTableIndex(virtualAddress);
-
-    const page_dir = getCurrentPageDirectory();
-    const page_table = getPageTableFromDirectory(page_dir, page_directory_index);
-    page_table[page_table_index].present = false;
-
+    widenEntryPermissions(&page_directory[page_directory_index], flags);
     flushTLB(virtualAddress);
 }
 
+pub fn unmapPage(virtualAddress: usize) void {
+    const walk = walkToPageTable(getCurrentAddressSpaceRoot(), virtualAddress) orelse return;
+    walk.page_table[walk.page_table_index].present = false;
+    flushTLB(virtualAddress);
+}
+
+fn directMapVirtualAddress() usize {
+    return limine_requests.hhdmOffset();
+}
+
 pub fn getKernelVirtualAddressStart() u64 {
-    return common.DIRECT_MAP_VIRTUAL_ADDRESS;
+    return common.KERNEL_VIRTUAL_ADDRESS;
 }
 
 pub fn getDirectMapVirtualAddress() u64 {
-    return common.DIRECT_MAP_VIRTUAL_ADDRESS;
+    return directMapVirtualAddress();
 }
 
 pub fn getDirectMapMaxSize() u64 {
@@ -162,41 +157,121 @@ pub fn getPageTableRegionSize() usize {
     return common.PAGE_TABLE_REGION_SIZE;
 }
 
-pub fn removeIdentityMapping() void {
-    const page_dir = getCurrentPageDirectory();
+pub fn removeIdentityMapping() void {}
 
-    const needed_page_tables = @as(usize, @truncate((getDirectMapMaxSize() +| common.PAGE_TABLE_REGION_SIZE -| 1) / common.PAGE_TABLE_REGION_SIZE));
+fn walkToPageTable(root: arch.AddressSpaceRoot, virtualAddress: usize) ?PageWalk {
+    const pml4 = getPageTableFromPhysical(root.value);
+    const pml4_index = pml4Index(virtualAddress);
+    const pdpt_index = pdptIndex(virtualAddress);
+    const page_directory_index = pageDirectoryIndex(virtualAddress);
 
-    for (0..needed_page_tables) |table_index| {
-        page_dir[table_index].present = false;
-        flushTLB(table_index * common.PAGE_TABLE_REGION_SIZE);
+    if (!pml4[pml4_index].present) return null;
+    const pdpt = getNextLevelTable(pml4[pml4_index]);
+
+    if (!pdpt[pdpt_index].present or pdpt[pdpt_index].page_size) return null;
+    const page_directory = getNextLevelTable(pdpt[pdpt_index]);
+
+    if (!page_directory[page_directory_index].present or page_directory[page_directory_index].page_size) return null;
+    const page_table = getNextLevelTable(page_directory[page_directory_index]);
+
+    return .{
+        .pml4 = pml4,
+        .pdpt = pdpt,
+        .page_directory = page_directory,
+        .page_table = page_table,
+        .pml4_index = pml4_index,
+        .pdpt_index = pdpt_index,
+        .page_directory_index = page_directory_index,
+        .page_table_index = pageTableIndex(virtualAddress),
+    };
+}
+
+fn widenIntermediatePermissions(walk: PageWalk, flags: arch.PageProtection) void {
+    widenEntryPermissions(&walk.pml4[walk.pml4_index], flags);
+    widenEntryPermissions(&walk.pdpt[walk.pdpt_index], flags);
+    widenEntryPermissions(&walk.page_directory[walk.page_directory_index], flags);
+}
+
+fn widenEntryPermissions(entry: *common.PageEntry, flags: arch.PageProtection) void {
+    entry.writeable = entry.writeable or flags.write;
+    entry.user_accessible = entry.user_accessible or flags.user;
+    entry.no_execute = entry.no_execute and !flags.execute;
+}
+
+fn makeTableEntry(physicalAddress: usize, flags: arch.PageProtection) common.PageEntry {
+    return makeEntry(physicalAddress, .{
+        .write = true,
+        .user = flags.user,
+        .execute = flags.execute,
+        .global = flags.global,
+    });
+}
+
+fn makePageEntry(physicalAddress: usize, flags: arch.PageProtection) common.PageEntry {
+    return makeEntry(physicalAddress, flags);
+}
+
+fn makeEntry(physicalAddress: usize, flags: arch.PageProtection) common.PageEntry {
+    return .{
+        .address = @truncate(physicalAddress >> 12),
+        .present = true,
+        .writeable = flags.write,
+        .user_accessible = flags.user,
+        .global = flags.global,
+        .no_execute = !flags.execute,
+    };
+}
+
+fn clearPageTable(physicalAddress: usize) void {
+    const page_table = getPageTableFromPhysical(physicalAddress);
+    for (page_table) |*entry| {
+        entry.* = .{};
     }
 }
 
+fn allocatePageTablePhysicalAddress() !usize {
+    return @intFromPtr(try arch.early_allocator.allocate(
+        common.PAGE_SIZE,
+        common.PAGE_SIZE,
+        arch.ReservedMapRegionType.PERSISTENT,
+    ));
+}
+
+inline fn getPageTableFromPhysical(physicalAddress: usize) common.PageTable {
+    return @ptrFromInt((physicalAddress & ~@as(usize, 0xFFF)) + directMapVirtualAddress());
+}
+
+inline fn getNextLevelTable(entry: common.PageEntry) common.PageTable {
+    return getPageTableFromPhysical(pageBasePhysicalAddress(entry));
+}
+
+inline fn pageBasePhysicalAddress(entry: common.PageEntry) usize {
+    return @as(usize, entry.address) << 12;
+}
+
 inline fn flushTLB(virtualAddress: usize) void {
-    // Invalidate the TLB entry for this virtual address
     asm volatile ("invlpg (%[address])"
         :
         : [address] "r" (virtualAddress),
         : .{ .memory = true });
 }
 
-fn clearPageTable(physicalAddress: usize) void {
-    const page_table: common.PageTable = @ptrFromInt(physicalAddress + common.DIRECT_MAP_VIRTUAL_ADDRESS);
-    for (page_table) |*entry| {
-        entry.* = .{};
-    }
+inline fn pml4Index(virtualAddress: usize) usize {
+    return (virtualAddress >> 39) & 0x1FF;
 }
 
-inline fn getPageTableFromDirectory(page_dir: common.PageDirectory, directoryIndex: usize) common.PageTable {
-    const physical_address = @as(usize, page_dir[directoryIndex].address) << 12;
-    return @ptrFromInt(physical_address + common.DIRECT_MAP_VIRTUAL_ADDRESS);
+inline fn pdptIndex(virtualAddress: usize) usize {
+    return (virtualAddress >> 30) & 0x1FF;
 }
 
-inline fn getPageDirectoryIndex(virtualAddress: usize) usize {
-    return virtualAddress >> 22;
+inline fn pageDirectoryIndex(virtualAddress: usize) usize {
+    return (virtualAddress >> 21) & 0x1FF;
 }
 
-inline fn getPageTableIndex(virtualAddress: usize) usize {
-    return (virtualAddress >> 12) & 0x3FF;
+inline fn pageTableIndex(virtualAddress: usize) usize {
+    return (virtualAddress >> 12) & 0x1FF;
+}
+
+inline fn pageOffset(virtualAddress: usize) usize {
+    return virtualAddress & 0xFFF;
 }

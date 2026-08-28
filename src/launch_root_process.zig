@@ -66,7 +66,11 @@ pub fn prepareRootProcess(address_space: *vmm.AddressSpace) !PreparedRootProcess
 
 pub fn enterPreparedRootProcess(prepared_root_process: PreparedRootProcess) noreturn {
     arch.mmu.switchAddressSpaceRoot(prepared_root_process.address_space_root);
-    arch.cpu.enterUserMode(prepared_root_process.entry_point, prepared_root_process.initial_stack_pointer);
+    arch.cpu.enterUserMode(
+        prepared_root_process.entry_point,
+        prepared_root_process.initial_stack_pointer,
+        RootProcessLayout.boot_info_start,
+    );
 }
 
 /// `vmm`'s bootstrap-mapping calls (mapBootstrapContiguousInAddressSpace,
@@ -293,9 +297,13 @@ fn validateBootModuleRange(boot_module: arch.BootModule) RootProcessLaunchError!
         return RootProcessLaunchError.InvalidBootModuleRange;
     }
 
-    if (boot_module.physical_end > std.math.maxInt(u32)) {
+    const direct_map_base: usize = @intCast(arch.mmu.getDirectMapVirtualAddress());
+    _ = std.math.add(usize, direct_map_base, boot_module.physical_start) catch {
         return RootProcessLaunchError.InvalidBootModuleRange;
-    }
+    };
+    _ = std.math.add(usize, direct_map_base, boot_module.physical_end - 1) catch {
+        return RootProcessLaunchError.InvalidBootModuleRange;
+    };
 }
 
 fn getBootModuleBytes(root_module: arch.BootModule) RootProcessLaunchError![]const u8 {

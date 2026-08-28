@@ -9,6 +9,6 @@ pub const BootInfo = extern struct {
 };
 
 pub const BootModuleInfo = extern struct {
-    physical_start: u32,
-    physical_end: u32,
+    physical_start: u64,
+    physical_end: u64,
 };

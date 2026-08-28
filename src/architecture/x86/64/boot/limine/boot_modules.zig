@@ -1,29 +1,30 @@
 const arch = @import("arch");
-const limine = @import("main.zig");
+const limine_protocol = @import("protocol.zig");
+const limine_requests = @import("requests.zig");
 
-const MAX_BOOT_MODULES = 16;
+const BOOT_MODULE_CACHE_CAPACITY = 16;
 
-var bootModules: [MAX_BOOT_MODULES]arch.BootModule = undefined;
+var bootModules: [BOOT_MODULE_CACHE_CAPACITY]arch.BootModule = undefined;
 var bootModuleCount: usize = 0;
-var bootModulesCached: bool = false;
+var bootModulesCached = false;
 
 pub fn cacheBootModules() void {
     if (bootModulesCached) {
         return;
     }
 
-    const response = limine.module_request.response orelse {
+    const module_count = getAvailableLimineModuleCount();
+    const modules = getLimineModules() orelse {
         bootModuleCount = 0;
         bootModulesCached = true;
         return;
     };
 
-    const available_modules = @min(@as(usize, @intCast(response.module_count)), MAX_BOOT_MODULES);
-    for (0..available_modules) |module_index| {
-        bootModules[module_index] = convertLimineModule(response.modules[module_index]);
+    for (0..module_count) |module_index| {
+        bootModules[module_index] = convertLimineModule(modules[module_index]);
     }
 
-    bootModuleCount = available_modules;
+    bootModuleCount = module_count;
     bootModulesCached = true;
 }
 
@@ -47,11 +48,11 @@ fn ensureBootModulesCached() void {
 }
 
 pub fn reserveBootModules() arch.EarlyAllocError!void {
-    const response = limine.module_request.response orelse return;
-    const available_modules = @min(@as(usize, @intCast(response.module_count)), MAX_BOOT_MODULES);
+    const module_count = getAvailableLimineModuleCount();
+    const modules = getLimineModules() orelse return;
 
-    for (0..available_modules) |module_index| {
-        const boot_module = convertLimineModule(response.modules[module_index]);
+    for (0..module_count) |module_index| {
+        const boot_module = convertLimineModule(modules[module_index]);
         if (boot_module.physical_start >= boot_module.physical_end) {
             continue;
         }
@@ -64,17 +65,27 @@ pub fn reserveBootModules() arch.EarlyAllocError!void {
     }
 }
 
-fn convertLimineModule(file: *const limine.File) arch.BootModule {
+fn getAvailableLimineModuleCount() usize {
+    const response = limine_requests.moduleResponse() orelse return 0;
+    return @min(@as(usize, @intCast(response.module_count)), BOOT_MODULE_CACHE_CAPACITY);
+}
+
+fn getLimineModules() ?[*]const *const limine_protocol.File {
+    const response = limine_requests.moduleResponse() orelse return null;
+    return response.modules;
+}
+
+fn convertLimineModule(file: *const limine_protocol.File) arch.BootModule {
     const virtual_start = @intFromPtr(file.address);
-    const physical_start = getPhysicalAddressFromLiminePointer(virtual_start);
+    const physical_start = physicalAddressFromLiminePointer(virtual_start);
     return .{
         .physical_start = physical_start,
         .physical_end = physical_start + @as(usize, @intCast(file.size)),
     };
 }
 
-fn getPhysicalAddressFromLiminePointer(address: usize) usize {
-    const hhdm_offset = limine.getHhdmOffset();
+fn physicalAddressFromLiminePointer(address: usize) usize {
+    const hhdm_offset = limine_requests.hhdmOffset();
     if (hhdm_offset != 0 and address >= hhdm_offset) {
         return address - hhdm_offset;
     }

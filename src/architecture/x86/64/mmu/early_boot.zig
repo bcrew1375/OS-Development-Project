@@ -45,7 +45,6 @@
 //!        no behavior attached.
 
 const arch = @import("arch");
-const multiboot = @import("../boot/multiboot/main.zig");
 
 const common = @import("common.zig");
 
@@ -111,11 +110,11 @@ fn calculateDirectMapPageTableCount() error{ InvalidBootstrapMapping, BootstrapM
         return error.InvalidBootstrapMapping;
     }
 
-    if (page_table_count > common.HIGHER_HALF_INDEX) {
+    if (page_table_count > common.PML4_HIGHER_HALF_INDEX) {
         return error.KernelImageTooLarge;
     }
 
-    if (common.HIGHER_HALF_INDEX + page_table_count > common.ENTRIES_PER_DIRECTORY) {
+    if (common.PML4_HIGHER_HALF_INDEX + page_table_count > common.ENTRIES_PER_DIRECTORY) {
         return error.KernelImageTooLarge;
     }
 
@@ -170,7 +169,7 @@ fn initializeBootstrapMappings(
         const directory_entry = makePageDirectoryEntry(page_table);
 
         page_directory[directory_index] = directory_entry;
-        page_directory[common.HIGHER_HALF_INDEX + directory_index] = directory_entry;
+        page_directory[common.PML4_HIGHER_HALF_INDEX + directory_index] = directory_entry;
 
         initializePageTable(page_table, directory_index, reserved_map);
     }
@@ -259,15 +258,15 @@ fn activatePaging(page_directory: common.PageDirectory) void {
     asm volatile (
         \\pusha
         \\mov %[pageDirectoryAddress], %eax
-        \\mov %eax, %cr3
+        \\mov %rax, %cr3
         // Enable paging.
-        \\mov %cr0, %eax
+        \\mov %cr0, %rax
         \\or $0x80010000, %eax
-        \\mov %eax, %cr0
+        \\mov %rax, %cr0
         \\popa
         :
         : [pageDirectoryAddress] "r" (page_directory_physical_address),
-        : .{ .eax = true, .memory = true });
+        : .{ .rax = true, .memory = true });
 }
 
 // ============================================================

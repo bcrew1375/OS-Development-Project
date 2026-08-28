@@ -1,37 +1,39 @@
-const limine = @import("../boot/limine/main.zig");
-
 const arch = @import("arch");
+const limine_protocol = @import("../boot/limine/protocol.zig");
+const limine_requests = @import("../boot/limine/requests.zig");
 
 var memoryMap: arch.MemoryMap = arch.MemoryMap{};
 var maxAvailableAddress: u64 = 0;
 
 pub fn readLimineMemoryMap() void {
-    const response = limine.memory_map_request.response orelse return;
+    const response = limine_requests.memoryMapResponse() orelse return;
     const entry_count = @min(@as(usize, @intCast(response.entry_count)), arch.MAX_MEMORY_MAP_ENTRIES);
 
-    for (0..entry_count) |entry| {
-        const map_entry = response.entries[entry];
-
-        memoryMap.entries[entry].address = map_entry.base;
-        memoryMap.entries[entry].size = map_entry.length;
-
-        switch (map_entry.entry_type) {
-            limine.MemoryMapEntryType.USABLE => memoryMap.entries[entry].region_type = arch.MemoryMapRegionType.AVAILABLE,
-            limine.MemoryMapEntryType.BOOTLOADER_RECLAIMABLE,
-            limine.MemoryMapEntryType.ACPI_RECLAIMABLE,
-            => memoryMap.entries[entry].region_type = arch.MemoryMapRegionType.RECLAIMABLE,
-            else => memoryMap.entries[entry].region_type = arch.MemoryMapRegionType.RESERVED,
-        }
-
+    for (0..entry_count) |entry_index| {
+        memoryMap.entries[entry_index] = convertLimineMemoryMapEntry(response.entries[entry_index].*);
         memoryMap.length += 1;
     }
 }
 
-/// Centralizes the lazy-load check that both `getMemoryMap` and
-/// `getMaxAvailableAddress` previously duplicated independently. One
-/// place now owns "has the map been read yet" - if that condition
-/// ever needs to change (e.g. to a real `bool` flag instead of
-/// `length == 0`), it changes in exactly one place instead of two.
+fn convertLimineMemoryMapEntry(entry: limine_protocol.MemoryMapEntry) arch.MemoryMapEntry {
+    return .{
+        .address = entry.base,
+        .size = entry.length,
+        .region_type = convertLimineMemoryMapEntryType(entry.entry_type),
+    };
+}
+
+fn convertLimineMemoryMapEntryType(
+    entry_type: limine_protocol.MemoryMapEntryType,
+) arch.MemoryMapRegionType {
+    return switch (entry_type) {
+        .USABLE => .AVAILABLE,
+        .BOOTLOADER_RECLAIMABLE, .ACPI_RECLAIMABLE => .RECLAIMABLE,
+        .BAD_MEMORY => .BAD,
+        else => .RESERVED,
+    };
+}
+
 fn ensureMemoryMapLoaded() void {
     if (memoryMap.length == 0) {
         readLimineMemoryMap();

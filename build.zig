@@ -278,34 +278,27 @@ fn createLimineIsoStep(
         \\
         \\limine_bios_sys="$(find_limine_file limine-bios.sys)"
         \\limine_bios_cd="$(find_limine_file limine-bios-cd.bin)"
-        \\limine_uefi_cd="$(find_limine_file limine-uefi-cd.bin)"
-        \\limine_boot_x64="$(find_limine_file BOOTX64.EFI)"
         \\
         \\rm -rf "$iso_root"
-        \\mkdir -p "$iso_root/boot" "$iso_root/EFI/BOOT"
+        \\mkdir -p "$iso_root/boot"
         \\cp "$kernel" "$iso_root/boot/kernel.elf"
         \\cp "$root_process" "$iso_root/boot/root_process.elf"
         \\cp "$limine_conf" "$iso_root/boot/limine.conf"
         \\cp "$limine_bios_sys" "$iso_root/boot/limine-bios.sys"
         \\cp "$limine_bios_cd" "$iso_root/boot/limine-bios-cd.bin"
-        \\cp "$limine_uefi_cd" "$iso_root/boot/limine-uefi-cd.bin"
-        \\cp "$limine_boot_x64" "$iso_root/EFI/BOOT/BOOTX64.EFI"
         \\
         \\xorriso -as mkisofs \
         \\    -b boot/limine-bios-cd.bin \
         \\    -no-emul-boot \
         \\    -boot-load-size 4 \
         \\    -boot-info-table \
-        \\    --efi-boot boot/limine-uefi-cd.bin \
-        \\    -efi-boot-part \
-        \\    --efi-boot-image \
-        \\    --protective-msdos-label \
         \\    "$iso_root" \
         \\    -o "$output_iso"
         \\limine bios-install "$output_iso"
     ;
 
     const make_iso_cmd = b.addSystemCommand(&.{ "bash", "-c", script, "make-limine-iso" });
+    make_iso_cmd.has_side_effects = true;
     make_iso_cmd.addArg(b.pathFromRoot(".zig-cache/limine-iso-root"));
     make_iso_cmd.addFileArg(kernel.getEmittedBin());
     make_iso_cmd.addFileArg(root_process.getEmittedBin());
@@ -325,7 +318,7 @@ const directQemuArgs = [_][]const u8{
     "-m", "4G",
     "-daemonize",
     "-pidfile", ".qemu.pid",
-    "-M", "accel=tcg,smm=off",
+    "-M", "pc,accel=tcg,smm=off",
     "-D", "qemu.log",
     "-d", "int,cpu_reset,guest_errors",
     "-no-reboot",
@@ -336,6 +329,8 @@ const directQemuArgs = [_][]const u8{
 const limineQemuArgs = [_][]const u8{
     // zig fmt: off
     "qemu-system-x86_64",
+    "-vga", "std",
+    "-boot", "d",
     "-vnc", "127.0.0.1:0",
     "-chardev", "file,id=serial0,path=serial.log",
     "-serial", "chardev:serial0",
@@ -344,7 +339,7 @@ const limineQemuArgs = [_][]const u8{
     "-m", "4G",
     "-daemonize",
     "-pidfile", ".qemu.pid",
-    "-M", "accel=tcg,smm=off",
+    "-M", "pc,accel=tcg,smm=off",
     "-D", "qemu.log",
     "-d", "int,cpu_reset,guest_errors",
     "-no-reboot",

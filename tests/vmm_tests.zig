@@ -467,7 +467,7 @@ test "VMM resolveFault: permissions propagate to page protection" {
     try std.testing.expect(mappedPage.protection.execute);
 }
 
-test "VMM resolveFault: early fault before memory management returns error" {
+test "VMM resolveFault: bootstrap VMA fault uses early allocator" {
     testSetup();
 
     var vmaBacking: [1]kernel.vmm.VirtualMemoryArea = undefined;
@@ -477,15 +477,36 @@ test "VMM resolveFault: early fault before memory management returns error" {
     };
     kernel.vmm.setAddressSpace(&addressSpace);
 
+    const memoryMap = arch.mmu.getMemoryMap();
+    const regionBase = memoryMap.entries[0].address;
+    const pageSize: u64 = arch.mmu.getPageSize();
+    const vmaStart = regionBase + 0x500000;
+    const vmaEnd = vmaStart + pageSize;
+
     const faultInfo = arch.FaultInfo{
-        .address = 0x10000000,
+        .address = @as(usize, @intCast(vmaStart)),
         .present = false,
         .write = false,
         .user = false,
         .instruction_fetch = false,
     };
 
-    try std.testing.expectError(error.FaultBeforeMemoryManagementActive, kernel.vmm.resolveFault(faultInfo));
+    try kernel.vmm.map(&addressSpace, vmaStart, vmaEnd, .{
+        .readable = true,
+        .writeable = true,
+        .executable = false,
+        .user_accessible = false,
+    });
+
+    try kernel.vmm.resolveFault(faultInfo);
+
+    try std.testing.expect(arch.mmu.isTablePresent(@as(usize, @intCast(vmaStart))));
+
+    const mappedPage = arch.mmu.getMappedPageForTest(@as(usize, @intCast(vmaStart))).?;
+    try std.testing.expect(mappedPage.present);
+    try std.testing.expect(mappedPage.protection.write);
+    try std.testing.expect(!mappedPage.protection.user);
+    try std.testing.expect(!mappedPage.protection.execute);
 }
 
 test "VMM resolveFault: fault outside VMA returns error" {

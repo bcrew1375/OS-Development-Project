@@ -102,82 +102,86 @@ fn handlePageFault(trap_frame: *const TrapFrame, diagnostic: diagnostics.Decisio
 }
 
 fn handleSyscall(trap_frame: *TrapFrame) void {
-    const syscall_number: abi.syscall.SyscallNumber = @enumFromInt(trap_frame.eax);
+    const syscall_number: abi.syscall.SyscallNumber = @enumFromInt(low32(trap_frame.rax));
     const root_process_handle = kernel_common.process.ROOT_PROCESS_HANDLE;
 
     switch (syscall_number) {
         .debug_write => {
-            const message: [*]const u8 = @ptrFromInt(trap_frame.ebx);
-            const length: usize = @intCast(trap_frame.ecx);
+            const message: [*]const u8 = @ptrFromInt(trap_frame.rbx);
+            const length: usize = @intCast(trap_frame.rcx);
             arch.platform.writer().writeAll(message[0..length]) catch {};
-            trap_frame.eax = 0;
+            trap_frame.rax = 0;
         },
         .exit => {
-            arch.platform.writer().print("User process exited with status {d}.\n", .{trap_frame.ebx}) catch {};
+            arch.platform.writer().print("User process exited with status {d}.\n", .{trap_frame.rbx}) catch {};
             arch.cpu.unrecoverableHalt();
         },
         .create_address_space => {
             const capability = kernel_common.capability.createAddressSpaceCapability(root_process_handle) catch |err| {
                 arch.platform.writer().print("create_address_space failed: {s}\n", .{@errorName(err)}) catch {};
-                trap_frame.eax = abi.capability.INVALID_CAPABILITY;
+                trap_frame.rax = abi.capability.INVALID_CAPABILITY;
                 return;
             };
-            trap_frame.eax = capability;
+            trap_frame.rax = capability;
         },
         .map_memory => {
-            const address_space_handle = kernel_common.capability.resolveAddressSpace(root_process_handle, trap_frame.ebx, .{ .manage = true }) catch |err| {
+            const address_space_handle = kernel_common.capability.resolveAddressSpace(root_process_handle, low32(trap_frame.rbx), .{ .manage = true }) catch |err| {
                 arch.platform.writer().print("map_memory address-space capability failed: {s}\n", .{@errorName(err)}) catch {};
-                trap_frame.eax = abi.syscall.SYSCALL_FAILURE;
+                trap_frame.rax = abi.syscall.SYSCALL_FAILURE;
                 return;
             };
 
-            kernel_common.process.mapMemory(address_space_handle, trap_frame.ecx, trap_frame.edx) catch |err| {
+            kernel_common.process.mapMemory(address_space_handle, low32(trap_frame.rcx), low32(trap_frame.rdx)) catch |err| {
                 arch.platform.writer().print("map_memory failed: {s}\n", .{@errorName(err)}) catch {};
-                trap_frame.eax = abi.syscall.SYSCALL_FAILURE;
+                trap_frame.rax = abi.syscall.SYSCALL_FAILURE;
                 return;
             };
-            trap_frame.eax = abi.syscall.SYSCALL_SUCCESS;
+            trap_frame.rax = abi.syscall.SYSCALL_SUCCESS;
         },
         .create_memory_object => {
-            const capability = kernel_common.capability.createMemoryObjectCapability(root_process_handle, trap_frame.ebx) catch |err| {
+            const capability = kernel_common.capability.createMemoryObjectCapability(root_process_handle, low32(trap_frame.rbx)) catch |err| {
                 arch.platform.writer().print("create_memory_object failed: {s}\n", .{@errorName(err)}) catch {};
-                trap_frame.eax = abi.capability.INVALID_CAPABILITY;
+                trap_frame.rax = abi.capability.INVALID_CAPABILITY;
                 return;
             };
-            trap_frame.eax = capability;
+            trap_frame.rax = capability;
         },
         .map_memory_object => {
-            const address_space_handle = kernel_common.capability.resolveAddressSpace(root_process_handle, trap_frame.ebx, .{ .manage = true }) catch |err| {
+            const address_space_handle = kernel_common.capability.resolveAddressSpace(root_process_handle, low32(trap_frame.rbx), .{ .manage = true }) catch |err| {
                 arch.platform.writer().print("map_memory_object address-space capability failed: {s}\n", .{@errorName(err)}) catch {};
-                trap_frame.eax = abi.syscall.SYSCALL_FAILURE;
+                trap_frame.rax = abi.syscall.SYSCALL_FAILURE;
                 return;
             };
 
-            const memory_object_handle = kernel_common.capability.resolveMemoryObject(root_process_handle, trap_frame.ecx, rightsFromMapFlags(trap_frame.edi)) catch |err| {
+            const memory_object_handle = kernel_common.capability.resolveMemoryObject(root_process_handle, low32(trap_frame.rcx), rightsFromMapFlags(low32(trap_frame.rdi))) catch |err| {
                 arch.platform.writer().print("map_memory_object memory-object capability failed: {s}\n", .{@errorName(err)}) catch {};
-                trap_frame.eax = abi.syscall.SYSCALL_FAILURE;
+                trap_frame.rax = abi.syscall.SYSCALL_FAILURE;
                 return;
             };
 
             kernel_common.process.mapMemoryObject(
                 address_space_handle,
                 memory_object_handle,
-                trap_frame.edx,
+                low32(trap_frame.rdx),
                 0,
-                trap_frame.esi,
-                trap_frame.edi,
+                low32(trap_frame.rsi),
+                low32(trap_frame.rdi),
             ) catch |err| {
                 arch.platform.writer().print("map_memory_object failed: {s}\n", .{@errorName(err)}) catch {};
-                trap_frame.eax = abi.syscall.SYSCALL_FAILURE;
+                trap_frame.rax = abi.syscall.SYSCALL_FAILURE;
                 return;
             };
-            trap_frame.eax = abi.syscall.SYSCALL_SUCCESS;
+            trap_frame.rax = abi.syscall.SYSCALL_SUCCESS;
         },
         _ => {
-            arch.platform.writer().print("Unknown syscall: {d}\n", .{trap_frame.eax}) catch {};
+            arch.platform.writer().print("Unknown syscall: {d}\n", .{trap_frame.rax}) catch {};
             arch.cpu.unrecoverableHalt();
         },
     }
+}
+
+fn low32(value: u64) u32 {
+    return @truncate(value);
 }
 
 fn rightsFromMapFlags(permission_flags: u32) abi.capability.Rights {
@@ -190,7 +194,7 @@ fn rightsFromMapFlags(permission_flags: u32) abi.capability.Rights {
 
 fn readPageFaultInfo(trap_frame: *const TrapFrame) arch.FaultInfo {
     const virtual_address = asm volatile ("mov %%cr2, %[out]"
-        : [out] "=r" (-> u32),
+        : [out] "=r" (-> usize),
     );
     const error_code: usize = @intCast(trap_frame.error_code);
 
@@ -207,32 +211,37 @@ fn readPageFaultInfo(trap_frame: *const TrapFrame) arch.FaultInfo {
 }
 
 const TrapFrame = extern struct {
-    gs: u32,
-    fs: u32,
-    es: u32,
-    ds: u32,
-    edi: u32,
-    esi: u32,
-    ebp: u32,
-    original_stack_pointer: u32,
-    ebx: u32,
-    edx: u32,
-    ecx: u32,
-    eax: u32,
-    error_code: u32,
-    instruction_pointer: u32,
-    code_selector: u32,
-    flags: u32,
+    r15: u64,
+    r14: u64,
+    r13: u64,
+    r12: u64,
+    r11: u64,
+    r10: u64,
+    r9: u64,
+    r8: u64,
+    rdi: u64,
+    rsi: u64,
+    rbp: u64,
+    rbx: u64,
+    rdx: u64,
+    rcx: u64,
+    rax: u64,
+    error_code: u64,
+    instruction_pointer: u64,
+    code_selector: u64,
+    flags: u64,
+    stack_pointer: u64,
+    stack_selector: u64,
 };
 
 comptime {
-    @import("std").debug.assert(@sizeOf(TrapFrame) == 16 * @sizeOf(u32));
+    @import("std").debug.assert(@sizeOf(TrapFrame) == 21 * @sizeOf(u64));
 }
 
 const InterruptedFrame = struct {
-    error_code: u32,
-    instruction_pointer: u32,
-    code_selector: u32,
+    error_code: u64,
+    instruction_pointer: u64,
+    code_selector: u64,
     user_mode: bool,
 };
 

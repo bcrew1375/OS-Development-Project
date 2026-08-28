@@ -1,7 +1,9 @@
 pub const PAGE_SIZE = 4096;
 
-pub const ENTRIES_PER_DIRECTORY: usize = 1024;
-pub const ENTRIES_PER_TABLE: usize = 1024;
+pub const KERNEL_VIRTUAL_ADDRESS = 0xFFFFFFFF80000000;
+
+pub const ENTRIES_PER_TABLE: usize = 512;
+pub const ENTRIES_PER_DIRECTORY: usize = ENTRIES_PER_TABLE;
 
 pub const PAGE_TABLE_REGION_SIZE = PAGE_SIZE * ENTRIES_PER_TABLE;
 
@@ -14,7 +16,7 @@ pub const KERNEL_HEAP_SIZE_RATIO = 0.01;
 pub const RESERVED_VIRTUAL_ADDRESS = 0xF8000000;
 pub const RESERVED_SIZE = 128 * 1024 * 1024;
 
-pub const HIGHER_HALF_INDEX = DIRECT_MAP_VIRTUAL_ADDRESS / (PAGE_SIZE * ENTRIES_PER_TABLE);
+pub const PML4_HIGHER_HALF_INDEX = 256;
 
 pub const PageEntry = packed struct {
     present: bool = false,
@@ -26,11 +28,14 @@ pub const PageEntry = packed struct {
     dirty: bool = false,
     page_size: bool = false,
     global: bool = false,
-    available: u3 = 0,
-    address: u20 = 0,
+    available_low: u3 = 0,
+    address: u40 = 0,
+    available_high: u11 = 0,
+    no_execute: bool = false,
 };
 
-pub const PageDirectory = *[ENTRIES_PER_DIRECTORY]PageEntry;
+pub const PageTableRoot = *[ENTRIES_PER_TABLE]PageEntry;
+pub const PageDirectory = PageTableRoot;
 pub const PageTable = *[ENTRIES_PER_TABLE]PageEntry;
 
 pub fn alignForward(

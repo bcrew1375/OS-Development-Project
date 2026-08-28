@@ -185,10 +185,6 @@ pub fn faultHandler(faultInfo: arch.FaultInfo) void {
 }
 
 pub fn resolveFault(faultInfo: arch.FaultInfo) VMMError!void {
-    if (arch.earlyAllocatorActive == true) {
-        return VMMError.FaultBeforeMemoryManagementActive;
-    }
-
     const vma = findVirtualMemoryArea(faultInfo.address) orelse {
         return VMMError.FaultOutsideVirtualMemoryArea;
     };

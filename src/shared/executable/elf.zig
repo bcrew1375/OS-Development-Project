@@ -38,6 +38,23 @@ pub const LoadableImage = struct {
     segment_count: usize,
 };
 
+const ElfHeader = struct {
+    class: u8,
+    entry_point: u64,
+    program_header_offset: u64,
+    program_header_entry_size: u16,
+    program_header_count: u16,
+};
+
+const ProgramHeader = struct {
+    p_type: u32,
+    p_offset: u64,
+    p_vaddr: u64,
+    p_filesz: u64,
+    p_memsz: u64,
+    p_flags: u32,
+};
+
 pub fn parseLoadableImage(image: []const u8, page_size: u64) ElfLoadError!LoadableImage {
     const elf_header = try readElfHeader(image);
     try validateElfHeader(elf_header);
@@ -46,7 +63,7 @@ pub fn parseLoadableImage(image: []const u8, page_size: u64) ElfLoadError!Loadab
     var image_end: u64 = 0;
     var loadable_segment_count: usize = 0;
 
-    for (0..elf_header.e_phnum) |program_header_index| {
+    for (0..elf_header.program_header_count) |program_header_index| {
         const program_header = try readProgramHeader(image, elf_header, program_header_index);
         if (program_header.p_type != std.elf.PT_LOAD) {
             continue;
@@ -66,7 +83,7 @@ pub fn parseLoadableImage(image: []const u8, page_size: u64) ElfLoadError!Loadab
     if (image_start >= image_end) return ElfLoadError.InvalidLoadSegment;
 
     return .{
-        .entry_point = elf_header.e_entry,
+        .entry_point = elf_header.entry_point,
         .virtual_start = image_start,
         .virtual_end = image_end,
         .segment_count = loadable_segment_count,
@@ -78,7 +95,7 @@ pub fn getLoadableSegment(image: []const u8, loadable_segment_index: usize) ElfL
     try validateElfHeader(elf_header);
 
     var current_loadable_index: usize = 0;
-    for (0..elf_header.e_phnum) |program_header_index| {
+    for (0..elf_header.program_header_count) |program_header_index| {
         const program_header = try readProgramHeader(image, elf_header, program_header_index);
         if (program_header.p_type != std.elf.PT_LOAD) {
             continue;
@@ -95,51 +112,114 @@ pub fn getLoadableSegment(image: []const u8, loadable_segment_index: usize) ElfL
     return ElfLoadError.InvalidLoadSegment;
 }
 
-fn validateElfHeader(elf_header: std.elf.Elf32_Ehdr) ElfLoadError!void {
-    if (elf_header.e_ident[std.elf.EI_CLASS] != std.elf.ELFCLASS32) return ElfLoadError.UnsupportedElfClass;
-    if (elf_header.e_ident[std.elf.EI_DATA] != std.elf.ELFDATA2LSB) return ElfLoadError.UnsupportedElfEndian;
-    if (elf_header.e_ident[std.elf.EI_VERSION] != 1) return ElfLoadError.UnsupportedElfVersion;
-    if (elf_header.e_type != std.elf.ET.EXEC) return ElfLoadError.UnsupportedElfType;
-    if (elf_header.e_machine != std.elf.EM.@"386") return ElfLoadError.UnsupportedElfMachine;
-    if (elf_header.e_phentsize != @sizeOf(std.elf.Elf32_Phdr)) return ElfLoadError.InvalidProgramHeaderTable;
+fn validateElfHeader(elf_header: ElfHeader) ElfLoadError!void {
+    if (elf_header.program_header_count == 0) return ElfLoadError.InvalidProgramHeaderTable;
 }
 
-fn readElfHeader(image: []const u8) ElfLoadError!std.elf.Elf32_Ehdr {
+fn readElfHeader(image: []const u8) ElfLoadError!ElfHeader {
+    if (image.len < @sizeOf(std.elf.Elf32_Ehdr)) return ElfLoadError.InvalidElfImage;
+
+    const ident = image[0..std.elf.EI_NIDENT];
+    if (!std.mem.eql(u8, ident[0..4], std.elf.MAGIC)) return ElfLoadError.InvalidElfImage;
+    if (ident[std.elf.EI_DATA] != std.elf.ELFDATA2LSB) return ElfLoadError.UnsupportedElfEndian;
+    if (ident[std.elf.EI_VERSION] != 1) return ElfLoadError.UnsupportedElfVersion;
+
+    return switch (ident[std.elf.EI_CLASS]) {
+        std.elf.ELFCLASS32 => readElf32Header(image),
+        std.elf.ELFCLASS64 => readElf64Header(image),
+        else => ElfLoadError.UnsupportedElfClass,
+    };
+}
+
+fn readElf32Header(image: []const u8) ElfLoadError!ElfHeader {
     if (image.len < @sizeOf(std.elf.Elf32_Ehdr)) return ElfLoadError.InvalidElfImage;
 
     const elf_header = std.mem.bytesToValue(std.elf.Elf32_Ehdr, image[0..@sizeOf(std.elf.Elf32_Ehdr)]);
-    if (!std.mem.eql(u8, elf_header.e_ident[0..4], std.elf.MAGIC)) return ElfLoadError.InvalidElfImage;
-    return elf_header;
+    if (elf_header.e_type != std.elf.ET.EXEC) return ElfLoadError.UnsupportedElfType;
+    if (elf_header.e_machine != std.elf.EM.@"386") return ElfLoadError.UnsupportedElfMachine;
+    if (elf_header.e_phentsize != @sizeOf(std.elf.Elf32_Phdr)) return ElfLoadError.InvalidProgramHeaderTable;
+
+    return .{
+        .class = std.elf.ELFCLASS32,
+        .entry_point = elf_header.e_entry,
+        .program_header_offset = elf_header.e_phoff,
+        .program_header_entry_size = elf_header.e_phentsize,
+        .program_header_count = elf_header.e_phnum,
+    };
 }
 
-fn readProgramHeader(image: []const u8, elf_header: std.elf.Elf32_Ehdr, program_header_index: usize) ElfLoadError!std.elf.Elf32_Phdr {
-    const program_header_offset = @as(usize, elf_header.e_phoff);
-    const program_header_table_size = std.math.mul(usize, @as(usize, elf_header.e_phnum), @sizeOf(std.elf.Elf32_Phdr)) catch return ElfLoadError.InvalidProgramHeaderTable;
+fn readElf64Header(image: []const u8) ElfLoadError!ElfHeader {
+    if (image.len < @sizeOf(std.elf.Elf64_Ehdr)) return ElfLoadError.InvalidElfImage;
+
+    const elf_header = std.mem.bytesToValue(std.elf.Elf64_Ehdr, image[0..@sizeOf(std.elf.Elf64_Ehdr)]);
+    if (elf_header.e_type != std.elf.ET.EXEC) return ElfLoadError.UnsupportedElfType;
+    if (elf_header.e_machine != std.elf.EM.X86_64) return ElfLoadError.UnsupportedElfMachine;
+    if (elf_header.e_phentsize != @sizeOf(std.elf.Elf64_Phdr)) return ElfLoadError.InvalidProgramHeaderTable;
+
+    return .{
+        .class = std.elf.ELFCLASS64,
+        .entry_point = elf_header.e_entry,
+        .program_header_offset = elf_header.e_phoff,
+        .program_header_entry_size = elf_header.e_phentsize,
+        .program_header_count = elf_header.e_phnum,
+    };
+}
+
+fn readProgramHeader(image: []const u8, elf_header: ElfHeader, program_header_index: usize) ElfLoadError!ProgramHeader {
+    if (program_header_index >= elf_header.program_header_count) return ElfLoadError.InvalidProgramHeaderTable;
+
+    const program_header_offset: usize = @intCast(elf_header.program_header_offset);
+    const program_header_entry_size: usize = @intCast(elf_header.program_header_entry_size);
+    const program_header_table_size = std.math.mul(usize, @as(usize, elf_header.program_header_count), program_header_entry_size) catch return ElfLoadError.InvalidProgramHeaderTable;
     const program_header_table_end = std.math.add(usize, program_header_offset, program_header_table_size) catch return ElfLoadError.InvalidProgramHeaderTable;
     if (program_header_table_end > image.len) return ElfLoadError.InvalidProgramHeaderTable;
 
-    if (program_header_index >= elf_header.e_phnum) return ElfLoadError.InvalidProgramHeaderTable;
-
-    const current_program_header_offset = program_header_offset + program_header_index * @sizeOf(std.elf.Elf32_Phdr);
-    return std.mem.bytesToValue(std.elf.Elf32_Phdr, image[current_program_header_offset..][0..@sizeOf(std.elf.Elf32_Phdr)]);
+    const current_program_header_offset = program_header_offset + program_header_index * program_header_entry_size;
+    return switch (elf_header.class) {
+        std.elf.ELFCLASS32 => programHeaderFromElf32(std.mem.bytesToValue(std.elf.Elf32_Phdr, image[current_program_header_offset..][0..@sizeOf(std.elf.Elf32_Phdr)])),
+        std.elf.ELFCLASS64 => programHeaderFromElf64(std.mem.bytesToValue(std.elf.Elf64_Phdr, image[current_program_header_offset..][0..@sizeOf(std.elf.Elf64_Phdr)])),
+        else => ElfLoadError.UnsupportedElfClass,
+    };
 }
 
-fn validateLoadableProgramHeader(image: []const u8, program_header: std.elf.Elf32_Phdr) ElfLoadError!void {
+fn programHeaderFromElf32(program_header: std.elf.Elf32_Phdr) ProgramHeader {
+    return .{
+        .p_type = program_header.p_type,
+        .p_offset = program_header.p_offset,
+        .p_vaddr = program_header.p_vaddr,
+        .p_filesz = program_header.p_filesz,
+        .p_memsz = program_header.p_memsz,
+        .p_flags = program_header.p_flags,
+    };
+}
+
+fn programHeaderFromElf64(program_header: std.elf.Elf64_Phdr) ProgramHeader {
+    return .{
+        .p_type = program_header.p_type,
+        .p_offset = program_header.p_offset,
+        .p_vaddr = program_header.p_vaddr,
+        .p_filesz = program_header.p_filesz,
+        .p_memsz = program_header.p_memsz,
+        .p_flags = program_header.p_flags,
+    };
+}
+
+fn validateLoadableProgramHeader(image: []const u8, program_header: ProgramHeader) ElfLoadError!void {
     if (program_header.p_memsz == 0) return ElfLoadError.EmptyLoadSegment;
     if (program_header.p_filesz > program_header.p_memsz) return ElfLoadError.InvalidLoadSegment;
 
-    const file_offset = @as(usize, program_header.p_offset);
-    const file_size = @as(usize, program_header.p_filesz);
+    const file_offset: usize = @intCast(program_header.p_offset);
+    const file_size: usize = @intCast(program_header.p_filesz);
     const file_end = std.math.add(usize, file_offset, file_size) catch return ElfLoadError.InvalidLoadSegment;
     if (file_end > image.len) return ElfLoadError.InvalidLoadSegment;
 }
 
-fn loadableSegmentFromProgramHeader(program_header: std.elf.Elf32_Phdr) LoadableSegment {
+fn loadableSegmentFromProgramHeader(program_header: ProgramHeader) LoadableSegment {
     return .{
         .virtual_address = program_header.p_vaddr,
         .memory_size = program_header.p_memsz,
-        .file_offset = program_header.p_offset,
-        .file_size = program_header.p_filesz,
+        .file_offset = @intCast(program_header.p_offset),
+        .file_size = @intCast(program_header.p_filesz),
         .permissions = .{
             .readable = (program_header.p_flags & ELF_PROGRAM_HEADER_READABLE) != 0,
             .writeable = (program_header.p_flags & ELF_PROGRAM_HEADER_WRITABLE) != 0,

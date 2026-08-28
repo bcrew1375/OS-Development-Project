@@ -1,19 +1,42 @@
 const TextColor = @import("arch").TextColor;
+const limine_requests = @import("../../boot/limine/requests.zig");
+const serial = @import("../io/serial.zig");
+const vga_font = @import("vga_font.zig");
 
 const std = @import("std");
 
-const TEXT_MODE_WIDTH: u16 = 80;
-const TEXT_MODE_HEIGHT: u16 = 25;
-const TEXT_MODE_BUFFER_SIZE = TEXT_MODE_WIDTH * TEXT_MODE_HEIGHT;
+const DEFAULT_TEXT_MODE_WIDTH: usize = 80;
+const DEFAULT_TEXT_MODE_HEIGHT: usize = 25;
+const MAX_TEXT_MODE_WIDTH: usize = 160;
+const MAX_TEXT_MODE_HEIGHT: usize = 75;
+const TEXT_MODE_BUFFER_SIZE = MAX_TEXT_MODE_WIDTH * MAX_TEXT_MODE_HEIGHT;
 
-const MAX_ROW_INDEX = TEXT_MODE_HEIGHT - 1;
-const MAX_COLUMN_INDEX = TEXT_MODE_WIDTH - 1;
+const GLYPH_WIDTH = vga_font.GLYPH_WIDTH;
+const GLYPH_HEIGHT = vga_font.GLYPH_HEIGHT;
+const DEFAULT_TEXT_MODE_PIXEL_WIDTH = DEFAULT_TEXT_MODE_WIDTH * GLYPH_WIDTH;
+const DEFAULT_TEXT_MODE_PIXEL_HEIGHT = DEFAULT_TEXT_MODE_HEIGHT * GLYPH_HEIGHT;
 
-const buffer_pointer: *volatile [TEXT_MODE_BUFFER_SIZE]u16 = @ptrFromInt(0xFFFF_FFFF_000B_8000);
+const Cell = struct {
+    character: u8,
+    foreground: VGAColor,
+    background: VGAColor,
+};
 
-var row: u8 = 0;
-var column: u8 = 0;
-var active_color: VGAColor = VGAColor.WHITE;
+const FramebufferConsole = struct {
+    framebuffer: *allowzero anyopaque,
+    width: usize,
+    height: usize,
+    pitch: usize,
+    bytes_per_pixel: usize,
+    red_mask_size: u8,
+    red_mask_shift: u8,
+    green_mask_size: u8,
+    green_mask_shift: u8,
+    blue_mask_size: u8,
+    blue_mask_shift: u8,
+    columns: usize,
+    rows: usize,
+};
 
 const VGAColor = enum(u4) {
     BLACK,
@@ -34,12 +57,62 @@ const VGAColor = enum(u4) {
     WHITE,
 };
 
+const RGBColor = struct {
+    red: u8,
+    green: u8,
+    blue: u8,
+};
+
+const VGA_PALETTE = [_]RGBColor{
+    .{ .red = 0x00, .green = 0x00, .blue = 0x00 },
+    .{ .red = 0x00, .green = 0x00, .blue = 0xAA },
+    .{ .red = 0x00, .green = 0xAA, .blue = 0x00 },
+    .{ .red = 0x00, .green = 0xAA, .blue = 0xAA },
+    .{ .red = 0xAA, .green = 0x00, .blue = 0x00 },
+    .{ .red = 0xAA, .green = 0x00, .blue = 0xAA },
+    .{ .red = 0xAA, .green = 0x55, .blue = 0x00 },
+    .{ .red = 0xAA, .green = 0xAA, .blue = 0xAA },
+    .{ .red = 0x55, .green = 0x55, .blue = 0x55 },
+    .{ .red = 0x55, .green = 0x55, .blue = 0xFF },
+    .{ .red = 0x55, .green = 0xFF, .blue = 0x55 },
+    .{ .red = 0x55, .green = 0xFF, .blue = 0xFF },
+    .{ .red = 0xFF, .green = 0x55, .blue = 0x55 },
+    .{ .red = 0xFF, .green = 0x55, .blue = 0xFF },
+    .{ .red = 0xFF, .green = 0xFF, .blue = 0x55 },
+    .{ .red = 0xFF, .green = 0xFF, .blue = 0xFF },
+};
+
+var row: usize = 0;
+var column: usize = 0;
+var active_columns: usize = DEFAULT_TEXT_MODE_WIDTH;
+var active_rows: usize = DEFAULT_TEXT_MODE_HEIGHT;
+var active_color: VGAColor = .WHITE;
+var framebuffer_console: ?FramebufferConsole = null;
+var text_buffer: [TEXT_MODE_BUFFER_SIZE]Cell = undefined;
+
 pub fn initialize() void {
+    serial.initialize();
+
     row = 0;
     column = 0;
-    active_color = VGAColor.WHITE;
-    const clear_char = makeChar(' ', active_color);
-    @memset(buffer_pointer[0..TEXT_MODE_BUFFER_SIZE], clear_char);
+    active_columns = DEFAULT_TEXT_MODE_WIDTH;
+    active_rows = DEFAULT_TEXT_MODE_HEIGHT;
+    active_color = .WHITE;
+    initializeTextBuffer();
+
+    framebuffer_console = discoverFramebuffer();
+    if (framebuffer_console) |console| {
+        active_columns = console.columns;
+        active_rows = console.rows;
+        clearFramebuffer(console, .BLACK);
+        redrawTextBuffer();
+        serial.writer().print(
+            "Initialized fullscreen framebuffer VGA text console: {d}x{d} pixels, {d}x{d} cells\n",
+            .{ console.width, console.height, console.columns, console.rows },
+        ) catch {};
+    } else {
+        serial.writeString("Limine framebuffer unavailable; console output is serial-only\n");
+    }
 }
 
 const Writer = std.io.GenericWriter(void, error{}, struct {
@@ -49,22 +122,204 @@ const Writer = std.io.GenericWriter(void, error{}, struct {
     }
 }.write);
 
-/// Returns a Zig std.io.Writer instance for serial output.
 pub fn writer() Writer {
     return .{ .context = {} };
 }
 
 pub fn print(string: []const u8) void {
-    for (string) |char| {
-        writeChar(char);
+    serial.writeString(string);
+
+    for (string) |character| {
+        writeChar(character);
     }
 }
 
 pub fn setColor(color: TextColor) void {
-    active_color = TextColorToVGAColor(color);
+    active_color = textColorToVGAColor(color);
 }
 
-fn TextColorToVGAColor(text_color: TextColor) VGAColor {
+fn discoverFramebuffer() ?FramebufferConsole {
+    const response = limine_requests.framebufferResponse() orelse return null;
+    if (response.framebuffer_count == 0) {
+        return null;
+    }
+
+    const framebuffer = response.framebuffers[0];
+    if (framebuffer.bits_per_pixel != 32) {
+        return null;
+    }
+
+    const width: usize = @intCast(framebuffer.width);
+    const height: usize = @intCast(framebuffer.height);
+    const pitch: usize = @intCast(framebuffer.pitch);
+    const columns = @min(width / GLYPH_WIDTH, MAX_TEXT_MODE_WIDTH);
+    const rows = @min(height / GLYPH_HEIGHT, MAX_TEXT_MODE_HEIGHT);
+
+    if (columns == 0 or rows == 0) {
+        return null;
+    }
+
+    return .{
+        .framebuffer = framebuffer.address,
+        .width = width,
+        .height = height,
+        .pitch = pitch,
+        .bytes_per_pixel = framebuffer.bits_per_pixel / 8,
+        .red_mask_size = framebuffer.red_mask_size,
+        .red_mask_shift = framebuffer.red_mask_shift,
+        .green_mask_size = framebuffer.green_mask_size,
+        .green_mask_shift = framebuffer.green_mask_shift,
+        .blue_mask_size = framebuffer.blue_mask_size,
+        .blue_mask_shift = framebuffer.blue_mask_shift,
+        .columns = columns,
+        .rows = rows,
+    };
+}
+
+fn initializeTextBuffer() void {
+    for (&text_buffer) |*cell| {
+        cell.* = blankCell(active_color);
+    }
+}
+
+fn blankCell(foreground: VGAColor) Cell {
+    return .{
+        .character = ' ',
+        .foreground = foreground,
+        .background = .BLACK,
+    };
+}
+
+fn writeChar(character: u8) void {
+    switch (character) {
+        '\n' => {
+            nextLine();
+            return;
+        },
+        '\r' => {
+            column = 0;
+            return;
+        },
+        '\t' => {
+            const next_tab_column = (column + 8) & ~@as(usize, 7);
+            while (column < next_tab_column) {
+                writeChar(' ');
+            }
+            return;
+        },
+        else => {},
+    }
+
+    if (column >= active_columns) {
+        nextLine();
+    }
+
+    if (row >= active_rows) {
+        scrollLine();
+    }
+
+    putChar(column, row, character, active_color);
+    column += 1;
+}
+
+fn putChar(x_position: usize, y_position: usize, character: u8, color: VGAColor) void {
+    const cell_index = (y_position * MAX_TEXT_MODE_WIDTH) + x_position;
+    text_buffer[cell_index] = .{
+        .character = character,
+        .foreground = color,
+        .background = .BLACK,
+    };
+    drawCell(x_position, y_position, text_buffer[cell_index]);
+}
+
+fn nextLine() void {
+    row += 1;
+    column = 0;
+
+    if (row >= active_rows) {
+        scrollLine();
+    }
+}
+
+fn scrollLine() void {
+    for (1..active_rows) |source_row| {
+        for (0..active_columns) |cell_column| {
+            text_buffer[((source_row - 1) * MAX_TEXT_MODE_WIDTH) + cell_column] = text_buffer[(source_row * MAX_TEXT_MODE_WIDTH) + cell_column];
+        }
+    }
+
+    for (0..active_columns) |cell_column| {
+        text_buffer[((active_rows - 1) * MAX_TEXT_MODE_WIDTH) + cell_column] = blankCell(active_color);
+    }
+
+    row = active_rows - 1;
+    redrawTextBuffer();
+}
+
+fn redrawTextBuffer() void {
+    for (0..active_rows) |cell_y| {
+        for (0..active_columns) |cell_x| {
+            drawCell(cell_x, cell_y, text_buffer[(cell_y * MAX_TEXT_MODE_WIDTH) + cell_x]);
+        }
+    }
+}
+
+fn drawCell(cell_x: usize, cell_y: usize, cell: Cell) void {
+    const console = framebuffer_console orelse return;
+    const origin_x = cell_x * GLYPH_WIDTH;
+    const origin_y = cell_y * GLYPH_HEIGHT;
+    const foreground = pixelValue(console, VGA_PALETTE[@intFromEnum(cell.foreground)]);
+    const background = pixelValue(console, VGA_PALETTE[@intFromEnum(cell.background)]);
+
+    for (0..GLYPH_HEIGHT) |glyph_y| {
+        const glyph_row = vga_font.glyphRow(cell.character, glyph_y);
+        for (0..GLYPH_WIDTH) |glyph_x| {
+            const mask = @as(u8, 0x80) >> @intCast(glyph_x);
+            const pixel = if ((glyph_row & mask) != 0) foreground else background;
+            putPixel(console, origin_x + glyph_x, origin_y + glyph_y, pixel);
+        }
+    }
+}
+
+fn clearFramebuffer(console: FramebufferConsole, color: VGAColor) void {
+    const pixel = pixelValue(console, VGA_PALETTE[@intFromEnum(color)]);
+    for (0..console.height) |y| {
+        for (0..console.width) |x| {
+            putPixel(console, x, y, pixel);
+        }
+    }
+}
+
+fn putPixel(console: FramebufferConsole, x: usize, y: usize, pixel: u32) void {
+    if (x >= console.width or y >= console.height) {
+        return;
+    }
+
+    const row_address = @intFromPtr(console.framebuffer) + (y * console.pitch);
+    const pixel_address = row_address + (x * console.bytes_per_pixel);
+    const pixel_pointer: *volatile u32 = @ptrFromInt(pixel_address);
+    pixel_pointer.* = pixel;
+}
+
+fn pixelValue(console: FramebufferConsole, color: RGBColor) u32 {
+    return (scaleColorComponent(color.red, console.red_mask_size) << @as(u5, @intCast(console.red_mask_shift))) |
+        (scaleColorComponent(color.green, console.green_mask_size) << @as(u5, @intCast(console.green_mask_shift))) |
+        (scaleColorComponent(color.blue, console.blue_mask_size) << @as(u5, @intCast(console.blue_mask_shift)));
+}
+
+fn scaleColorComponent(component: u8, mask_size: u8) u32 {
+    if (mask_size == 0) {
+        return 0;
+    }
+
+    if (mask_size >= 8) {
+        return @as(u32, component) << @intCast(mask_size - 8);
+    }
+
+    return @as(u32, component) >> @intCast(8 - mask_size);
+}
+
+fn textColorToVGAColor(text_color: TextColor) VGAColor {
     return switch (text_color) {
         TextColor.BLACK => VGAColor.BLACK,
         TextColor.BLUE => VGAColor.BLUE,
@@ -83,53 +338,4 @@ fn TextColorToVGAColor(text_color: TextColor) VGAColor {
         TextColor.YELLOW => VGAColor.YELLOW,
         TextColor.WHITE => VGAColor.WHITE,
     };
-}
-
-fn putChar(x_position: u8, y_position: u8, character: u8, color: VGAColor) void {
-    // Calculate index based on updated positions
-    const safe_x = if (x_position > MAX_COLUMN_INDEX) 0 else x_position;
-    const safe_y = if (x_position > MAX_COLUMN_INDEX) y_position + 1 else y_position;
-
-    buffer_pointer[(@as(u32, safe_y) * TEXT_MODE_WIDTH) + safe_x] = makeChar(character, color);
-
-    column += 1;
-}
-
-fn writeChar(character: u8) void {
-    if (character == '\n') {
-        nextLine();
-        return;
-    }
-
-    if (column > MAX_COLUMN_INDEX) {
-        nextLine();
-    }
-
-    if (row > MAX_ROW_INDEX) {
-        scrollLine();
-    }
-
-    putChar(column, row, character, active_color);
-}
-
-fn makeChar(character: u8, color: VGAColor) u16 {
-    return (@as(u16, @intFromEnum(color)) << 8) | character;
-}
-
-fn nextLine() void {
-    row += 1;
-    column = 0;
-}
-
-fn scrollLine() void {
-    for (TEXT_MODE_WIDTH..TEXT_MODE_BUFFER_SIZE) |i| {
-        buffer_pointer[i - TEXT_MODE_WIDTH] = buffer_pointer[i];
-    }
-
-    const clear_char = makeChar(' ', active_color);
-    for ((TEXT_MODE_BUFFER_SIZE - TEXT_MODE_WIDTH)..TEXT_MODE_BUFFER_SIZE) |i| {
-        buffer_pointer[i] = clear_char;
-    }
-
-    row = MAX_ROW_INDEX;
 }

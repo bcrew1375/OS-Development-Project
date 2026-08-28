@@ -22,7 +22,7 @@ const RESERVED_UPPER_END: usize = 0x00100000;
 pub fn initialize() arch.EarlyAllocError!void {
     try common_early_allocator.initialize();
 
-    try reserveLegacyRegions();
+    // try reserveLegacyRegions();
     try reserveKernelImageRegions();
 }
 

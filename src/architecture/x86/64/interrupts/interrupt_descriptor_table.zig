@@ -11,7 +11,7 @@ const TOTAL_INTERRUPTS: usize = 256;
 const InterruptDescriptorTableStruct = packed struct {
     offset_1: u16 = 0, // Offset bits 0-15
     selector: u16 = 0, // Selector from GDT
-    ist: u3, // Interrupt Stack Table offset
+    ist: u3 = 0, // Interrupt Stack Table offset
     ist_padding: u5 = 0, // IST padding bits
     type_attributes: u8 = 0, // Descriptor type and attributes
     offset_2: u16 = 0, // Offset bits 16-31
@@ -29,42 +29,47 @@ comptime {
     std.debug.assert(@bitSizeOf(InterruptDescriptorTableRegisterStruct) == 80);
 }
 
-const Trampoline = *const fn () callconv(.naked) noreturn;
-
 var interrupt_descriptor_table: [TOTAL_INTERRUPTS]InterruptDescriptorTableStruct align(16) =
     [_]InterruptDescriptorTableStruct{.{}} ** TOTAL_INTERRUPTS;
 
 var interrupt_descriptor_table_register: InterruptDescriptorTableRegisterStruct align(16) =
     InterruptDescriptorTableRegisterStruct{ .base = undefined };
 
-var trampolines: [TOTAL_INTERRUPTS]Trampoline = undefined;
+var trampolines: [TOTAL_INTERRUPTS]*const fn () callconv(.naked) void = undefined;
 
 pub fn initialize() void {
-    // inline for (0..TOTAL_INTERRUPTS) |vector| {
-    //     trampolines[vector] = makeTrampoline(vector);
-    //     set(@truncate(vector), @intFromPtr(trampolines[vector]), 0x8E);
-    // }
+    inline for (0..TOTAL_INTERRUPTS) |vector| {
+        trampolines[vector] = makeTrampoline(vector);
+        set(vector, @intFromPtr(trampolines[vector]), interruptGate(0));
+    }
 
-    // set(vectors.syscall, @intFromPtr(trampolines[vectors.syscall]), 0xEE);
+    set(vectors.syscall, @intFromPtr(trampolines[vectors.syscall]), interruptGate(3));
 
-    // interrupt_descriptor_table_register.limit = @sizeOf(@TypeOf(interrupt_descriptor_table)) - 1;
-    // interrupt_descriptor_table_register.base = @intFromPtr(&interrupt_descriptor_table);
+    interrupt_descriptor_table_register.limit = @sizeOf(@TypeOf(interrupt_descriptor_table)) - 1;
+    interrupt_descriptor_table_register.base = @intFromPtr(&interrupt_descriptor_table);
 
-    // idtLoad();
+    idtLoad();
 
-    // pic.remap(pic.MASTER_VECTOR_OFFSET, pic.SLAVE_VECTOR_OFFSET);
-    // pic.maskAll();
-    // pic.clearMask(pic.KEYBOARD_IRQ);
+    pic.remap(pic.MASTER_VECTOR_OFFSET, pic.SLAVE_VECTOR_OFFSET);
+    pic.maskAll();
+    pic.clearMask(pic.KEYBOARD_IRQ);
 }
 
 pub fn set(interruptVector: usize, address: usize, typeAttribute: usize) void {
     var interrupt_descriptor: *InterruptDescriptorTableStruct = &interrupt_descriptor_table[interruptVector];
-    interrupt_descriptor.offset_low = @truncate(address & 0xffff);
+    interrupt_descriptor.offset_1 = @truncate(address & 0xffff);
     interrupt_descriptor.selector = gdt.CODE_SELECTOR;
-    interrupt_descriptor.unused_byte = 0x00;
-    interrupt_descriptor.type_attribute = @truncate(typeAttribute);
-    interrupt_descriptor.offset_high = @truncate(address >> 16);
+    interrupt_descriptor.ist = 0;
+    interrupt_descriptor.ist_padding = 0;
+    interrupt_descriptor.type_attributes = @truncate(typeAttribute);
+    interrupt_descriptor.offset_2 = @truncate((address >> 16) & 0xffff);
+    interrupt_descriptor.offset_3 = @truncate(address >> 32);
+    interrupt_descriptor.reserved = 0;
     return;
+}
+
+fn interruptGate(dpl: u2) usize {
+    return 0x80 | (@as(usize, dpl) << 5) | 0x0E;
 }
 
 fn hasErrorCode(comptime vector: u32) bool {
@@ -74,52 +79,54 @@ fn hasErrorCode(comptime vector: u32) bool {
     };
 }
 
-// Generate a trampoline that calls the interrupt handler with the interrupt number.
-// fn makeTrampoline(comptime vector: u32) Trampoline {
-//     return struct {
-//         fn trampoline() align(16) callconv(.naked) noreturn {
-//             asm volatile ((if (hasErrorCode(vector)) "" else "push $0\n") ++
-//                     \\pusha
-//                     \\mov %ds, %ax
-//                     \\movzwl %ax, %eax
-//                     \\push %eax
-//                     \\mov %es, %ax
-//                     \\movzwl %ax, %eax
-//                     \\push %eax
-//                     \\mov %fs, %ax
-//                     \\movzwl %ax, %eax
-//                     \\push %eax
-//                     \\mov %gs, %ax
-//                     \\movzwl %ax, %eax
-//                     \\push %eax
-//                     \\mov %[kernelDataSelector], %ax
-//                     \\mov %ax, %ds
-//                     \\mov %ax, %es
-//                     \\mov %ax, %fs
-//                     \\mov %ax, %gs
-//                     \\push %esp
-//                     \\push %[vector]
-//                     \\call %[interruptHandler]
-//                     \\add $8, %esp
-//                     \\pop %eax
-//                     \\mov %ax, %gs
-//                     \\pop %eax
-//                     \\mov %ax, %fs
-//                     \\pop %eax
-//                     \\mov %ax, %es
-//                     \\pop %eax
-//                     \\mov %ax, %ds
-//                     \\popa
-//                     \\add $4, %esp
-//                     \\iret
-//                 :
-//                 : [vector] "i" (vector),
-//                   [interruptHandler] "i" (&interruptHandler),
-//                   [kernelDataSelector] "i" (gdt.KERNEL_DATA_SELECTOR),
-//                 : .{ .eax = true, .memory = true });
-//         }
-//     }.trampoline;
-// }
+// Generate a long-mode trampoline that saves general-purpose registers and
+// calls `interruptHandler(vector, stack_pointer)` using the SysV x86_64 ABI.
+fn makeTrampoline(comptime vector: u32) *const fn () callconv(.naked) void {
+    return struct {
+        fn trampoline() align(16) callconv(.naked) void {
+            asm volatile ((if (hasErrorCode(vector)) "" else "pushq $0\n") ++
+                    \\pushq %%rax
+                    \\pushq %%rcx
+                    \\pushq %%rdx
+                    \\pushq %%rbx
+                    \\pushq %%rbp
+                    \\pushq %%rsi
+                    \\pushq %%rdi
+                    \\pushq %%r8
+                    \\pushq %%r9
+                    \\pushq %%r10
+                    \\pushq %%r11
+                    \\pushq %%r12
+                    \\pushq %%r13
+                    \\pushq %%r14
+                    \\pushq %%r15
+                    \\mov %%rsp, %%rsi
+                    \\mov %[vector], %%dil
+                    \\call %[interruptHandler:P]
+                    \\popq %%r15
+                    \\popq %%r14
+                    \\popq %%r13
+                    \\popq %%r12
+                    \\popq %%r11
+                    \\popq %%r10
+                    \\popq %%r9
+                    \\popq %%r8
+                    \\popq %%rdi
+                    \\popq %%rsi
+                    \\popq %%rbp
+                    \\popq %%rbx
+                    \\popq %%rdx
+                    \\popq %%rcx
+                    \\popq %%rax
+                    \\addq $8, %%rsp
+                    \\iretq
+                :
+                : [vector] "i" (vector),
+                  [interruptHandler] "i" (&interruptHandler),
+                : .{ .memory = true });
+        }
+    }.trampoline;
+}
 
 fn idtLoad() void {
     asm volatile (

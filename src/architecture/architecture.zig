@@ -140,7 +140,7 @@ pub fn validateImpl(comptime T: type) void {
 
         validateInterface(T.cpu, struct {
             unrecoverableHalt: fn () noreturn,
-            enterUserMode: fn (entry_point: usize, stack_top: usize) noreturn,
+            enterUserMode: fn (entry_point: usize, stack_top: usize, argument0: usize) noreturn,
         });
 
         validateInterface(T.mmu, struct {
