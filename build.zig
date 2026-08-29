@@ -6,8 +6,14 @@ const Architecture = enum {
     x86_64,
 };
 
+const Bootloader = enum {
+    limine,
+    multiboot,
+};
+
 const BuildConfig = struct {
     architecture: Architecture,
+    bootloader: Bootloader,
     kernel_target: std.Build.ResolvedTarget,
     root_process_target: std.Build.ResolvedTarget,
     kernel_linker_script: []const u8,
@@ -18,7 +24,8 @@ const BuildConfig = struct {
 pub fn build(b: *std.Build) void {
     const optimize = b.standardOptimizeOption(.{});
     const architecture = b.option(Architecture, "arch", "Target architecture") orelse .x86_64;
-    const config = resolveBuildConfig(b, architecture);
+    const bootloader = b.option(Bootloader, "bootloader", "Bootloader path for x86_32; x86_64 uses Limine") orelse .limine;
+    const config = resolveBuildConfig(b, architecture, bootloader);
 
     const kernel = b.addExecutable(.{
         .name = "kernel.elf",
@@ -56,6 +63,15 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     });
 
+    const vga_font = b.createModule(.{
+        .root_source_file = b.path("src/common/terminal/vga_font.zig"),
+        .target = config.kernel_target,
+        .optimize = optimize,
+    });
+
+    const build_options = b.addOptions();
+    build_options.addOption(bool, "x86_32_multiboot", config.architecture == .x86_32);
+
     const root_process_abi = b.createModule(.{
         .root_source_file = b.path("src/abi/main.zig"),
         .target = config.root_process_target,
@@ -84,6 +100,8 @@ pub fn build(b: *std.Build) void {
     arch.addImport("arch", arch);
     arch.addImport("kernel_common", kernel_common);
     arch.addImport("abi", abi);
+    arch.addImport("vga_font", vga_font);
+    arch.addOptions("build_options", build_options);
 
     kernel_common.addImport("arch", arch);
     kernel_common.addImport("abi", abi);
@@ -120,6 +138,15 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     });
 
+    const vga_font_test = b.createModule(.{
+        .root_source_file = b.path("src/common/terminal/vga_font.zig"),
+        .target = b.graph.host,
+        .optimize = optimize,
+    });
+
+    const build_options_test = b.addOptions();
+    build_options_test.addOption(bool, "x86_32_multiboot", false);
+
     const tests = b.addTest(.{
         .root_module = b.createModule(.{ .root_source_file = b.path("tests/tests.zig"), .target = b.graph.host, .optimize = optimize, .code_model = .normal }),
     });
@@ -127,6 +154,8 @@ pub fn build(b: *std.Build) void {
     arch_test.addImport("arch", arch_test);
     arch_test.addImport("kernel_common", kernel_common_test);
     arch_test.addImport("abi", abi_test);
+    arch_test.addImport("vga_font", vga_font_test);
+    arch_test.addOptions("build_options", build_options_test);
 
     kernel_common_test.addImport("arch", arch_test);
     kernel_common_test.addImport("abi", abi_test);
@@ -157,18 +186,23 @@ pub fn build(b: *std.Build) void {
     b.getInstallStep().dependOn(&install_root_process.step);
 
     const run_step = b.step("run", "Run kernel with qemu");
-    switch (config.architecture) {
-        .x86_32 => run_step.dependOn(&createDirectKernelRunStep(b, kernel, root_process).step),
-        .x86_64 => run_step.dependOn(&createLimineRunStep(b, kernel, root_process).step),
+    switch (config.bootloader) {
+        .multiboot => run_step.dependOn(&createDirectKernelRunStep(b, kernel, root_process).step),
+        .limine => run_step.dependOn(&createLimineRunStep(b, config, kernel, root_process).step),
     }
 }
 
-fn resolveBuildConfig(b: *std.Build, architecture: Architecture) BuildConfig {
+fn resolveBuildConfig(b: *std.Build, architecture: Architecture, requested_bootloader: Bootloader) BuildConfig {
     const Target = std.Target.x86;
+    const bootloader = switch (architecture) {
+        .x86_32 => requested_bootloader,
+        .x86_64 => .limine,
+    };
 
     return switch (architecture) {
         .x86_32 => .{
             .architecture = architecture,
+            .bootloader = bootloader,
             .kernel_target = b.resolveTargetQuery(.{
                 .cpu_arch = .x86,
                 .os_tag = .freestanding,
@@ -181,12 +215,16 @@ fn resolveBuildConfig(b: *std.Build, architecture: Architecture) BuildConfig {
                 .os_tag = .freestanding,
                 .abi = .none,
             }),
-            .kernel_linker_script = "src/architecture/x86/32/linker.ld",
+            .kernel_linker_script = switch (bootloader) {
+                .limine => "src/architecture/x86/32/linker_limine.ld",
+                .multiboot => "src/architecture/x86/32/linker_multiboot.ld",
+            },
             .root_process_linker_script = "src/root_process/src/linker_x86_32.ld",
             .kernel_code_model = .default,
         },
         .x86_64 => .{
             .architecture = architecture,
+            .bootloader = bootloader,
             .kernel_target = b.resolveTargetQuery(.{
                 .cpu_arch = .x86_64,
                 .os_tag = .freestanding,
@@ -227,13 +265,14 @@ fn createDirectKernelRunStep(
 
 fn createLimineRunStep(
     b: *std.Build,
+    config: BuildConfig,
     kernel: *std.Build.Step.Compile,
     root_process: *std.Build.Step.Compile,
 ) *std.Build.Step.Run {
-    const make_iso_cmd = createLimineIsoStep(b, kernel, root_process);
-    const iso = make_iso_cmd.addOutputFileArg("kernel-x86_64.iso");
+    const make_iso_cmd = createLimineIsoStep(b, config, kernel, root_process);
+    const iso = make_iso_cmd.addOutputFileArg(b.fmt("kernel-{s}.iso", .{@tagName(config.architecture)}));
 
-    const qemu_cmd = b.addSystemCommand(&limineQemuArgs);
+    const qemu_cmd = b.addSystemCommand(limineQemuArgs(config.architecture));
     qemu_cmd.addArg("-cdrom");
     qemu_cmd.addFileArg(iso);
     qemu_cmd.step.dependOn(&make_iso_cmd.step);
@@ -243,6 +282,7 @@ fn createLimineRunStep(
 
 fn createLimineIsoStep(
     b: *std.Build,
+    config: BuildConfig,
     kernel: *std.Build.Step.Compile,
     root_process: *std.Build.Step.Compile,
 ) *std.Build.Step.Run {
@@ -302,9 +342,16 @@ fn createLimineIsoStep(
     make_iso_cmd.addArg(b.pathFromRoot(".zig-cache/limine-iso-root"));
     make_iso_cmd.addFileArg(kernel.getEmittedBin());
     make_iso_cmd.addFileArg(root_process.getEmittedBin());
-    make_iso_cmd.addFileArg(b.path("src/architecture/x86/64/boot/limine/limine.conf"));
+    make_iso_cmd.addFileArg(b.path(limineConfigPath(config.architecture)));
 
     return make_iso_cmd;
+}
+
+fn limineConfigPath(architecture: Architecture) []const u8 {
+    return switch (architecture) {
+        .x86_32 => "src/architecture/x86/32/boot/limine/limine.conf",
+        .x86_64 => "src/architecture/x86/64/boot/limine/limine.conf",
+    };
 }
 
 const directQemuArgs = [_][]const u8{
@@ -313,7 +360,6 @@ const directQemuArgs = [_][]const u8{
     "-vnc", "127.0.0.1:0",
     "-chardev", "file,id=serial0,path=serial.log",
     "-serial", "chardev:serial0",
-    "-S",
     "-s",
     "-m", "4G",
     "-daemonize",
@@ -326,7 +372,34 @@ const directQemuArgs = [_][]const u8{
     // zig fmt: on
 };
 
-const limineQemuArgs = [_][]const u8{
+fn limineQemuArgs(architecture: Architecture) []const []const u8 {
+    return switch (architecture) {
+        .x86_32 => &limineQemuI386Args,
+        .x86_64 => &limineQemuX8664Args,
+    };
+}
+
+const limineQemuI386Args = [_][]const u8{
+    // zig fmt: off
+    "qemu-system-i386",
+    "-vga", "std",
+    "-boot", "d",
+    "-vnc", "127.0.0.1:0",
+    "-chardev", "file,id=serial0,path=serial.log",
+    "-serial", "chardev:serial0",
+    "-s",
+    "-m", "4G",
+    "-daemonize",
+    "-pidfile", ".qemu.pid",
+    "-M", "pc,accel=tcg,smm=off",
+    "-D", "qemu.log",
+    "-d", "int,cpu_reset,guest_errors",
+    "-no-reboot",
+    "-no-shutdown",
+    // zig fmt: on
+};
+
+const limineQemuX8664Args = [_][]const u8{
     // zig fmt: off
     "qemu-system-x86_64",
     "-vga", "std",
@@ -334,7 +407,6 @@ const limineQemuArgs = [_][]const u8{
     "-vnc", "127.0.0.1:0",
     "-chardev", "file,id=serial0,path=serial.log",
     "-serial", "chardev:serial0",
-    "-S",
     "-s",
     "-m", "4G",
     "-daemonize",

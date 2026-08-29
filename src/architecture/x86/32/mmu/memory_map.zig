@@ -1,3 +1,6 @@
+const build_options = @import("build_options");
+const boot_text_section = if (build_options.x86_32_multiboot) ".multiboot.text" else ".text";
+const boot_data_section = if (build_options.x86_32_multiboot) ".multiboot.data" else ".data";
 const multiboot = @import("../boot/multiboot/main.zig");
 
 const arch = @import("arch");
@@ -25,10 +28,10 @@ const MultibootMemoryMapRegionTypes = enum(u32) {
     _,
 };
 
-var memoryMap: arch.MemoryMap linksection(".multiboot.data") = arch.MemoryMap{};
-var maxAvailableAddress: u64 linksection(".multiboot.data") = 0;
+var memoryMap: arch.MemoryMap linksection(boot_data_section) = arch.MemoryMap{};
+var maxAvailableAddress: u64 linksection(boot_data_section) = 0;
 
-pub fn readMultibootMemoryMap() linksection(".multiboot.text") void {
+pub fn readMultibootMemoryMap() linksection(boot_text_section) void {
     var offset: usize = 0;
 
     for (0..arch.MAX_MEMORY_MAP_ENTRIES) |entry| {
@@ -60,13 +63,13 @@ pub fn readMultibootMemoryMap() linksection(".multiboot.text") void {
 /// place now owns "has the map been read yet" - if that condition
 /// ever needs to change (e.g. to a real `bool` flag instead of
 /// `length == 0`), it changes in exactly one place instead of two.
-fn ensureMemoryMapLoaded() linksection(".multiboot.text") void {
+fn ensureMemoryMapLoaded() linksection(boot_text_section) void {
     if (memoryMap.length == 0) {
         readMultibootMemoryMap();
     }
 }
 
-pub fn getMemoryMap() linksection(".multiboot.text") *arch.MemoryMap {
+pub fn getMemoryMap() linksection(boot_text_section) *arch.MemoryMap {
     ensureMemoryMapLoaded();
 
     if (memoryMap.length == 0) {
@@ -76,7 +79,7 @@ pub fn getMemoryMap() linksection(".multiboot.text") *arch.MemoryMap {
     return &memoryMap;
 }
 
-pub fn getMaxAvailableAddress() linksection(".multiboot.text") u64 {
+pub fn getMaxAvailableAddress() linksection(boot_text_section) u64 {
     ensureMemoryMapLoaded();
 
     if (maxAvailableAddress == 0) {

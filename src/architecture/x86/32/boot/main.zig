@@ -1,4 +1,5 @@
 const arch = @import("arch");
+const build_options = @import("build_options");
 
 const gdt = @import("../interrupts/global_descriptor_table.zig");
 const idt = @import("../interrupts/interrupt_descriptor_table.zig");
@@ -16,6 +17,8 @@ pub const getBootModuleCount = multiboot_modules.getBootModuleCount;
 
 const std = @import("std");
 
+const boot_text_section = ".multiboot.text";
+
 extern const _startup_stack_start: usize;
 extern const _startup_stack_end: usize;
 
@@ -23,7 +26,7 @@ var kernelStack: [16 * 1024]u8 align(16) linksection(".bss") = undefined;
 
 extern fn kernelMain() void;
 
-pub fn kernelSetup() linksection(".multiboot.text") noreturn {
+pub fn kernelSetup() linksection(boot_text_section) noreturn {
     arch.early_allocator.initialize() catch |err| {
         @panic(@errorName(err));
     };

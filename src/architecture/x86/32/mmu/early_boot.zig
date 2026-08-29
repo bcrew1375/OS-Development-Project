@@ -44,6 +44,9 @@
 //!        constants directly - as written they're indirection with
 //!        no behavior attached.
 
+const build_options = @import("build_options");
+const boot_text_section = if (build_options.x86_32_multiboot) ".multiboot.text" else ".text";
+const boot_data_section = if (build_options.x86_32_multiboot) ".multiboot.data" else ".data";
 const arch = @import("arch");
 const multiboot = @import("../boot/multiboot/main.zig");
 
@@ -79,21 +82,24 @@ extern const _kernel_end: usize;
 // a validation pass with its own fully-contained checks - nothing
 // here calls back "up" into a sibling that also branches.
 
-pub fn initializePaging() linksection(".multiboot.text") EarlyPagingError!void {
+pub fn initializePaging() linksection(boot_text_section) EarlyPagingError!void {
     try validateKernelFitsDirectMap(@intFromPtr(&_kernel_end));
-    const needed_page_tables = try calculateDirectMapPageTableCount();
+    const direct_map_page_table_count = try calculateDirectMapPageTableCount();
+    const reserved_page_table_count = common.RESERVED_SIZE / common.PAGE_TABLE_REGION_SIZE;
+    const needed_page_tables = try common.checkedAdd(direct_map_page_table_count, reserved_page_table_count);
 
     const kernel_page_directory_entries = try allocatePageDirectory();
     const direct_map_entries = try allocatePageTables(needed_page_tables);
     const reserved_map = arch.early_allocator.getReservedMap();
 
-    initializeBootstrapMappings(kernel_page_directory_entries, direct_map_entries, reserved_map);
+    initializeBootstrapMappings(kernel_page_directory_entries, direct_map_entries[0..direct_map_page_table_count], reserved_map);
+    initializeReservedMappings(kernel_page_directory_entries, direct_map_entries[direct_map_page_table_count..], reserved_map);
     activatePaging(kernel_page_directory_entries);
 }
 
 fn validateKernelFitsDirectMap(
     kernel_end_address: usize,
-) linksection(".multiboot.text") error{ InvalidBootstrapMapping, BootstrapMappingOverflow, KernelImageTooLarge }!void {
+) linksection(boot_text_section) error{ InvalidBootstrapMapping, BootstrapMappingOverflow, KernelImageTooLarge }!void {
     if (kernel_end_address == 0) {
         return error.InvalidBootstrapMapping;
     }
@@ -103,7 +109,7 @@ fn validateKernelFitsDirectMap(
     }
 }
 
-fn calculateDirectMapPageTableCount() linksection(".multiboot.text") error{ InvalidBootstrapMapping, BootstrapMappingOverflow, KernelImageTooLarge }!usize {
+fn calculateDirectMapPageTableCount() linksection(boot_text_section) error{ InvalidBootstrapMapping, BootstrapMappingOverflow, KernelImageTooLarge }!usize {
     const aligned_direct_map_size = try common.alignForward(common.DIRECT_MAP_SIZE, common.PAGE_TABLE_REGION_SIZE);
     const page_table_count = aligned_direct_map_size / common.PAGE_TABLE_REGION_SIZE;
 
@@ -122,7 +128,7 @@ fn calculateDirectMapPageTableCount() linksection(".multiboot.text") error{ Inva
     return page_table_count;
 }
 
-fn allocatePageDirectory() linksection(".multiboot.text") (arch.EarlyAllocError || error{PageTableAllocationOverflow})!common.PageDirectory {
+fn allocatePageDirectory() linksection(boot_text_section) (arch.EarlyAllocError || error{PageTableAllocationOverflow})!common.PageDirectory {
     const allocation_size = try common.checkedMultiply(@sizeOf(common.PageEntry), common.ENTRIES_PER_DIRECTORY);
     const page_directory: common.PageDirectory = @ptrCast(@alignCast(try arch.early_allocator.allocate(
         allocation_size,
@@ -139,7 +145,7 @@ fn allocatePageDirectory() linksection(".multiboot.text") (arch.EarlyAllocError 
 
 fn allocatePageTables(
     page_table_count: usize,
-) linksection(".multiboot.text") (arch.EarlyAllocError || error{PageTableAllocationOverflow})![][common.ENTRIES_PER_TABLE]common.PageEntry {
+) linksection(boot_text_section) (arch.EarlyAllocError || error{PageTableAllocationOverflow})![][common.ENTRIES_PER_TABLE]common.PageEntry {
     const page_table_size = try common.checkedMultiply(@sizeOf(common.PageEntry), common.ENTRIES_PER_TABLE);
     const allocation_size = try common.checkedMultiply(page_table_count, page_table_size);
     const page_tables_ptr = try arch.early_allocator.allocate(
@@ -165,7 +171,7 @@ fn initializeBootstrapMappings(
     page_directory: common.PageDirectory,
     page_tables: [][common.ENTRIES_PER_TABLE]common.PageEntry,
     reserved_map: *const arch.ReservedMap,
-) linksection(".multiboot.text") void {
+) linksection(boot_text_section) void {
     for (page_tables, 0..) |*page_table, directory_index| {
         const directory_entry = makePageDirectoryEntry(page_table);
 
@@ -176,11 +182,56 @@ fn initializeBootstrapMappings(
     }
 }
 
+fn initializeReservedMappings(
+    page_directory: common.PageDirectory,
+    page_tables: [][common.ENTRIES_PER_TABLE]common.PageEntry,
+    reserved_map: *const arch.ReservedMap,
+) linksection(boot_text_section) void {
+    const reserved_directory_index = common.RESERVED_VIRTUAL_ADDRESS / common.PAGE_TABLE_REGION_SIZE;
+
+    for (page_tables, 0..) |*page_table, table_offset| {
+        page_directory[reserved_directory_index + table_offset] = makePageDirectoryEntry(page_table);
+
+        for (page_table) |*entry| {
+            entry.* = .{};
+        }
+    }
+
+    mapFramebufferIntoReservedWindow(page_directory, reserved_map);
+}
+
+fn mapFramebufferIntoReservedWindow(page_directory: common.PageDirectory, reserved_map: *const arch.ReservedMap) linksection(boot_text_section) void {
+    const framebuffer_physical_start = multiboot.framebufferPhysicalAddress() orelse return;
+    const framebuffer_size = multiboot.framebufferByteSize() orelse return;
+    const framebuffer_physical_end = framebuffer_physical_start +| framebuffer_size;
+
+    const page_mask = ~@as(usize, common.PAGE_SIZE - 1);
+    const aligned_physical_start = framebuffer_physical_start & page_mask;
+    const aligned_physical_end = (framebuffer_physical_end +| common.PAGE_SIZE - 1) & page_mask;
+    const mapped_size = aligned_physical_end -| aligned_physical_start;
+    if (mapped_size > common.RESERVED_SIZE) {
+        return;
+    }
+
+    var physical_address = aligned_physical_start;
+    var virtual_address: usize = common.RESERVED_VIRTUAL_ADDRESS;
+    while (physical_address < aligned_physical_end) : ({
+        physical_address += common.PAGE_SIZE;
+        virtual_address += common.PAGE_SIZE;
+    }) {
+        const page_directory_index = virtual_address / common.PAGE_TABLE_REGION_SIZE;
+        const page_table_index = (virtual_address / common.PAGE_SIZE) % common.ENTRIES_PER_TABLE;
+        const page_table = getBootstrapPageTable(page_directory, page_directory_index);
+
+        page_table[page_table_index] = makePageEntry(physical_address, flagsForPhysicalPage(physical_address, reserved_map));
+    }
+}
+
 fn initializePageTable(
     page_table: *[common.ENTRIES_PER_TABLE]common.PageEntry,
     directory_index: usize,
     reserved_map: *const arch.ReservedMap,
-) linksection(".multiboot.text") void {
+) linksection(boot_text_section) void {
     for (page_table, 0..) |*entry, table_index| {
         const physical_address = (directory_index * common.PAGE_TABLE_REGION_SIZE) + (table_index * common.PAGE_SIZE);
 
@@ -188,7 +239,7 @@ fn initializePageTable(
     }
 }
 
-fn flagsForPhysicalPage(physical_address: usize, reserved_map: *const arch.ReservedMap) linksection(".multiboot.text") PageEntryFlags {
+fn flagsForPhysicalPage(physical_address: usize, reserved_map: *const arch.ReservedMap) linksection(boot_text_section) PageEntryFlags {
     const physical_page_end = physical_address + common.PAGE_SIZE;
     var found_reservation = false;
     var writeable = false;
@@ -221,7 +272,7 @@ fn flagsForPhysicalPage(physical_address: usize, reserved_map: *const arch.Reser
     };
 }
 
-fn flagsForReservationType(region_type: arch.ReservedMapRegionType) linksection(".multiboot.text") PageEntryFlags {
+fn flagsForReservationType(region_type: arch.ReservedMapRegionType) linksection(boot_text_section) PageEntryFlags {
     var writeable = false;
     var cache_disabled = false;
 
@@ -246,7 +297,7 @@ fn flagsForReservationType(region_type: arch.ReservedMapRegionType) linksection(
     };
 }
 
-fn makePageDirectoryEntry(page_table: *[common.ENTRIES_PER_TABLE]common.PageEntry) linksection(".multiboot.text") common.PageEntry {
+fn makePageDirectoryEntry(page_table: *[common.ENTRIES_PER_TABLE]common.PageEntry) linksection(boot_text_section) common.PageEntry {
     return .{
         .address = @truncate(getBootstrapPhysicalAddress(@intFromPtr(page_table)) >> 12),
         .present = true,
@@ -255,7 +306,7 @@ fn makePageDirectoryEntry(page_table: *[common.ENTRIES_PER_TABLE]common.PageEntr
     };
 }
 
-fn makePageEntry(physical_address: usize, flags: PageEntryFlags) linksection(".multiboot.text") common.PageEntry {
+fn makePageEntry(physical_address: usize, flags: PageEntryFlags) linksection(boot_text_section) common.PageEntry {
     return .{
         .address = @truncate(physical_address >> 12),
         .present = true,
@@ -266,7 +317,12 @@ fn makePageEntry(physical_address: usize, flags: PageEntryFlags) linksection(".m
     };
 }
 
-fn getBootstrapPhysicalAddress(address: usize) linksection(".multiboot.text") usize {
+fn getBootstrapPageTable(page_directory: common.PageDirectory, directory_index: usize) linksection(boot_text_section) common.PageTable {
+    const physical_address = @as(usize, page_directory[directory_index].address) << 12;
+    return @ptrFromInt(physical_address);
+}
+
+fn getBootstrapPhysicalAddress(address: usize) linksection(boot_text_section) usize {
     if (address >= common.DIRECT_MAP_VIRTUAL_ADDRESS) {
         return address - common.DIRECT_MAP_VIRTUAL_ADDRESS;
     }
@@ -274,7 +330,7 @@ fn getBootstrapPhysicalAddress(address: usize) linksection(".multiboot.text") us
     return address;
 }
 
-fn activatePaging(page_directory: common.PageDirectory) linksection(".multiboot.text") void {
+fn activatePaging(page_directory: common.PageDirectory) linksection(boot_text_section) void {
     const page_directory_physical_address = getBootstrapPhysicalAddress(@intFromPtr(page_directory));
 
     asm volatile (

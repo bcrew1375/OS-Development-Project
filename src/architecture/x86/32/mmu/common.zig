@@ -1,3 +1,6 @@
+const build_options = @import("build_options");
+const boot_text_section = if (build_options.x86_32_multiboot) ".multiboot.text" else ".text";
+const boot_data_section = if (build_options.x86_32_multiboot) ".multiboot.data" else ".data";
 pub const PAGE_SIZE = 4096;
 
 pub const ENTRIES_PER_DIRECTORY: usize = 1024;
@@ -36,7 +39,7 @@ pub const PageTable = *[ENTRIES_PER_TABLE]PageEntry;
 pub fn alignForward(
     value: usize,
     alignment: usize,
-) linksection(".multiboot.text") error{ InvalidBootstrapMapping, BootstrapMappingOverflow }!usize {
+) linksection(boot_text_section) error{ InvalidBootstrapMapping, BootstrapMappingOverflow }!usize {
     if (alignment == 0 or (alignment & (alignment - 1)) != 0) {
         return error.InvalidBootstrapMapping;
     }
@@ -44,7 +47,7 @@ pub fn alignForward(
     return (try checkedAdd(value, alignment - 1)) & ~(alignment - 1);
 }
 
-pub fn checkedAdd(left: usize, right: usize) linksection(".multiboot.text") error{BootstrapMappingOverflow}!usize {
+pub fn checkedAdd(left: usize, right: usize) linksection(boot_text_section) error{BootstrapMappingOverflow}!usize {
     const result = left +% right;
     if (result < left) {
         return error.BootstrapMappingOverflow;
@@ -53,7 +56,7 @@ pub fn checkedAdd(left: usize, right: usize) linksection(".multiboot.text") erro
     return result;
 }
 
-pub fn checkedMultiply(left: usize, right: usize) linksection(".multiboot.text") error{PageTableAllocationOverflow}!usize {
+pub fn checkedMultiply(left: usize, right: usize) linksection(boot_text_section) error{PageTableAllocationOverflow}!usize {
     const maximum_usize = ~@as(usize, 0);
     if (left != 0 and right > maximum_usize / left) {
         return error.PageTableAllocationOverflow;
