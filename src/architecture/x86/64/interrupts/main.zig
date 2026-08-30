@@ -2,12 +2,12 @@ const arch = @import("arch");
 const kernel_common = @import("kernel_common");
 const abi = @import("abi");
 
-const diagnostics = @import("diagnostics.zig");
-const vectors = @import("vectors.zig");
-const keyboard = @import("../platform/io/keyboard.zig");
+const diagnostics = @import("../../common/interrupts/diagnostics.zig");
+const vectors = @import("../../common/interrupts/vectors.zig");
+const keyboard = @import("../../common/platform/io/keyboard.zig");
 
 pub const idt = @import("interrupt_descriptor_table.zig");
-pub const pic = @import("pic.zig");
+pub const pic = @import("../../common/interrupts/pic.zig");
 
 pub fn enableInterrupts() void {
     asm volatile (
@@ -203,10 +203,7 @@ fn readPageFaultInfo(trap_frame: *const TrapFrame) arch.FaultInfo {
         .present = (error_code & 0x1) != 0,
         .write = (error_code & 0x2) != 0,
         .user = (error_code & 0x4) != 0,
-        // .reserved       = (error_code & 0x8)  != 0,
         .instruction_fetch = (error_code & 0x10) != 0,
-        // .protection_key = (error_code & 0x20) != 0,
-        // .shadow_stack   = (error_code & 0x40) != 0,
     };
 }
 

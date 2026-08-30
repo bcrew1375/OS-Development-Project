@@ -15,12 +15,7 @@ comptime {
 pub const getBootModule = multiboot_modules.getBootModule;
 pub const getBootModuleCount = multiboot_modules.getBootModuleCount;
 
-const std = @import("std");
-
 const boot_text_section = ".multiboot.text";
-
-extern const _startup_stack_start: usize;
-extern const _startup_stack_end: usize;
 
 var kernelStack: [16 * 1024]u8 align(16) linksection(".bss") = undefined;
 

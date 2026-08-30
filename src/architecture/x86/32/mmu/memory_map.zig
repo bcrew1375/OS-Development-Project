@@ -12,13 +12,6 @@ const MultibootMemoryMapEntry = extern struct {
     region_type: MultibootMemoryMapRegionTypes,
 };
 
-// Field names deliberately mirror the multiboot specification's own
-// SCREAMING_CASE constants rather than Zig's usual PascalCase enum
-// convention. This is the same tradeoff the kernel makes with types
-// like `__u32` at a userspace-facing ABI boundary: matching the
-// external spec's vocabulary here is more valuable than internal
-// naming consistency, since anyone cross-referencing this against the
-// multiboot spec document benefits from the names matching exactly.
 const MultibootMemoryMapRegionTypes = enum(u32) {
     AVAILABLE = 1,
     RESERVED = 2,
@@ -51,18 +44,10 @@ pub fn readMultibootMemoryMap() linksection(boot_text_section) void {
         }
 
         memoryMap.length += 1;
-        // Per the multiboot spec, `map_entry.size` is the size of the
-        // entry *excluding* the `size` field itself, so the field's own
-        // width (a u32) has to be added to get to the next entry.
         offset += map_entry.size + @sizeOf(u32);
     }
 }
 
-/// Centralizes the lazy-load check that both `getMemoryMap` and
-/// `getMaxAvailableAddress` previously duplicated independently. One
-/// place now owns "has the map been read yet" - if that condition
-/// ever needs to change (e.g. to a real `bool` flag instead of
-/// `length == 0`), it changes in exactly one place instead of two.
 fn ensureMemoryMapLoaded() linksection(boot_text_section) void {
     if (memoryMap.length == 0) {
         readMultibootMemoryMap();

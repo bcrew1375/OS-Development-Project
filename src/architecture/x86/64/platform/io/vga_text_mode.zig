@@ -1,4 +1,4 @@
-const port_io = @import("port_io.zig");
+const port_io = @import("../../../common/platform/io/port_io.zig");
 
 const MiscellaneousOutputWritePort: u16 = 0x3C2;
 const SequencerIndexPort: u16 = 0x3C4;

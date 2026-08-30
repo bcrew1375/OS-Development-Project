@@ -1,6 +1,6 @@
 const TextColor = @import("arch").TextColor;
-const limine_requests = @import("../../boot/limine/requests.zig");
-const serial = @import("../io/serial.zig");
+const limine_requests = @import("../../../common/boot/limine/requests.zig");
+const serial = @import("../../../common/platform/io/serial.zig");
 const vga_font = @import("vga_font");
 
 const std = @import("std");

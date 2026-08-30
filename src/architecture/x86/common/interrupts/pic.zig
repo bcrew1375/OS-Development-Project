@@ -23,11 +23,7 @@ const SLAVE_CASCADE_IDENTITY: u8 = 0x02;
 
 const TOTAL_IRQS: u8 = 16;
 
-/// Remaps the legacy 8259 PIC pair away from CPU exception vectors.
-///
-/// The function preserves the existing interrupt masks. Callers should set the
-/// desired policy explicitly afterwards with `maskAll`, `setMask`, or
-/// `clearMask` so initialization code documents which IRQs are allowed.
+/// Remaps the legacy 8259 PIC pair while preserving interrupt masks.
 pub fn remap(master_vector_offset: u8, slave_vector_offset: u8) void {
     const master_mask = port_io.in8(MASTER_DATA_PORT);
     const slave_mask = port_io.in8(SLAVE_DATA_PORT);

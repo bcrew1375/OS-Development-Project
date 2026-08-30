@@ -1,6 +1,6 @@
 const gdt = @import("global_descriptor_table.zig");
-const pic = @import("pic.zig");
-const vectors = @import("vectors.zig");
+const pic = @import("../../common/interrupts/pic.zig");
+const vectors = @import("../../common/interrupts/vectors.zig");
 
 const std = @import("std");
 

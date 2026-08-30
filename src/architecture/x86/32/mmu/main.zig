@@ -12,8 +12,6 @@ pub const getMaxAvailableAddress = @import("memory_map.zig").getMaxAvailableAddr
 
 const std = @import("std");
 
-/// Reads the current page directory base from CR3 and returns it as a
-/// higher-half virtual address so it can be indexed directly.
 inline fn getCurrentPageDirectory() common.PageDirectory {
     return getPageDirectoryFromAddressSpaceRoot(getCurrentAddressSpaceRoot());
 }
@@ -165,7 +163,6 @@ pub fn removeIdentityMapping() void {
 }
 
 inline fn flushTLB(virtualAddress: usize) void {
-    // Invalidate the TLB entry for this virtual address
     asm volatile ("invlpg (%[address])"
         :
         : [address] "r" (virtualAddress),

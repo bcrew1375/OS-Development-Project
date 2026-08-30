@@ -1,6 +1,6 @@
 const arch = @import("arch");
-const limine_protocol = @import("../boot/limine/protocol.zig");
-const limine_requests = @import("../boot/limine/requests.zig");
+const limine_protocol = @import("../../common/boot/limine/protocol.zig");
+const limine_requests = @import("../../common/boot/limine/requests.zig");
 
 var memoryMap: arch.MemoryMap = arch.MemoryMap{};
 var maxAvailableAddress: u64 = 0;

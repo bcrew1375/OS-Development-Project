@@ -1,7 +1,7 @@
 const arch = @import("arch");
 
 const common = @import("common.zig");
-const limine_requests = @import("../boot/limine/requests.zig");
+const limine_requests = @import("../../common/boot/limine/requests.zig");
 
 pub fn createAddressSpaceRoot() arch.MmuError!arch.AddressSpaceRoot {
     const page_table_root_physical_address = allocatePageTableRoot() catch {

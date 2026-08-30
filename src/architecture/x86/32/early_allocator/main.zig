@@ -4,12 +4,9 @@ const boot_data_section = if (build_options.x86_32_multiboot) ".multiboot.data" 
 const arch = @import("arch");
 const multiboot = @import("../boot/multiboot/main.zig");
 const common_early_allocator = @import("../../../early_allocator.zig");
-const mmu_common = @import("../mmu/common.zig");
 
 var reservedMap: arch.ReservedMap linksection(boot_data_section) = arch.ReservedMap{};
 
-/// Resolves a linker-defined symbol's address by name, without needing a
-/// dedicated `extern const` declaration for every symbol in the file.
 fn linkerAddr(comptime name: [:0]const u8) linksection(boot_text_section) usize {
     return @intFromPtr(@extern(*const anyopaque, .{ .name = name }));
 }

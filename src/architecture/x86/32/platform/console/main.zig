@@ -1,6 +1,7 @@
 const TextColor = @import("arch").TextColor;
 const multiboot = @import("../../boot/multiboot/main.zig");
 const mmu_common = @import("../../mmu/common.zig");
+const serial = @import("../../../common/platform/io/serial.zig");
 const vga_font = @import("vga_font");
 
 const std = @import("std");
@@ -98,6 +99,8 @@ var framebuffer_console: ?FramebufferConsole = null;
 var text_buffer: [TEXT_MODE_BUFFER_SIZE]Cell = undefined;
 
 pub fn initialize() void {
+    serial.initialize();
+
     row = 0;
     column = 0;
     active_columns = DEFAULT_TEXT_MODE_WIDTH;
@@ -128,6 +131,8 @@ pub fn writer() Writer {
 }
 
 pub fn print(string: []const u8) void {
+    serial.writeString(string);
+
     for (string) |character| {
         writeChar(character);
     }

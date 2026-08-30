@@ -1,47 +1,16 @@
 const arch = @import("arch");
 const common_early_allocator = @import("../../../early_allocator.zig");
-const mmu_common = @import("../mmu/common.zig");
 
 var reservedMap: arch.ReservedMap = arch.ReservedMap{};
 
-/// Resolves a linker-defined symbol's address by name, without needing a
-/// dedicated `extern const` declaration for every symbol in the file.
 fn linkerAddr(comptime name: [:0]const u8) usize {
     return @intFromPtr(@extern(*const anyopaque, .{ .name = name }));
 }
 
-const RESERVED_LOWER_START: usize = 0x00000000;
-const RESERVED_LOWER_END: usize = 0x000B8000;
-
-const VGA_BUFFER_START = 0x000B8000;
-const VGA_BUFFER_END = VGA_BUFFER_START + 0x8000;
-
-const RESERVED_UPPER_START: usize = 0x000C0000;
-const RESERVED_UPPER_END: usize = 0x00100000;
-
 pub fn initialize() arch.EarlyAllocError!void {
     try common_early_allocator.initialize();
 
-    // try reserveLegacyRegions();
     try reserveKernelImageRegions();
-}
-
-fn reserveLegacyRegions() arch.EarlyAllocError!void {
-    try arch.early_allocator.reserve(
-        RESERVED_LOWER_START,
-        RESERVED_LOWER_END - RESERVED_LOWER_START,
-        arch.ReservedMapRegionType.PERSISTENT,
-    );
-    try arch.early_allocator.reserve(
-        VGA_BUFFER_START,
-        VGA_BUFFER_END - VGA_BUFFER_START,
-        arch.ReservedMapRegionType.DEVICE_MEMORY,
-    );
-    try arch.early_allocator.reserve(
-        RESERVED_UPPER_START,
-        RESERVED_UPPER_END - RESERVED_UPPER_START,
-        arch.ReservedMapRegionType.PERSISTENT,
-    );
 }
 
 fn reserveKernelImageRegions() arch.EarlyAllocError!void {

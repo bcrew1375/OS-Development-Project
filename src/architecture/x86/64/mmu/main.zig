@@ -1,11 +1,7 @@
 const arch = @import("arch");
-const kernel_common = @import("kernel_common");
-
 const address_space = @import("address_space.zig");
 const common = @import("common.zig");
-const limine_requests = @import("../boot/limine/requests.zig");
-
-const std = @import("std");
+const limine_requests = @import("../../common/boot/limine/requests.zig");
 
 pub const createAddressSpaceRoot = address_space.createAddressSpaceRoot;
 pub const switchAddressSpaceRoot = address_space.switchAddressSpaceRoot;
@@ -141,12 +137,7 @@ pub fn getKernelHeapVirtualAddress() u64 {
 }
 
 pub fn getKernelHeapSize() u64 {
-    // const available_ram = kernel_common.pmm.getTotalAvailableRAM();
-    // const heap_size_float = @as(f64, @floatFromInt(available_ram)) * common.KERNEL_HEAP_SIZE_RATIO;
-    // const heap_size_int = @as(u64, @intFromFloat(heap_size_float));
-    // const aligned_heap_size = std.mem.alignForward(u64, heap_size_int, common.PAGE_SIZE) & std.mem.alignBackward(u64, heap_size_int, common.PAGE_SIZE);
-    // return aligned_heap_size;
-    return 0;
+    return common.KERNEL_HEAP_SIZE;
 }
 
 pub fn getPageSize() usize {
