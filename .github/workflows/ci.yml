@@ -38,10 +38,16 @@ jobs:
         run: zig version
 
       - name: Check formatting
-        run: zig fmt --check build.zig docs/root.zig src tests
+        run: zig fmt --check build.zig build docs/root.zig src tests
 
       - name: Run unit tests
         run: zig build tests
 
-      - name: Build kernel and root process
+      - name: Build root task artifact
+        working-directory: os-root-task
         run: zig build -Darch=${{ matrix.arch }}
+
+      - name: Build kernel with external root task artifact
+        run: |
+          zig build -Darch=${{ matrix.arch }} \
+            -Droot-task=${{ github.workspace }}/os-root-task/zig-out/${{ matrix.arch }}/bin/root_process.elf

@@ -4,3 +4,5 @@ qemu.log
 .qemu.pid
 serial.log
 *.o
+os-shared/
+os-root-task/
