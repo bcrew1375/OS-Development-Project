@@ -1,6 +1,9 @@
+//! Kernel-side capability table for protected object access.
+
 const abi = @import("abi");
 const process = @import("../process/main.zig");
 
+/// Errors produced while creating or resolving capabilities.
 pub const CapabilityError = error{
     OutOfCapabilitySlots,
     InvalidCapability,
@@ -27,6 +30,7 @@ const CapabilitySlot = struct {
 var nextCapabilityHandle: abi.capability.CapabilityHandle = 1;
 var capabilitySlots: [MAX_CAPABILITIES]CapabilitySlot = [_]CapabilitySlot{.{}} ** MAX_CAPABILITIES;
 
+/// Creates a managed address-space capability owned by `owner_process_handle`.
 pub fn createAddressSpaceCapability(owner_process_handle: process.ProcessHandle) CapabilityError!abi.capability.CapabilityHandle {
     const slot = findFreeCapabilitySlot() orelse return CapabilityError.OutOfCapabilitySlots;
     const address_space_handle = try process.createAddressSpaceForOwner(owner_process_handle);
@@ -38,6 +42,7 @@ pub fn createAddressSpaceCapability(owner_process_handle: process.ProcessHandle)
     }, .{ .address_space = address_space_handle });
 }
 
+/// Creates a managed memory-object capability owned by `owner_process_handle`.
 pub fn createMemoryObjectCapability(owner_process_handle: process.ProcessHandle, size_in_bytes: u64) CapabilityError!abi.capability.CapabilityHandle {
     const slot = findFreeCapabilitySlot() orelse return CapabilityError.OutOfCapabilitySlots;
     const memory_object_handle = try process.createMemoryObjectForOwner(owner_process_handle, size_in_bytes);
@@ -50,6 +55,7 @@ pub fn createMemoryObjectCapability(owner_process_handle: process.ProcessHandle,
     }, .{ .memory_object = memory_object_handle });
 }
 
+/// Resolves an address-space capability after checking ownership and rights.
 pub fn resolveAddressSpace(
     owner_process_handle: process.ProcessHandle,
     capability_handle: abi.capability.CapabilityHandle,
@@ -62,6 +68,7 @@ pub fn resolveAddressSpace(
     };
 }
 
+/// Resolves a memory-object capability after checking ownership and rights.
 pub fn resolveMemoryObject(
     owner_process_handle: process.ProcessHandle,
     capability_handle: abi.capability.CapabilityHandle,
@@ -121,6 +128,7 @@ fn findCapabilitySlot(capability_handle: abi.capability.CapabilityHandle) ?*cons
     return null;
 }
 
+/// Resets all capability table state for unit tests.
 pub fn resetForTest() void {
     nextCapabilityHandle = 1;
     for (&capabilitySlots) |*slot| {

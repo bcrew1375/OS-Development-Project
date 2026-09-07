@@ -1,5 +1,8 @@
+//! ELF executable parsing support for boot and process-loading paths.
+
 const std = @import("std");
 
+/// Errors reported while validating or interpreting an ELF image.
 pub const ElfLoadError = error{
     InvalidElfImage,
     UnsupportedElfClass,
@@ -17,12 +20,14 @@ const ELF_PROGRAM_HEADER_EXECUTABLE: u32 = 1;
 const ELF_PROGRAM_HEADER_WRITABLE: u32 = 2;
 const ELF_PROGRAM_HEADER_READABLE: u32 = 4;
 
+/// Access permissions requested by an ELF loadable segment.
 pub const SegmentPermissions = struct {
     readable: bool,
     writeable: bool,
     executable: bool,
 };
 
+/// Description of a single validated `PT_LOAD` segment.
 pub const LoadableSegment = struct {
     virtual_address: u64,
     memory_size: u64,
@@ -31,6 +36,7 @@ pub const LoadableSegment = struct {
     permissions: SegmentPermissions,
 };
 
+/// Summary of the loadable portion of an executable image.
 pub const LoadableImage = struct {
     entry_point: u64,
     virtual_start: u64,
@@ -55,6 +61,7 @@ const ProgramHeader = struct {
     p_flags: u32,
 };
 
+/// Validates `image` and returns aggregate load information for all loadable segments.
 pub fn parseLoadableImage(image: []const u8, page_size: u64) ElfLoadError!LoadableImage {
     const elf_header = try readElfHeader(image);
     try validateElfHeader(elf_header);
@@ -90,6 +97,7 @@ pub fn parseLoadableImage(image: []const u8, page_size: u64) ElfLoadError!Loadab
     };
 }
 
+/// Returns the `loadable_segment_index`th validated loadable segment.
 pub fn getLoadableSegment(image: []const u8, loadable_segment_index: usize) ElfLoadError!LoadableSegment {
     const elf_header = try readElfHeader(image);
     try validateElfHeader(elf_header);

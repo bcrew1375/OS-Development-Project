@@ -1,12 +1,16 @@
+//! Physical frame allocator initialized from the architecture memory map.
+
 const arch = @import("arch");
 
 const builtin = @import("builtin");
 const std = @import("std");
 
+/// Size in bytes of one physical frame.
 pub const FRAME_SIZE: usize = @as(usize, @intCast(arch.mmu.getPageSize()));
-// Max 64 GBs for now.
+/// Maximum tracked frames; currently sized for 64 GiB with 4 KiB pages.
 pub const MAX_FRAMES: usize = 2097152;
 
+/// Errors produced by physical memory allocation operations.
 pub const PmmError = error{
     OutOfMemory,
     InvalidSize,
@@ -33,6 +37,7 @@ var frameMap: []allowzero FrameInfo = undefined;
 extern const _kernel_start: usize;
 extern const _kernel_end: usize;
 
+/// Initializes frame accounting from the architecture memory and reservation maps.
 pub fn initialize() !void {
     if (builtin.is_test) {
         kernelBaseStartFrame = _kernel_start / FRAME_SIZE;
@@ -96,6 +101,7 @@ pub fn initialize() !void {
     }
 }
 
+/// Allocates `needed_frames` contiguous frames and returns the physical address.
 pub fn allocate(needed_frames: usize) !usize {
     if ((needed_frames < 1) or
         (needed_frames > totalAvailableFrames))
@@ -123,6 +129,7 @@ pub fn allocate(needed_frames: usize) !usize {
     return start_frame * FRAME_SIZE;
 }
 
+/// Marks a frame range as reserved and unavailable for allocation.
 pub fn reserve(start_frame: usize, total_frames: usize) !void {
     const end_frame = start_frame + total_frames;
 
@@ -139,6 +146,7 @@ pub fn reserve(start_frame: usize, total_frames: usize) !void {
     currentAvailableFrames -|= total_frames;
 }
 
+/// Frees a non-reserved frame range.
 pub fn free(start_frame: usize, total_frames: usize) !void {
     const end_frame: usize = start_frame +| total_frames;
 
@@ -204,34 +212,42 @@ fn markFrames(start_frame: usize, total_frames: usize, region_type: arch.MemoryM
     }
 }
 
+/// Returns the total number of tracked frames.
 pub fn getTotalFrames() usize {
     return totalFrames;
 }
 
+/// Returns the number of frames initially classified as available.
 pub fn getTotalAvailableFrames() usize {
     return totalAvailableFrames;
 }
 
+/// Returns the number of frames reserved for kernel/system use.
 pub fn getTotalSystemFrames() usize {
     return totalSystemFrames;
 }
 
+/// Returns the number of currently allocatable frames.
 pub fn getCurrentAvailableFrames() usize {
     return currentAvailableFrames;
 }
 
+/// Returns initially available RAM in bytes.
 pub fn getTotalAvailableRAM() u64 {
     return totalAvailableFrames * FRAME_SIZE;
 }
 
+/// Returns currently allocatable RAM in bytes.
 pub fn getCurrentAvailableRAM() u64 {
     return currentAvailableFrames * FRAME_SIZE;
 }
 
+/// Returns RAM reserved for kernel/system use in bytes.
 pub fn getTotalSystemReservedRAM() u64 {
     return totalSystemFrames * FRAME_SIZE;
 }
 
+/// Controls whether future allocations also count as system-reserved frames.
 pub fn setTrackAllocationsAsReserved(track: bool) void {
     trackAllocationsAsReserved = track;
 }

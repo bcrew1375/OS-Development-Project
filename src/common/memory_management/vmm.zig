@@ -1,8 +1,11 @@
+//! Common virtual memory area manager and demand-mapping helpers.
+
 const arch = @import("arch");
 const abi = @import("abi");
 
 const pmm = @import("pmm.zig");
 
+/// Errors produced by virtual memory operations.
 pub const VMMError = error{
     UndefinedAddressSpace,
     OverlappingVirtualMemoryArea,
@@ -25,6 +28,7 @@ pub const MemoryPermissions = struct {
     user_accessible: bool,
 };
 
+/// Virtual memory area tracked in an address space.
 pub const VirtualMemoryArea = struct {
     start_address: u64 = undefined,
     end_address: u64 = undefined,
@@ -33,6 +37,7 @@ pub const VirtualMemoryArea = struct {
     memory_object_offset: u64 = 0,
 };
 
+/// Common address-space metadata backed by caller-provided VMA storage.
 pub const AddressSpace = struct {
     virtual_memory_areas: []VirtualMemoryArea = undefined,
     length: usize = 0,
@@ -40,14 +45,17 @@ pub const AddressSpace = struct {
 
 var currentAddressSpace: *AddressSpace = undefined;
 
+/// Sets the active common address-space metadata for fault handling.
 pub fn setAddressSpace(addressSpace: *AddressSpace) void {
     currentAddressSpace = addressSpace;
 }
 
+/// Reserves a virtual range without eagerly allocating backing frames.
 pub fn map(addressSpace: *AddressSpace, startAddress: u64, endAddress: u64, memoryPermissions: MemoryPermissions) !void {
     try mapObject(addressSpace, startAddress, endAddress, memoryPermissions, abi.syscall.INVALID_HANDLE, 0);
 }
 
+/// Reserves and immediately backs a virtual range in the current hardware address space.
 pub fn mapEager(addressSpace: *AddressSpace, startAddress: u64, endAddress: u64, memoryPermissions: MemoryPermissions) !void {
     try map(addressSpace, startAddress, endAddress, memoryPermissions);
 
@@ -58,6 +66,7 @@ pub fn mapEager(addressSpace: *AddressSpace, startAddress: u64, endAddress: u64,
     }
 }
 
+/// Reserves and immediately backs a virtual range in `root`.
 pub fn mapEagerInAddressSpace(root: arch.AddressSpaceRoot, addressSpace: *AddressSpace, startAddress: u64, endAddress: u64, memoryPermissions: MemoryPermissions) !void {
     try map(addressSpace, startAddress, endAddress, memoryPermissions);
 
@@ -68,6 +77,7 @@ pub fn mapEagerInAddressSpace(root: arch.AddressSpaceRoot, addressSpace: *Addres
     }
 }
 
+/// Maps bootstrap-time contiguous physical pages for a virtual range in `root`.
 pub fn mapBootstrapContiguousInAddressSpace(
     root: arch.AddressSpaceRoot,
     addressSpace: *AddressSpace,
@@ -79,6 +89,7 @@ pub fn mapBootstrapContiguousInAddressSpace(
     try mapBootstrapContiguousPagesInAddressSpace(root, startAddress, endAddress, memoryPermissions);
 }
 
+/// Updates permissions for an existing VMA and any currently mapped pages.
 pub fn protect(addressSpace: *AddressSpace, startAddress: u64, endAddress: u64, memoryPermissions: MemoryPermissions) !void {
     const vma = findVirtualMemoryAreaByRange(addressSpace, startAddress, endAddress) orelse return VMMError.UndefinedVirtualMemoryArea;
 
@@ -99,6 +110,7 @@ pub fn protect(addressSpace: *AddressSpace, startAddress: u64, endAddress: u64, 
     vma.permissions = memoryPermissions;
 }
 
+/// Updates permissions for an existing VMA and mapped pages in `root`.
 pub fn protectInAddressSpace(root: arch.AddressSpaceRoot, addressSpace: *AddressSpace, startAddress: u64, endAddress: u64, memoryPermissions: MemoryPermissions) !void {
     const vma = findVirtualMemoryAreaByRange(addressSpace, startAddress, endAddress) orelse return VMMError.UndefinedVirtualMemoryArea;
 
@@ -119,6 +131,7 @@ pub fn protectInAddressSpace(root: arch.AddressSpaceRoot, addressSpace: *Address
     vma.permissions = memoryPermissions;
 }
 
+/// Reserves a virtual range backed by a memory object and offset.
 pub fn mapObject(
     addressSpace: *AddressSpace,
     startAddress: u64,
@@ -159,6 +172,7 @@ pub fn mapObject(
     addressSpace.length += 1;
 }
 
+/// Removes a VMA and unmaps pages in the current hardware address space.
 pub fn unmap(addressSpace: *AddressSpace, startAddress: u64, endAddress: u64) void {
     for (addressSpace.virtual_memory_areas[0..addressSpace.length], 0..) |vma, vmaIndex| {
         if (vma.start_address == startAddress and vma.end_address == endAddress) {
@@ -178,12 +192,14 @@ pub fn unmap(addressSpace: *AddressSpace, startAddress: u64, endAddress: u64) vo
     }
 }
 
+/// Panic-on-error wrapper around `resolveFault`.
 pub fn faultHandler(faultInfo: arch.FaultInfo) void {
     resolveFault(faultInfo) catch |err| {
         @panic(@errorName(err));
     };
 }
 
+/// Resolves a not-present page fault by allocating and mapping a frame.
 pub fn resolveFault(faultInfo: arch.FaultInfo) VMMError!void {
     const vma = findVirtualMemoryArea(faultInfo.address) orelse {
         return VMMError.FaultOutsideVirtualMemoryArea;

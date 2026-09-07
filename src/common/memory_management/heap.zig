@@ -1,5 +1,8 @@
+//! Boundary-tag heap allocator used by kernel dynamic allocation.
+
 const std = @import("std");
 
+/// Errors produced by heap allocation operations.
 pub const HeapError = error{
     OutOfMemory,
 };
@@ -19,6 +22,7 @@ pub const BlockHeader = struct {
     payload_offset: usize = @sizeOf(BlockHeader),
 };
 
+/// Footer stored at the end of every heap block for backward coalescing.
 pub const BlockFooter = struct {
     magic: u32 = FOOTER_MAGIC,
     size: usize,
@@ -56,6 +60,7 @@ pub const Heap = struct {
     end_address: usize,
     free_list: ?*FreeBlock,
 
+    /// Creates a heap over `[start_address, start_address + size_in_bytes)`.
     pub fn initialize(start_address: usize, size_in_bytes: usize) Heap {
         var heap = Heap{
             .start_address = start_address,
@@ -72,6 +77,7 @@ pub const Heap = struct {
         return heap;
     }
 
+    /// Allocates `size_in_bytes` bytes with at least `alignment` alignment.
     pub fn allocate(self: *Heap, size_in_bytes: usize, alignment: usize) HeapError![*]u8 {
         const actual_alignment = @max(alignment, DEFAULT_ALIGNMENT);
 
@@ -107,6 +113,7 @@ pub const Heap = struct {
         return HeapError.OutOfMemory;
     }
 
+    /// Releases a previously allocated byte slice.
     pub fn free(self: *Heap, bytes: []u8) void {
         if (bytes.len == 0) return;
 
@@ -121,6 +128,7 @@ pub const Heap = struct {
         self.insertIntoFreeList(header);
     }
 
+    /// Attempts to resize an allocation in place.
     pub fn resize(self: *Heap, bytes: []u8, new_size_in_bytes: usize) bool {
         if (bytes.len == 0) return false;
 
@@ -137,6 +145,7 @@ pub const Heap = struct {
         return self.tryGrowIntoNextBlock(header, needed_size);
     }
 
+    /// Returns a Zig allocator interface backed by this heap.
     pub fn allocator(self: *Heap) std.mem.Allocator {
         return .{
             .ptr = self,
@@ -290,6 +299,7 @@ pub const Heap = struct {
     }
 };
 
+/// Returns allocator metadata for a previous allocation.
 pub fn getBlockHeaderFromAllocation(bytes: []u8) *BlockHeader {
     const tag_address = @intFromPtr(bytes.ptr) - ALLOCATION_TAG_SIZE;
     const header = @as(*BlockHeader, @ptrFromInt(@as(*usize, @ptrFromInt(tag_address)).*));

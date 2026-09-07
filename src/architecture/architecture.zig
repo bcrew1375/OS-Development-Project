@@ -1,5 +1,12 @@
+//! Common architecture interface and selected architecture implementation facade.
+//!
+//! Architecture-independent kernel code imports this module to access CPU, MMU,
+//! interrupt, boot, allocator, and platform services without binding to a
+//! concrete hardware implementation.
+
 const builtin = @import("builtin");
 
+/// Selected architecture implementation. Tests use the mock implementation.
 pub const impl = if (builtin.is_test)
     @import("mock/arch.zig")
 else switch (builtin.cpu.arch) {
@@ -15,13 +22,20 @@ comptime {
     validateImpl(impl);
 }
 
+/// Early boot allocator implementation.
 pub const early_allocator = impl.early_allocator;
+/// Boot protocol services.
 pub const boot = impl.boot;
+/// CPU control services.
 pub const cpu = impl.cpu;
+/// Interrupt controller and descriptor-table services.
 pub const interrupts = impl.interrupts;
+/// Memory-management unit services.
 pub const mmu = impl.mmu;
+/// Platform device services such as console and timers.
 pub const platform = impl.platform;
 
+/// Portable terminal color names.
 pub const TextColor = enum(u8) {
     BLACK,
     BLUE,
@@ -41,9 +55,12 @@ pub const TextColor = enum(u8) {
     WHITE,
 };
 
+/// Maximum number of memory map entries retained during early boot.
 pub const MAX_MEMORY_MAP_ENTRIES = 128;
+/// Maximum number of early reserved memory regions.
 pub const MAX_EARLY_RESERVATIONS = 128;
 
+/// Errors exposed by architecture MMU implementations.
 pub const MmuError = error{
     MemoryMapReadError,
     MappingError,
@@ -51,21 +68,25 @@ pub const MmuError = error{
     AddressSpaceRootAllocationFailed,
 };
 
+/// Opaque architecture address-space root identifier.
 pub const AddressSpaceRoot = struct {
     value: usize,
 };
 
+/// Boot-time physical memory map.
 pub const MemoryMap = struct {
     entries: [MAX_MEMORY_MAP_ENTRIES]MemoryMapEntry = undefined,
     length: usize = 0,
     available_regions: usize = 0,
 };
 
+/// Single physical memory range descriptor.
 pub const MemoryMapEntry = struct {
     address: u64 = undefined,
     size: u64 = undefined,
     region_type: MemoryMapRegionType = MemoryMapRegionType.RESERVED,
 };
+/// Classification for physical memory map ranges.
 pub const MemoryMapRegionType = enum(u8) {
     AVAILABLE,
     RESERVED,
@@ -73,6 +94,7 @@ pub const MemoryMapRegionType = enum(u8) {
     BAD,
 };
 
+/// Reason an early memory range was reserved.
 pub const ReservedMapRegionType = enum {
     TEMPORARY,
     PERSISTENT,
@@ -82,22 +104,26 @@ pub const ReservedMapRegionType = enum {
     DEVICE_MEMORY,
 };
 
+/// Single early reserved memory range.
 pub const ReservedMapEntry = struct {
     address: usize,
     size: usize,
     region_type: ReservedMapRegionType,
 };
 
+/// Collection of early reserved memory ranges.
 pub const ReservedMap = struct {
     entries: [MAX_EARLY_RESERVATIONS]ReservedMapEntry = undefined,
     length: usize = 0,
 };
 
+/// Boot-loaded module physical range.
 pub const BootModule = struct {
     physical_start: usize,
     physical_end: usize,
 };
 
+/// Errors returned by early boot allocation and reservation operations.
 pub const EarlyAllocError = error{
     OutOfReservations,
     OutOfSpace,
@@ -106,6 +132,7 @@ pub const EarlyAllocError = error{
     InvalidMemoryMap,
 };
 
+/// Architecture page-table protection flags.
 pub const PageProtection = struct {
     write: bool = false,
     user: bool = false,
@@ -113,6 +140,7 @@ pub const PageProtection = struct {
     global: bool = false,
 };
 
+/// Decoded page-fault information supplied to the common fault handler.
 pub const FaultInfo = struct {
     address: usize,
     present: bool,
@@ -121,8 +149,10 @@ pub const FaultInfo = struct {
     instruction_fetch: bool,
 };
 
+/// True while boot code still relies on the architecture early allocator.
 pub var earlyAllocatorActive = true;
 
+/// Performs compile-time interface validation for an architecture implementation.
 pub fn validateImpl(comptime T: type) void {
     comptime {
         validateInterface(T.early_allocator, struct {

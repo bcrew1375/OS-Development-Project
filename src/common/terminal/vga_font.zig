@@ -4,8 +4,11 @@
 //! SeaBIOS notes that these fonts come from fntcol16.zip by Joseph Gil
 //! and that the individual fonts are public domain.
 
+/// Width in pixels of each glyph.
 pub const GLYPH_WIDTH: usize = 8;
+/// Height in pixels of each glyph.
 pub const GLYPH_HEIGHT: usize = 16;
+/// Number of glyphs in the VGA font table.
 pub const GLYPH_COUNT: usize = 256;
 
 const glyphs: [GLYPH_COUNT * GLYPH_HEIGHT]u8 = .{
@@ -779,6 +782,7 @@ const glyphs: [GLYPH_COUNT * GLYPH_HEIGHT]u8 = .{
     0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
 };
 
+/// Returns the bitmap row for `character` at `row`.
 pub fn glyphRow(character: u8, row: usize) u8 {
     if (row >= GLYPH_HEIGHT) {
         return 0;

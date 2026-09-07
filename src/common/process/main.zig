@@ -1,8 +1,11 @@
+//! Minimal process, address-space, and memory-object registry.
+
 const abi = @import("abi");
 const arch = @import("arch");
 const std = @import("std");
 const vmm = @import("../memory_management/vmm.zig");
 
+/// Errors produced by process and memory-object management operations.
 pub const ProcessError = error{
     OutOfAddressSpaces,
     OutOfMemoryObjects,
@@ -17,9 +20,13 @@ pub const ProcessError = error{
     InvalidMemoryPermissions,
 } || vmm.VMMError;
 
+/// Opaque handle for a registered address space.
 pub const AddressSpaceHandle = u32;
+/// Opaque handle for a registered memory object.
 pub const MemoryObjectHandle = u32;
+/// Opaque process identifier used for ownership checks.
 pub const ProcessHandle = u32;
+/// Reserved handle for the initial root process.
 pub const ROOT_PROCESS_HANDLE: ProcessHandle = 1;
 
 const MAX_ADDRESS_SPACES = 16;
@@ -47,10 +54,12 @@ var nextMemoryObjectHandle: MemoryObjectHandle = 1;
 var addressSpaceSlots: [MAX_ADDRESS_SPACES]AddressSpaceSlot = [_]AddressSpaceSlot{.{}} ** MAX_ADDRESS_SPACES;
 var memoryObjectSlots: [MAX_MEMORY_OBJECTS]MemoryObjectSlot = [_]MemoryObjectSlot{.{}} ** MAX_MEMORY_OBJECTS;
 
+/// Creates an address space owned by the root process.
 pub fn createAddressSpace() ProcessError!AddressSpaceHandle {
     return createAddressSpaceForOwner(ROOT_PROCESS_HANDLE);
 }
 
+/// Creates an address space owned by `owner_process_handle`.
 pub fn createAddressSpaceForOwner(owner_process_handle: ProcessHandle) ProcessError!AddressSpaceHandle {
     const slot = findFreeAddressSpaceSlot() orelse return ProcessError.OutOfAddressSpaces;
 
@@ -68,15 +77,18 @@ pub fn createAddressSpaceForOwner(owner_process_handle: ProcessHandle) ProcessEr
     return handle;
 }
 
+/// Returns the address-space object referenced by `handle`.
 pub fn getAddressSpace(handle: AddressSpaceHandle) ProcessError!*vmm.AddressSpace {
     const slot = findAddressSpaceSlot(handle) orelse return ProcessError.InvalidAddressSpaceHandle;
     return &slot.address_space;
 }
 
+/// Creates a page-aligned memory object owned by the root process.
 pub fn createMemoryObject(size_in_bytes: u64) ProcessError!MemoryObjectHandle {
     return createMemoryObjectForOwner(ROOT_PROCESS_HANDLE, size_in_bytes);
 }
 
+/// Creates a page-aligned memory object owned by `owner_process_handle`.
 pub fn createMemoryObjectForOwner(owner_process_handle: ProcessHandle, size_in_bytes: u64) ProcessError!MemoryObjectHandle {
     if (size_in_bytes == 0) {
         return ProcessError.EmptyMemoryRange;
@@ -102,6 +114,7 @@ pub fn createMemoryObjectForOwner(owner_process_handle: ProcessHandle, size_in_b
     return handle;
 }
 
+/// Maps a range of a memory object into an address space.
 pub fn mapMemoryObject(
     address_space_handle: AddressSpaceHandle,
     memory_object_handle: MemoryObjectHandle,
@@ -129,6 +142,7 @@ pub fn mapMemoryObject(
     );
 }
 
+/// Reserves anonymous user memory in an address space.
 pub fn mapMemory(address_space_handle: AddressSpaceHandle, virtual_start: u64, size_in_bytes: u64) ProcessError!void {
     if (size_in_bytes == 0) {
         return ProcessError.EmptyMemoryRange;
@@ -211,6 +225,7 @@ fn findMemoryObjectSlot(handle: MemoryObjectHandle) ?*MemoryObjectSlot {
     return null;
 }
 
+/// Resets all process registry state for unit tests.
 pub fn resetForTest() void {
     nextAddressSpaceHandle = 1;
     nextMemoryObjectHandle = 1;
