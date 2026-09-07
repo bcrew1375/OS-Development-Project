@@ -75,7 +75,7 @@ pub fn resolveRootTaskArtifact(b: *std.Build, config: BuildConfig) RootTaskArtif
         "root-task",
         "Path to the externally built root task ELF artifact",
     ) orelse b.pathFromRoot(b.fmt(
-        "os-root-task/zig-out/{s}/bin/root_process.elf",
+        "OS-Root-Task/zig-out/{s}/bin/root_process.elf",
         .{@tagName(config.architecture)},
     ));
 

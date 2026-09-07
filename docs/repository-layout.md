@@ -2,49 +2,64 @@
 
 The project is split into three repositories:
 
-- `os-kernel`: the kernel, architecture code, kernel subsystems, kernel tests,
+- `OS-Development-Project`: the kernel, architecture code, kernel subsystems, kernel tests,
   and boot-image packaging.
-- `os-shared`: stable user/kernel ABI definitions and implementation helpers
+- `OS-ABI-Library`: stable user/kernel ABI definitions and implementation helpers
   usable from both kernel and userspace.
-- `os-root-task`: the initial userspace root task, built independently as a
+- `OS-Root-Task`: the initial userspace root task, built independently as a
   freestanding ELF executable.
 
 ## Dependency direction
 
 ```text
-os-shared
+OS-ABI-Library
   ^
   |
-  +-- os-kernel
+  +-- OS-Development-Project
   |
-  +-- os-root-task
+  +-- OS-Root-Task
 ```
 
 The kernel consumes the root task as an ELF artifact. It must not compile the
 root task from source.
 
-## Local development checkout
+## Submodule checkout
 
-The current local build scripts expect sibling-style checkouts under the same
-workspace root:
+`OS-ABI-Library` and `OS-Root-Task` are tracked by the kernel repository as Git
+submodules:
 
 ```text
-/workspace/os-kernel
-/workspace/os-shared
-/workspace/os-root-task
+/workspace/OS-Development-Project
+/workspace/OS-ABI-Library
+/workspace/OS-Root-Task
 ```
 
-In this transitional workspace, the kernel repository is `/workspace`, while
-`/workspace/os-shared` and `/workspace/os-root-task` are independent nested Git
-repositories ignored by the kernel repository.
+Clone with submodules:
+
+```sh
+git clone --recurse-submodules https://github.com/bcrew1375/OS-Development-Project.git
+```
+
+Initialize submodules in an existing checkout:
+
+```sh
+git submodule update --init --recursive
+```
+
+Update submodules to their configured remote branch tips when intentionally
+advancing dependencies:
+
+```sh
+git submodule update --remote --merge
+```
 
 Build order:
 
 ```sh
-cd /workspace/os-shared
+cd /workspace/OS-ABI-Library
 zig build tests
 
-cd /workspace/os-root-task
+cd /workspace/OS-Root-Task
 zig build -Darch=x86_64
 zig build -Darch=x86_32
 
@@ -57,11 +72,11 @@ The kernel can also consume an explicit root-task artifact path:
 
 ```sh
 zig build -Darch=x86_64 \
-  -Droot-task=/workspace/os-root-task/zig-out/x86_64/bin/root_process.elf
+  -Droot-task=/workspace/OS-Root-Task/zig-out/x86_64/bin/root_process.elf
 ```
 
 ## Future package-release step
 
-The current local integration uses direct paths to the sibling checkouts. Once
-the independent repositories are hosted and release tags exist, replace those
-path imports with pinned Zig package dependencies.
+The current integration uses direct paths to the submodule checkouts. Once
+release tags exist and Zig package metadata is finalized, these direct paths can
+be replaced with pinned Zig package dependencies.
