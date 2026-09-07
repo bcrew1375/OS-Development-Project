@@ -23,6 +23,8 @@ pub const RootTaskArtifact = struct {
     install_name: []const u8,
 };
 
+const ROOT_TASK_INSTALL_NAME = "root_process.elf";
+
 pub fn resolve(
     b: *std.Build,
     architecture: Architecture,
@@ -70,19 +72,46 @@ pub fn resolve(
 }
 
 pub fn resolveRootTaskArtifact(b: *std.Build, config: BuildConfig) RootTaskArtifact {
-    const path = b.option(
+    if (b.option(
         []const u8,
         "root-task",
         "Path to the externally built root task ELF artifact",
-    ) orelse b.pathFromRoot(b.fmt(
-        "OS-Root-Task/zig-out/{s}/bin/root_process.elf",
-        .{@tagName(config.architecture)},
-    ));
+    )) |path| {
+        return .{
+            .path = .{ .cwd_relative = path },
+            .install_name = ROOT_TASK_INSTALL_NAME,
+        };
+    }
 
     return .{
-        .path = .{ .cwd_relative = path },
-        .install_name = "root_process.elf",
+        .path = addRootTaskSubmoduleBuild(b, config),
+        .install_name = ROOT_TASK_INSTALL_NAME,
     };
+}
+
+fn addRootTaskSubmoduleBuild(b: *std.Build, config: BuildConfig) std.Build.LazyPath {
+    const script =
+        \\set -eu
+        \\architecture="$1"
+        \\output="$2"
+        \\zig_exe="$3"
+        \\
+        \\cd OS-Root-Task
+        \\"$zig_exe" build -Darch="$architecture"
+        \\mkdir -p "$(dirname "$output")"
+        \\cp "zig-out/$architecture/bin/root_process.elf" "$output"
+    ;
+
+    const build_root_task = b.addSystemCommand(&.{ "bash", "-c", script, "build-root-task" });
+    build_root_task.addArg(@tagName(config.architecture));
+
+    const output = build_root_task.addOutputFileArg(b.fmt(
+        "root_process-{s}.elf",
+        .{@tagName(config.architecture)},
+    ));
+    build_root_task.addArg(b.graph.zig_exe);
+
+    return output;
 }
 
 pub fn limineConfigPath(architecture: Architecture) []const u8 {

@@ -68,6 +68,10 @@ zig build -Darch=x86_64
 zig build -Darch=x86_32
 ```
 
+The kernel build automatically builds the `OS-Root-Task` submodule when
+`-Droot-task` is not supplied, so a clean checkout can run `zig build` directly
+after submodules are initialized.
+
 The kernel can also consume an explicit root-task artifact path:
 
 ```sh
