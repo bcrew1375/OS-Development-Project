@@ -9,10 +9,13 @@ pub fn addStep(
     root_task: configuration.RootTaskArtifact,
 ) void {
     const run_step = b.step("run", "Run kernel with qemu");
-    switch (config.bootloader) {
-        .multiboot => run_step.dependOn(&createDirectKernelRunStep(b, kernel, root_task).step),
-        .limine => run_step.dependOn(&createLimineRunStep(b, config, kernel, root_task).step),
-    }
+    const run_command = switch (config.bootloader) {
+        .multiboot => createDirectKernelRunStep(b, kernel, root_task),
+        .limine => createLimineRunStep(b, config, kernel, root_task),
+    };
+
+    run_command.step.dependOn(b.getInstallStep());
+    run_step.dependOn(&run_command.step);
 }
 
 fn createDirectKernelRunStep(
@@ -28,7 +31,6 @@ fn createDirectKernelRunStep(
     qemu_cmd.addArg("-initrd");
     qemu_cmd.addFileArg(root_task.path);
 
-    qemu_cmd.step.dependOn(b.getInstallStep());
     return qemu_cmd;
 }
 
