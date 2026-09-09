@@ -6,3 +6,4 @@ serial.log
 *.o
 os-shared/
 os-root-task/
+/QEMU-VNC-Extension/

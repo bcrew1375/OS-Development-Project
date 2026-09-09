@@ -1,3 +1,22 @@
+ARG NODE_VERSION=22.19.0
+ARG QEMU_VNC_REPOSITORY=https://github.com/bcrew1375/QEMU-VNC-Extension.git
+ARG QEMU_VNC_REF=v0.2.5
+
+FROM node:${NODE_VERSION}-bookworm-slim AS qemu-vnc-builder
+
+ARG QEMU_VNC_REPOSITORY
+ARG QEMU_VNC_REF
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      ca-certificates \
+      git && \
+    rm -rf /var/lib/apt/lists/*
+
+RUN git clone --depth=1 --branch "${QEMU_VNC_REF}" \
+      "${QEMU_VNC_REPOSITORY}" /build/qemu-vnc && \
+    npm ci --prefix /build/qemu-vnc && \
+    npm run package --prefix /build/qemu-vnc
+
 FROM ubuntu:noble
 
 # Avoid prompts during package install
@@ -5,6 +24,9 @@ ENV DEBIAN_FRONTEND=noninteractive
 
 ARG ZIG_VERSION=0.15.2
 ARG LIMINE_BRANCH=v9.x-binary
+
+COPY --from=qemu-vnc-builder \
+    /build/qemu-vnc/qemu-vnc.vsix /opt/qemu-vnc/qemu-vnc.vsix
 
 # Install dependencies
 RUN apt-get update && apt-get install -y \
