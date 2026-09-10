@@ -30,8 +30,8 @@ submodules:
 
 ```text
 /workspace/OS-Development-Project
-/workspace/OS-ABI-Library
-/workspace/OS-Root-Task
+/workspace/dependencies/OS-ABI-Library
+/workspace/dependencies/OS-Root-Task
 ```
 
 Clone with submodules:
@@ -56,10 +56,10 @@ git submodule update --remote --merge
 Build order:
 
 ```sh
-cd /workspace/OS-ABI-Library
+cd /workspace/dependencies/OS-ABI-Library
 zig build tests
 
-cd /workspace/OS-Root-Task
+cd /workspace/dependencies/OS-Root-Task
 zig build -Darch=x86_64
 zig build -Darch=x86_32
 
@@ -76,7 +76,7 @@ The kernel can also consume an explicit root-task artifact path:
 
 ```sh
 zig build -Darch=x86_64 \
-  -Droot-task=/workspace/OS-Root-Task/zig-out/x86_64/bin/root_process.elf
+  -Droot-task=/workspace/dependencies/OS-Root-Task/zig-out/x86_64/bin/root_process.elf
 ```
 
 ## Future package-release step
